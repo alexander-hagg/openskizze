@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenSKIZZE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Additional styles if needed */
+        .top-bar {
+            background-color: white; /* Tailwind color: gray-800 */
+            color: black;
+            padding: 0.75rem; /* Tailwind spacing: p-3 */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .top-bar img {
+            height: 2.5rem; /* Tailwind size: h-10 */
+        }
+        .output-map {
+            background-color: #4b5563; /* Tailwind color: gray-700 */
+            border: 2px solid #374151; /* Tailwind color: gray-700 */
+            margin-top: 16px; /* Tailwind margin: mt-4 */
+            height: 300px; /* Adjust as necessary */
+        }
+    </style>
+</head>
+<body class="bg-gray-800 text-white">
+    <script src="/static/script.js"></script>
+
+    <div class="top-bar">
+        <div class="text-4xl font-bold">OpenSKIZZE</div>
+        <div class="flex items-center space-x-4">
+            <div class="text-sm">created by Alexander Hagg</div>
+            <img src="/static/img/university_logo.png" alt="University Logo">
+            <img src="/static/img/tree_logo.png" alt="TREE Logo">
+        </div>
+    </div>
+
+    <div class="flex min-h-screen">
+        <!-- Input Section -->
+        <div id="inputSection" class="flex flex-col w-1/5 p-4 space-y-4">
+            <div class="text-2xl font-bold">INPUT</div>
+            <div>
+                <div class="font-semibold">Variationseigenschaften</div>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Anzahl Gebäuden</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Gebäudefläche</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Bebaute Fläche</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <div class="font-semibold">Ausrichtung</div>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="ausrichtung" class="form-radio h-5 w-5 text-blue-600">
+                        <span>Durchschnitt</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="ausrichtung" class="form-radio h-5 w-5 text-blue-600">
+                        <span>Maximal</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="ausrichtung" class="form-radio h-5 w-5 text-blue-600">
+                        <span>Varianz</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <div class="font-semibold">Optimalkriterien</div>
+                <div class="space-y-2">
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Porosität Baufkörper</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Hitzeabstrahlung</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Hitzeaufnahme</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Gebäudefläche</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        <span>Fassadenfläche</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <div class="font-semibold">Randbedingungen</div>
+                <!-- File inputs for CSV files -->
+                <div class="space-y-2">
+                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Section -->
+        <div class="flex-grow p-4 space-y-4 max-w-2xl">
+            <div class="text-xl font-semibold">Planungsentwurfsbeispiele</div>
+            <div class="grid grid-cols-12 gap-0">
+                <!-- Dynamically generated grid items -->
+                <!-- Placeholder for grid items -->
+                <div id="mainContent" class="col-span-12 h-96">
+                    <!-- Placeholder content -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Output Section -->
+        <div class="output-map-container flex flex-col w-1/4 p-4 space-y-4">
+            <div class="text-2xl font-bold">OUTPUT</div>
+            <div id="outputSection" class="space-y-4">
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <span>Karte Bebauung</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <span>Karte Gebäudeausrichtung</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <span>Karte Tabuzonen</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <span>Karte Bebauungshöhe</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <span>Karte notwendige blaue Infrastruktur</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <span>Karte möglicher Hitze-Hotspots</span>
+                </label>
+            </div>
+            <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Exportiere Karte
+            </button>
+            <div id="outputMap" class="output-map">
+                <!-- Output map will be loaded here -->
+            </div>
+        </div>
+
+            <!-- New Box for 'formalisieren' Button and Criteria Display -->
+        <div id="formalCriteriaBox" class="space-y-4">
+            <button id="formalizeButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Formalisieren
+            </button>
+            <div id="formalCriteria" class="text-sm bg-gray-700 p-4 rounded">
+                <!-- This is where the formal criteria will be displayed -->
+        </div>
+    </div>
+    </div>
+
+    
+</body>
+</html>
