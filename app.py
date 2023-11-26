@@ -32,11 +32,12 @@ def mockup_llm_process(data):
     # This should process 'data' and return a string with the criteria in German
     return '''
     <strong>Abgeleitete formale Kriterien:</strong>
-    <ul>
-        <li>Die Strukturhöhe muss den Vorschriften der BauO NRW entsprechen.</li>
-        <li>Die Bebauungsdichte sollte die lokale Gesetzgebung berücksichtigen.</li>
-        <li>Öffentliche Zugänglichkeit muss in der Planung berücksichtigt werden.</li>
-    </ul>
+    <ll>
+        <li>HOCHB_WIND_01: Die Bauhöhe darf an den auf Karte b1 angegebene Positionen nur 7 Meter betragen.</li>
+        <li>HOCHB_WIND_02: Die Bebauungsporösität muss mindestens 0.8 betragen und darf an den auf Karte c1 angegebene Positionen 0.3 nicht überschreiten.</li>
+        <li>BEBAU_TEMP_01: An den auf Karte c2 Stellen muss grünblaue Infrastruktur eingeplant werden.</li>
+        <li>STRUK_01: Die Bebauungsstruktur muss qualitativ die Strukturen der Kategorie II-IV ähneln</li>
+    </ll>
     '''
 
 def generate_design_image_name(params):

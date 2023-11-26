@@ -16,7 +16,7 @@
             justify-content: space-between;
         }
         .top-bar img {
-            height: 2.5rem; /* Tailwind size: h-10 */
+            height: 5rem; /* Tailwind size: h-10 */
         }
         .output-map {
             background-color: #4b5563; /* Tailwind color: gray-700 */
@@ -30,10 +30,10 @@
     <script src="/static/script.js"></script>
 
     <div class="top-bar">
-        <div class="text-4xl font-bold">OpenSKIZZE</div>
+        <div class="text-6xl font-bold">OpenSKIZZE</div>
         <div class="flex items-center space-x-4">
-            <div class="text-sm">created by Alexander Hagg</div>
-            <img src="/static/img/university_logo.png" alt="University Logo">
+            <div class="text-sm">created by Alexander Hagg<br>License: GPL v3</div>
+            <img src="/static/img/university_logo.jpg" alt="University Logo">
             <img src="/static/img/tree_logo.png" alt="TREE Logo">
         </div>
     </div>
@@ -41,7 +41,7 @@
     <div class="flex min-h-screen">
         <!-- Input Section -->
         <div id="inputSection" class="flex flex-col w-1/5 p-4 space-y-4">
-            <div class="text-2xl font-bold">INPUT</div>
+            <div class="text-2xl font-bold">Eingabeparameter</div>
             <div>
                 <div class="font-semibold">Variationseigenschaften</div>
                 <div class="space-y-2">
@@ -113,7 +113,7 @@
 
         <!-- Main Content Section -->
         <div class="flex-grow p-4 space-y-4 max-w-2xl">
-            <div class="text-xl font-semibold">Planungsentwurfsbeispiele</div>
+            <div class="text-2xl font-semibold">Planungsentwurfsbeispiele</div>
             <div class="grid grid-cols-12 gap-0">
                 <!-- Dynamically generated grid items -->
                 <!-- Placeholder for grid items -->
@@ -125,7 +125,7 @@
 
         <!-- Output Section -->
         <div class="output-map-container flex flex-col w-1/4 p-4 space-y-4">
-            <div class="text-2xl font-bold">OUTPUT</div>
+            <div class="text-2xl font-bold">Analyse</div>
             <div id="outputSection" class="space-y-4">
                 <label class="flex items-center space-x-2">
                     <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
@@ -153,7 +153,7 @@
                 </label>
             </div>
             <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                Exportiere Karte
+                Karten exportieren
             </button>
             <div id="outputMap" class="output-map">
                 <!-- Output map will be loaded here -->
@@ -161,13 +161,17 @@
         </div>
 
             <!-- New Box for 'formalisieren' Button and Criteria Display -->
-        <div id="formalCriteriaBox" class="space-y-4">
+        <div id="formalCriteriaBox" class="space-y-4 w-1/5">
             <button id="formalizeButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
                 Formalisieren
             </button>
             <div id="formalCriteria" class="text-sm bg-gray-700 p-4 rounded">
                 <!-- This is where the formal criteria will be displayed -->
-        </div>
+            </div>
+            <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Kriterien exportieren
+            </button>
+            
     </div>
     </div>
 
