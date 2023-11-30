@@ -31,17 +31,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    updateOutputMaps();
+
     // Add event listeners to input elements
     inputSection.addEventListener('change', function(event) {
         //updateDesigns();
     });
 
     // Add event listener for output section changes
-    outputSection.addEventListener('change', function(event) {
-        if (event.target.type === 'radio') {
-            updateOutputMap();
-        }
-    });    
+    // outputSection.addEventListener('change', function(event) {
+    //     if (event.target.type === 'radio') {
+    //         updateOutputMap();
+    //     }
+    // });    
 
 
     function updateAxisLabels() {
@@ -87,33 +89,38 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
-    function updateOutputMap() {
+    function updateOutputMaps() {
         // Fetch the updated output map based on output selections
         fetch('/update_output_map', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(getOutputSelections())
+            body: JSON.stringify('a')
         })
         .then(response => response.json())
         .then(data => {
-            displayOutputMap(data.mapSrc);
+            displayOutputMaps(data.mapSrc);
         });
     }
 
-    function getOutputSelections() {
-        let outputSelections = {};
-        document.querySelectorAll('#outputSection input[type="checkbox"]').forEach(input => {
-            outputSelections[input.id] = input.checked;
-        });
-        return outputSelections;
-    }
+    // function getOutputSelections() {
+    //     let outputSelections = {};
+    //     document.querySelectorAll('#outputSection input[type="checkbox"]').forEach(input => {
+    //         outputSelections[input.id] = input.checked;
+    //     });
+    //     return outputSelections;
+    // }
 
-    function displayOutputMap(mapSrc) {
-        outputMap.style.backgroundImage = `url(${mapSrc})`;
-        outputMap.style.backgroundSize = 'cover';
-        outputMap.style.backgroundPosition = 'center';
+    function displayOutputMaps(mapSrc) {
+        mapSrc.forEach(function(map, index) {
+            var outputMap = document.getElementById(`outputMap${index}`);
+            if (outputMap) {
+                outputMap.style.backgroundImage = `url(${map})`;
+                outputMap.style.backgroundSize = 'cover';
+                outputMap.style.backgroundPosition = 'center';
+            }
+        });
     }
 
 

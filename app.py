@@ -56,9 +56,9 @@ def update_designs():
 
 @app.route('/update_output_map', methods=['POST'])
 def update_output_map():
-    selections = request.json
-    map_src = generate_output_map_name(selections)
-    print(f'map_src: {map_src}')
+    # selections = request.json
+    # map_src = generate_output_map_name(selections)
+    map_src = update_output_maps()
     return jsonify({'mapSrc': map_src})
 
 @app.route('/formalize_criteria', methods=['POST'])
@@ -94,15 +94,19 @@ def generate_design_image_name(params):
     return f'/static/img/{image_name}.png'
 
 
-def generate_output_map_name(selections):
-    print(f'selections: {selections}')
-    selected_options = [key for key, value in selections.items() if value]
-    if selected_options:
-        # Generate a map name based on the selected options
-        map_name = "_".join(selected_options)
-        return f'/static/maps/{map_name}.png'
-    return '/static/maps/default_map.png'  # A default map if no options are selected
+# def generate_output_map_name(selections):
+#     print(f'selections: {selections}')
+#     selected_options = [key for key, value in selections.items() if value]
+#     if selected_options:
+#         # Generate a map name based on the selected options
+#         map_name = "_".join(selected_options)
+#         return f'/static/maps/{map_name}.png'
+#     return '/static/maps/default_map.png'  # A default map if no options are selected
 
+def update_output_maps():
+    png_files = [f'static/maps/{id}.png' for id in range(6)]
+    print(f'TODO Updating output maps {png_files}')
+    return png_files
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -1,6 +1,7 @@
 let scene, camera, renderer, controls;
 
-let margin=20 ;
+let margin=20;
+let solution_margin = 5;
 
 init();
 animate();
@@ -10,12 +11,14 @@ function init() {
     THREE.ColorManagement.legacyMode = false
 
     camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-    let spacing_scaling = 6; // TODO This magic number needs to be automatically calculated based on the incoming sat image and a fixed border. Change it from a scaling to an additivate factor.
+    let spacing_scaling = 5; // TODO This magic number needs to be automatically calculated based on the incoming sat image and a fixed border. Change it from a scaling to an additivate factor.
     
-    renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth/2-margin,window.innerWidth/2-margin);
     
     const container = document.getElementById("mainContent");
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(container.offsetWidth-margin,container.offsetWidth-margin);
+    
+
     container.appendChild(renderer.domElement);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -25,16 +28,16 @@ function init() {
         .then(response => response.json())
         .then(voxelMeshes => {
             const gridSize = Math.sqrt(voxelMeshes.length); 
-            const gridCenter = spacing_scaling*(gridSize - 1) * (gridSize + 1) / 2;
+            const gridCenter = solution_margin * (gridSize - 1) * (gridSize + 1) / 2;
 
             // Adjust camera position and FOV
-            camera.position.set(gridCenter, gridCenter, 65); // Higher Z value
+            camera.position.set(gridCenter, gridCenter, gridSize*17); // Higher Z value
             controls.target.set(gridCenter, gridCenter, 0);
             controls.update();
 
             // Load voxel meshes
             voxelMeshes.forEach((voxelData, index) => {
-                createVoxelMesh(voxelData, index, gridSize, spacing_scaling);
+                createVoxelMesh(voxelData, index, gridSize, solution_margin);
             });
         })
         .catch(error => console.error('Error fetching voxel data:', error));
@@ -55,12 +58,12 @@ function loadAndCreateBackgroundImage(imageUrl, positionX, positionY, width, hei
     texture.encoding = THREE.sRGBEncoding;
 }
 
-function createVoxelMesh(voxelData, index, gridSize, spacing_scaling) {
+function createVoxelMesh(voxelData, index, gridSize, solution_margin) {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshBasicMaterial();
     
-    let xOffset = (index % gridSize) * gridSize * spacing_scaling; // Adjusted for spacing
-    let yOffset = Math.floor(index / gridSize) * gridSize * spacing_scaling; // Adjusted for spacing
+    let xOffset = (index % gridSize) * gridSize * solution_margin; // Adjusted for spacing
+    let yOffset = Math.floor(index / gridSize) * gridSize * solution_margin; // Adjusted for spacing
     
     for (let x = 0; x < voxelData.length; x++) {
         for (let y = 0; y < voxelData[x].length; y++) {
@@ -102,7 +105,7 @@ window.addEventListener('resize', onWindowResize, false);
 
 function onWindowResize() {
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth/2-margin,window.innerWidth/2-margin);
+    renderer.setSize(document.getElementById("mainContent").offsetWidth-margin,document.getElementById("mainContent").offsetWidth-margin);
     controls.update();
     renderer.render(scene, camera);
 }
