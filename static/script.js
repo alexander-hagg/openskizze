@@ -4,17 +4,57 @@ document.addEventListener('DOMContentLoaded', function() {
     const outputSection = document.getElementById('outputSection');
     const outputMap = document.getElementById('outputMap');
 
+    const checkboxes = document.querySelectorAll('.variation-properties input[type="checkbox"]');
+    let checked = [];
+    // Preselect the first two checkboxes
+    checkboxes[0].checked = true;
+    checkboxes[1].checked = true;
+    checked.push(checkboxes[0], checkboxes[1]);
+    updateAxisLabels();    
+    checkboxes.forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            if (checkbox.checked) {
+                checked.push(checkbox);
+                if (checked.length > 2) {
+                    checked[0].checked = false;
+                    checked.shift();
+                }
+            } else {
+                // Prevent unchecking if it results in less than two checkboxes being checked
+                if (checked.length <= 2) {
+                    checkbox.checked = true;
+                    return;
+                }
+                checked = checked.filter(item => item !== checkbox);
+            }
+            updateAxisLabels();
+        });
+    });
+
     // Add event listeners to input elements
     inputSection.addEventListener('change', function(event) {
-        updateDesigns();
+        //updateDesigns();
     });
 
     // Add event listener for output section changes
     outputSection.addEventListener('change', function(event) {
-        if (event.target.type === 'checkbox') {
+        if (event.target.type === 'radio') {
             updateOutputMap();
         }
     });    
+
+
+    function updateAxisLabels() {
+        const checkedCheckboxes = document.querySelectorAll('.variation-properties input[type="checkbox"]:checked');
+        let labels = Array.from(checkedCheckboxes).map(cb => cb.nextSibling.textContent.trim());
+        console.log(`labels.length: ${labels.length}`);
+        console.log(`labels: ${labels}`);
+        if (labels.length === 2) {
+            document.getElementById('x-axis-label').textContent = labels[0].concat(" \u2192");
+            document.getElementById('y-axis-label').textContent = "\u2190 ".concat(labels[1]);
+        }
+    }
+
 
     function updateDesigns() {
         fetch('/update_designs', {
@@ -26,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            displayDesign(data.design);
+            updateDesign(data.design);
         });
     }
 
@@ -46,13 +86,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return inputValues;
     }
 
-    function displayDesign(designSrc) {
-        mainContent.innerHTML = ''; // Clear current content
-        let img = document.createElement('img');
-        img.src = designSrc;
-        img.alt = 'Design Mockup';
-        mainContent.appendChild(img);
-    }
 
     function updateOutputMap() {
         // Fetch the updated output map based on output selections

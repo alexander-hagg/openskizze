@@ -1,0 +1,108 @@
+let scene, camera, renderer, controls;
+
+let margin=20 ;
+
+init();
+animate();
+
+function init() {
+    scene = new THREE.Scene();
+    THREE.ColorManagement.legacyMode = false
+
+    camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    let spacing_scaling = 6; // TODO This magic number needs to be automatically calculated based on the incoming sat image and a fixed border. Change it from a scaling to an additivate factor.
+    
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth/2-margin,window.innerWidth/2-margin);
+    
+    const container = document.getElementById("mainContent");
+    container.appendChild(renderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    // Dynamic grid size calculation (assuming it's a square grid)
+    fetch('/get-voxel-meshes')
+        .then(response => response.json())
+        .then(voxelMeshes => {
+            const gridSize = Math.sqrt(voxelMeshes.length); 
+            const gridCenter = spacing_scaling*(gridSize - 1) * (gridSize + 1) / 2;
+
+            // Adjust camera position and FOV
+            camera.position.set(gridCenter, gridCenter, 65); // Higher Z value
+            controls.target.set(gridCenter, gridCenter, 0);
+            controls.update();
+
+            // Load voxel meshes
+            voxelMeshes.forEach((voxelData, index) => {
+                createVoxelMesh(voxelData, index, gridSize, spacing_scaling);
+            });
+        })
+        .catch(error => console.error('Error fetching voxel data:', error));
+
+}
+
+function loadAndCreateBackgroundImage(imageUrl, positionX, positionY, width, height) {
+    const textureLoader = new THREE.TextureLoader();
+    texture = textureLoader.load(imageUrl, function(texture) {
+        const planeGeometry = new THREE.PlaneGeometry(width, height);
+        const planeMaterial = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        
+        // Adjust position as needed
+        plane.position.set(positionX, positionY, 0); // Positioned slightly behind the voxel mesh
+        scene.add(plane);
+    });
+    texture.encoding = THREE.sRGBEncoding;
+}
+
+function createVoxelMesh(voxelData, index, gridSize, spacing_scaling) {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshBasicMaterial();
+    
+    let xOffset = (index % gridSize) * gridSize * spacing_scaling; // Adjusted for spacing
+    let yOffset = Math.floor(index / gridSize) * gridSize * spacing_scaling; // Adjusted for spacing
+    
+    for (let x = 0; x < voxelData.length; x++) {
+        for (let y = 0; y < voxelData[x].length; y++) {
+            const voxelHeight = voxelData[y][x];
+            if (voxelHeight > 0) {
+                const voxel = new THREE.Mesh(geometry, material.clone());
+                voxel.position.set(x + xOffset, y + yOffset, voxelHeight / 2);
+                voxel.scale.set(1, 1, voxelHeight);
+                voxel.material.color.set(new THREE.Color(`hsl(${voxelHeight * 360}, 50%, 50%)`));
+                scene.add(voxel);
+
+            }
+        }
+    }
+
+    // Create and add the border for this voxel mesh
+    maxHeight = 3;
+    const borderGeometry = new THREE.BoxGeometry(voxelData.length, voxelData.length, maxHeight);
+    const borderMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const borderEdges = new THREE.EdgesGeometry(borderGeometry);
+    const border = new THREE.LineSegments(borderEdges, borderMaterial);
+    border.position.set(xOffset+0.5*voxelData.length, yOffset+0.5*voxelData.length, maxHeight / 2);
+    scene.add(border);
+
+    const imageUrl = 'static/img/mapsat.png'; // Replace with the actual path
+    const imageWidth = voxelData.length; // Set the width of the image
+    const imageHeight = voxelData.length; // Set the height of the image
+    loadAndCreateBackgroundImage(imageUrl, xOffset + 0.5 * voxelData.length, yOffset + 0.5 * voxelData.length, imageWidth*1.3, imageHeight*1.3);
+
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', onWindowResize, false);
+
+function onWindowResize() {
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth/2-margin,window.innerWidth/2-margin);
+    controls.update();
+    renderer.render(scene, camera);
+}

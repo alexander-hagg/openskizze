@@ -22,12 +22,42 @@
             background-color: #4b5563; /* Tailwind color: gray-700 */
             border: 2px solid #374151; /* Tailwind color: gray-700 */
             margin-top: 16px; /* Tailwind margin: mt-4 */
-            height: 300px; /* Adjust as necessary */
+            height: 200px; /* Adjust as necessary */
+            width: 200px;
+        }
+
+        .content-container {
+            position: relative;
+            padding-top: 30px; /* Space for the x-axis label */
+        }
+
+        .x-axis-label {
+            position: absolute;
+            top: 0;
+            left: 10%;
+            transform: translateX(-50%);
+            font-weight: bold;
+        }
+
+        .y-axis-label {
+            position: absolute;
+            left: 0;
+            bottom: 50%;
+            transform: translateY(50%) rotate(-90deg);
+            transform-origin: left bottom;
+            font-weight: bold;
+        }
+
+        .main-content {
+            position: relative; /* Adjust as needed for the Three.js canvas */
+            height: 96px; /* Adjust as needed */
+            margin-left: 30px; /* Space for the y-axis label */
         }
     </style>
 </head>
 <body class="bg-gray-800 text-white">
-    <script src="/static/script.js"></script>
+    <script src="https://threejs.org/build/three.js"></script>
+    <script src="https://threejsfundamentals.org/threejs/resources/threejs/r125/examples/js/controls/OrbitControls.js"></script>
 
     <div class="top-bar">
         <div class="text-6xl font-bold">OpenSKIZZE</div>
@@ -40,48 +70,23 @@
 
     <div class="flex min-h-screen">
         <!-- Input Section -->
-        <div id="inputSection" class="flex flex-col w-1/5 p-4 space-y-4">
+        <div id="inputSection" class="flex flex-col w-1/6 p-4 space-y-4">
             <div class="text-2xl font-bold">Eingabeparameter</div>
             <div>
-                <div class="font-semibold">Variationseigenschaften</div>
+                <div>
+                <div class="font-semibold">Randbedingungen</div>
+                <!-- File inputs for CSV files -->
                 <div class="space-y-2">
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Anzahl Gebäuden</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Gebäudefläche</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Bebaute Fläche</span>
-                    </label>
+                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <!-- <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"> -->
                 </div>
-            </div>
+            </div>            
             <div>
-                <div class="font-semibold">Ausrichtung</div>
+            <div class="font-semibold">Optimierungskriterien</div>
                 <div class="space-y-2">
                     <label class="flex items-center space-x-2">
-                        <input type="radio" name="ausrichtung" class="form-radio h-5 w-5 text-blue-600">
-                        <span>Durchschnitt</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="radio" name="ausrichtung" class="form-radio h-5 w-5 text-blue-600">
-                        <span>Maximal</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="radio" name="ausrichtung" class="form-radio h-5 w-5 text-blue-600">
-                        <span>Varianz</span>
-                    </label>
-                </div>
-            </div>
-            <div>
-                <div class="font-semibold">Optimalkriterien</div>
-                <div class="space-y-2">
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Porosität Baufkörper</span>
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" checked>
+                        <span>Porosität Baukörper</span>
                     </label>
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
@@ -101,54 +106,82 @@
                     </label>
                 </div>
             </div>
+            <div class="font-semibold">Variationseigenschaften</div>
+                <div class="variation-properties space-y-2">
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        Anzahl Gebäude
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        Gebäudefläche
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                        Bebaute Fläche
+                    </label>
+                </div>
+            </div>
             <div>
-                <div class="font-semibold">Randbedingungen</div>
-                <!-- File inputs for CSV files -->
+            <div class="font-semibold">Angezeigte Statistik</div>
                 <div class="space-y-2">
-                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="statistics" class="form-radio h-5 w-5 text-blue-600">
+                        <span>Durchschnitt</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="statistics" class="form-radio h-5 w-5 text-blue-600">
+                        <span>Maximal</span>
+                    </label>
+                    <label class="flex items-center space-x-2">
+                        <input type="radio" name="statistics" class="form-radio h-5 w-5 text-blue-600">
+                        <span>Varianz</span>
+                    </label>
                 </div>
             </div>
         </div>
 
         <!-- Main Content Section -->
-        <div class="flex-grow p-4 space-y-4 max-w-2xl">
+        <div class="flex-grow p-4 space-y-4 w-3/6">
             <div class="text-2xl font-semibold">Planungsentwurfsbeispiele</div>
-            <div class="grid grid-cols-12 gap-0">
-                <!-- Dynamically generated grid items -->
-                <!-- Placeholder for grid items -->
+            <div class="content-container grid grid-cols-12 gap-0">
+                <!-- Axis Label Placeholders -->
+                <div class="grid-item-labels">
+                <div id="x-axis-label" class="x-axis-label">X-Axis Label</div>
+                <div id="y-axis-label" class="y-axis-label">Y-Axis Label</div>
+                </div>
                 <div id="mainContent" class="col-span-12 h-96">
-                    <!-- Placeholder content -->
+                    <!-- Placeholder for 3D designs -->
                 </div>
             </div>
         </div>
 
         <!-- Output Section -->
-        <div class="output-map-container flex flex-col w-1/4 p-4 space-y-4">
+        <div class="output-map-container flex flex-col w-1/6 p-4 space-y-4">
             <div class="text-2xl font-bold">Analyse</div>
             <div id="outputSection" class="space-y-4">
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
                     <span>Karte Bebauung</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
                     <span>Karte Gebäudeausrichtung</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
                     <span>Karte Tabuzonen</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
                     <span>Karte Bebauungshöhe</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
                     <span>Karte notwendige blaue Infrastruktur</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
                     <span>Karte möglicher Hitze-Hotspots</span>
                 </label>
             </div>
@@ -160,14 +193,15 @@
             </div>
         </div>
 
-            <!-- New Box for 'formalisieren' Button and Criteria Display -->
-        <div id="formalCriteriaBox" class="space-y-4 w-1/5">
-            <button id="formalizeButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                Formalisieren
-            </button>
+        <!-- New Box for 'formalisieren' Button and Criteria Display -->
+        <div id="formalCriteriaBox" class="space-y-4 w-1/6 p-4 ">
+            <div class="text-2xl font-bold">Formale Kriterien</div>
             <div id="formalCriteria" class="text-sm bg-gray-700 p-4 rounded">
                 <!-- This is where the formal criteria will be displayed -->
             </div>
+            <button id="formalizeButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Formalisieren
+            </button>            
             <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
                 Kriterien exportieren
             </button>
@@ -175,6 +209,8 @@
     </div>
     </div>
 
+    <script src="/static/script.js"></script>
+    <script src="/static/app.js"></script>
     
 </body>
 </html>
