@@ -1,7 +1,7 @@
 let scene, camera, renderer, controls;
 
-let margin=20;
-let solution_margin = 5;
+let margin = 20;
+let solution_margin = 4;
 
 init();
 animate();
@@ -72,7 +72,7 @@ function createVoxelMesh(voxelData, index, gridSize, solution_margin) {
                 const voxel = new THREE.Mesh(geometry, material.clone());
                 voxel.position.set(x + xOffset, y + yOffset, voxelHeight / 2);
                 voxel.scale.set(1, 1, voxelHeight);
-                voxel.material.color.set(new THREE.Color(`hsl(${voxelHeight * 360}, 50%, 50%)`));
+                voxel.material.color.set(new THREE.Color(`hsl(${voxelHeight * 360 / 3}, 50%, 50%)`));
                 scene.add(voxel);
 
             }

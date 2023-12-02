@@ -49,8 +49,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateAxisLabels() {
         const checkedCheckboxes = document.querySelectorAll('.variation-properties input[type="checkbox"]:checked');
         let labels = Array.from(checkedCheckboxes).map(cb => cb.nextSibling.textContent.trim());
-        console.log(`labels.length: ${labels.length}`);
-        console.log(`labels: ${labels}`);
         if (labels.length === 2) {
             document.getElementById('x-axis-label').textContent = labels[0].concat(" \u2192");
             document.getElementById('y-axis-label').textContent = "\u2190 ".concat(labels[1]);

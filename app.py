@@ -14,7 +14,7 @@ def index():
 def image_to_voxels(image_path):
     image = Image.open(image_path).convert('L')
     np_image = np.array(image)
-    voxel_data = np_image / 255.0
+    voxel_data = 3.0 * np_image / 255.0
     return voxel_data.tolist()
 
 # @app.route('/get-voxel-meshes', methods=['GET'])

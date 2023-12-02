@@ -26,12 +26,15 @@
         .top-bar img {
             height: 4rem; /* Tailwind size: h-10 */
         }
-        .output-map {
-            background-color: #4b5563; /* Tailwind color: gray-700 */
-            border: 0px solid #374151; /* Tailwind color: gray-700 */
-            margin-top: 0px; /* Tailwind margin: mt-4 */
-            height: 240px; /* Adjust as necessary */
-            width: 240px;
+
+        #inputSection {
+            background-color: #4b5563;
+        }
+
+        .main-content-container {
+            position: relative; /* Adjust as needed for the Three.js canvas */
+            height: 96px; /* Adjust as needed */
+            margin-left: 30px; /* Space for the y-axis label */
         }
 
         .content-container {
@@ -56,11 +59,24 @@
             font-weight: bold;
         }
 
-        .main-content {
-            position: relative; /* Adjust as needed for the Three.js canvas */
-            height: 96px; /* Adjust as needed */
-            margin-left: 30px; /* Space for the y-axis label */
+        .output-map-container {
+            background-color: #4b5563;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
+
+        .vertical-filler {
+            flex-grow: 1;
+            min-height: 300px;
+        } 
+
+        .output-map {
+            background-color: #4b5563; /* Tailwind color: gray-700 */
+            border: 0px solid #374151; /* Tailwind color: gray-700 */
+            margin-top: 0px; /* Tailwind margin: mt-4 */
+            aspect-ratio: 1;
+        }        
 
         .map-title {
             font-size: 1rem; /* Adjust font size as needed */
@@ -70,6 +86,7 @@
             color: white; /* Sets the font color to white for readability */
             padding: 4px; /* Optional: Adds some padding inside the title bar */
         }
+
 
     </style>
 </head>
@@ -94,6 +111,10 @@
             <div>
                 <div>
                 <div class="font-semibold"><br>Topographie</div>
+                <div class="space-y-2">
+                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+                <div class="font-semibold"><br>Vorh. Bebauung/Begrünung</div>
                 <div class="space-y-2">
                     <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 </div>
@@ -171,7 +192,7 @@
         </div>
 
         <!-- Main Content Section -->
-        <div class="flex-grow p-4 space-y-4 w-2/6">
+        <div class="main-content-container flex-grow p-4 space-y-4 w-2/6">
             <div class="text-2xl font-semibold">Planungsentwurfsbeispiele (25 Repräsentanten)</div>
             <div class="content-container grid grid-cols-12 gap-0">
                 <!-- Axis Label Placeholders -->
@@ -187,33 +208,7 @@
 
         <!-- Output Section -->
         <div class="output-map-container grid grid-cols-2 gap-4 w-2/7 p-4">
-            <div class="text-2xl font-bold col-span-2">Analyse</div>
-            <!-- <div id="outputSection" class="space-y-4">
-                <label class="flex items-center space-x-2">
-                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
-                    <span>Karte Bebauung</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
-                    <span>Karte Gebäudeausrichtung</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
-                    <span>Karte Tabuzonen</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
-                    <span>Karte Bebauungshöhe</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
-                    <span>Karte notwendige blaue Infrastruktur</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input type="radio" name="map" class="form-radio h-5 w-5 text-blue-600">
-                    <span>Karte möglicher Hitze-Hotspots</span>
-                </label>
-            </div>-->
+            <div class="text-2xl font-semibold col-span-2">Analyse</div>
             <div id="outputMap0" class="output-map col-span-1">
                 <div class="map-title">Bebauungsdichte</div>
                 <!-- Content -->
@@ -231,13 +226,14 @@
                 <!-- Content -->
             </div>
             <div id="outputMap4" class="output-map col-span-1">
-                <div class="map-title">Notwendige blaue Infrastruktur</div>
+                <div class="map-title">Notwendige gr/bl Infrastruktur</div>
                 <!-- Content -->
             </div>
             <div id="outputMap5" class="output-map col-span-1">
                 <div class="map-title">Hitzehotspots</div>
                 <!-- Content -->
             </div>
+            <div class="vertical-filler"></div>
         </div>
 
 
