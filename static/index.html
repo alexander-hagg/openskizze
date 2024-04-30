@@ -78,6 +78,13 @@
             aspect-ratio: 1;
         }        
 
+        .input-map {
+            background-color: #4b5563; /* Tailwind color: gray-700 */
+            border: 0px solid #374151; /* Tailwind color: gray-700 */
+            margin-top: 0px; /* Tailwind margin: mt-4 */
+            aspect-ratio: 1;
+        }        
+
         .map-title {
             font-size: 1rem; /* Adjust font size as needed */
             font-weight: bold;
@@ -86,7 +93,6 @@
             color: white; /* Sets the font color to white for readability */
             padding: 4px; /* Optional: Adds some padding inside the title bar */
         }
-
 
     </style>
 </head>
@@ -112,7 +118,7 @@
                 <div>
                 <div class="font-semibold"><br>Topographie</div>
                 <div class="space-y-2">
-                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <input type="file" disabled class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 </div>
                 <div class="font-semibold"><br>Vorh. Bebauung/Begrünung</div>
                 <div class="space-y-2">
@@ -136,23 +142,23 @@
                 <div class="space-y-2">
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" checked>
-                        <span>Porosität Baukörper</span>
+                        <span>Durchströmung &uarr;</span>
                     </label>
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Hitzeabstrahlung</span>
+                        <span>Porosität Baukörper &uarr;</span>
                     </label>
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Hitzeaufnahme</span>
+                        <span>Hitzeabstrahlung &darr;</span>
                     </label>
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Gebäudefläche</span>
+                        <span>Hitzeaufnahme &darr;</span>
                     </label>
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Fassadenfläche</span>
+                        <span>Fassadenfläche &darr;</span>
                     </label>
                 </div>
             </div>
@@ -193,7 +199,7 @@
 
         <!-- Main Content Section -->
         <div class="main-content-container flex-grow p-4 space-y-4 w-2/6">
-            <div class="text-2xl font-semibold">Planungsentwurfsbeispiele (25 Repräsentanten)</div>
+            <div class="text-2xl font-semibold">Planungsentwurfsbeispiele (Repräsentanten)</div>
             <div class="content-container grid grid-cols-12 gap-0">
                 <!-- Axis Label Placeholders -->
                 <div class="grid-item-labels">
@@ -208,6 +214,15 @@
 
         <!-- Output Section -->
         <div class="output-map-container grid grid-cols-2 gap-4 w-2/7 p-4">
+            <div class="text-2xl font-semibold col-span-2">Urbanklimatologische Bedingungen</div>
+            <div id="inputMap0" class="input-map col-span-1">
+                <div class="map-title">Kaltluftströmung</div>
+                <!-- Content -->
+            </div>
+            <div id="inputMap1" class="input-map col-span-1">
+                <div class="map-title">Hitzehotspots</div>
+                <!-- Content -->
+            </div>
             <div class="text-2xl font-semibold col-span-2">Analyse</div>
             <div id="outputMap0" class="output-map col-span-1">
                 <div class="map-title">Bebauungsdichte</div>
@@ -230,7 +245,7 @@
                 <!-- Content -->
             </div>
             <div id="outputMap5" class="output-map col-span-1">
-                <div class="map-title">Hitzehotspots</div>
+                <div class="map-title">Entsiegelungszwang</div>
                 <!-- Content -->
             </div>
             <div class="vertical-filler"></div>
@@ -256,8 +271,8 @@
     </div>
     </div>
 
-    <script src="/static/script.js"></script>
-    <script src="/static/app.js"></script>
+    <script src="/static/3dgui.js"></script>
+    <script src="/static/interaction.js"></script>
     
 </body>
 </html>

@@ -2,14 +2,14 @@ from flask import Flask, jsonify, request, send_from_directory
 from PIL import Image
 import numpy as np
 import os
-from math import sqrt, floor
-
 
 app = Flask(__name__, static_folder='static')
+
 
 @app.route('/')
 def index():
     return send_from_directory(app.static_folder, 'index.html')
+
 
 def image_to_voxels(image_path):
     image = Image.open(image_path).convert('L')
@@ -17,26 +17,39 @@ def image_to_voxels(image_path):
     voxel_data = 3.0 * np_image / 255.0
     return voxel_data.tolist()
 
-# @app.route('/get-voxel-meshes', methods=['GET'])
-# def get_voxel_meshes():
-#     n = 3  # number of rows and columns
-#     voxel_meshes = []
-#     for i in range(1, n**2 + 1):
-#         image_path = f'res/{i}.png'
-#         if not os.path.exists(image_path):
-#             return jsonify({"error": f"Image {i}.png not found"}), 404
-#         voxel_data = image_to_voxels(image_path)
-#         voxel_meshes.append(voxel_data)
-#     return jsonify(voxel_meshes)    
 
 @app.route('/get-voxel-meshes', methods=['GET'])
 def get_voxel_meshes():
     folder_path = 'res/'  # Folder containing PNG images
     files = os.listdir(folder_path)
     png_files = [file for file in files if file.lower().endswith('.png')]
+    voxel_meshes = []
+    for png_file in png_files:
+        image_path = os.path.join(folder_path, png_file)
+        voxel_data = image_to_voxels(image_path)
+        voxel_meshes.append(voxel_data)
+    # setup archive
+    # archive['size'] = [3,3]
+    # archive['genes'] = None
+    # archive['features'] = None
+    # archive['fitness'] = None
+    # get features
+    #for mesh in voxel_meshes:
+    #    print(f'mesh: {mesh}')
+    # add solutions to archive
+    # extract solutions from archive
+    voxel_meshes = voxel_meshes
+    return jsonify(voxel_meshes)
+
+
+@app.route('/get-voxel-meshes-example', methods=['GET'])
+def get_voxel_meshes_example():
+    folder_path = 'res/'  # Folder containing PNG images
+    files = os.listdir(folder_path)
+    png_files = [file for file in files if file.lower().endswith('.png')]
 
     # Determine the number of rows and columns based on the number of images
-    n = floor(sqrt(len(png_files)))
+    # n = floor(sqrt(len(png_files)))
     # if n**2 != len(png_files):
     #     return jsonify({"error": "Number of images is not a perfect square"}), 400
 
@@ -47,6 +60,7 @@ def get_voxel_meshes():
         voxel_meshes.append(voxel_data)
     return jsonify(voxel_meshes)
 
+
 @app.route('/update_designs', methods=['POST'])
 def update_designs():
     params = request.json
@@ -54,12 +68,22 @@ def update_designs():
     print(f'design_src: {design_src}')
     return jsonify({'design': design_src})
 
+
+@app.route('/update_input_map', methods=['POST'])
+def update_input_map():
+    # selections = request.json
+    # map_src = generate_output_map_name(selections)
+    map_src = [f'static/maps/in/{id}.png' for id in range(2)]
+    return jsonify({'mapSrc': map_src})
+
+
 @app.route('/update_output_map', methods=['POST'])
 def update_output_map():
     # selections = request.json
     # map_src = generate_output_map_name(selections)
-    map_src = update_output_maps()
+    map_src = [f'static/maps/out/{id}.png' for id in range(6)]
     return jsonify({'mapSrc': map_src})
+
 
 @app.route('/formalize_criteria', methods=['POST'])
 def formalize_criteria():
@@ -67,6 +91,7 @@ def formalize_criteria():
     # Simulate a call to a mockup LLM and return criteria
     criteria = mockup_llm_process(data)
     return jsonify({'criteria': criteria})
+
 
 def mockup_llm_process(data):
     # Placeholder function for LLM processing
@@ -80,6 +105,7 @@ def mockup_llm_process(data):
         <li>STRUK_01: Die Bebauungsstruktur muss qualitativ die Strukturen der Planungsentwurfskategorien II-IV ähneln</li>
     </ll>
     '''
+
 
 def generate_design_image_name(params):
     # Concatenate selected option values to form a unique image name
@@ -103,10 +129,7 @@ def generate_design_image_name(params):
 #         return f'/static/maps/{map_name}.png'
 #     return '/static/maps/default_map.png'  # A default map if no options are selected
 
-def update_output_maps():
-    png_files = [f'static/maps/{id}.png' for id in range(6)]
-    print(f'TODO Updating output maps {png_files}')
-    return png_files
+
 
 if __name__ == '__main__':
     app.run(debug=True)
