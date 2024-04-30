@@ -1,7 +1,9 @@
 # openskizze
 
 Current GUI design:
-![Screenshot from 2023-11-30 15-35-25](https://github.com/alexander-hagg/openskizze/assets/1055659/8e31743f-37b6-4ae3-8282-a1ef7e53af2f)
+
+![Screenshot from 2024-04-30 15-01-45](https://github.com/FullDA-FM/openskizze-gui/assets/1055659/4cc87b6a-9303-4d37-9afe-011e0f3c08f8)
+
 
 # Requirements
 
