@@ -3,6 +3,9 @@ let scene, camera, renderer, controls;
 let margin = 20;
 let solution_margin = 4;
 
+import * as THREE from './vendor/three/build/three.module.js';
+import { OrbitControls } from "./vendor/three/examples/jsm/controls/OrbitControls.js";
+
 init();
 animate();
 
@@ -17,11 +20,22 @@ function init() {
     const container = document.getElementById("mainContent");
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(container.offsetWidth-margin,container.offsetWidth-margin);
-    
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // PCF shadow mapping
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1); // white, intensity: 1
+    dirLight.position.set(10, 10, 10); // adjust as needed
+    //dirLight.target.position.set(-10,0,5);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // Optional: Add an ambient light for softer lighting of shadows
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // white, intensity: 0.4
+    scene.add(ambientLight);
 
     container.appendChild(renderer.domElement);
 
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls = new OrbitControls(camera, renderer.domElement);
 
     // Dynamic grid size calculation (assuming it's a square grid)
     fetch('/get-voxel-meshes')
@@ -46,13 +60,16 @@ function init() {
 
 function loadAndCreateBackgroundImage(imageUrl, positionX, positionY, width, height) {
     const textureLoader = new THREE.TextureLoader();
-    texture = textureLoader.load(imageUrl, function(texture) {
+    let texture = textureLoader.load(imageUrl, function(texture) {
         const planeGeometry = new THREE.PlaneGeometry(width, height);
         const planeMaterial = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
         const plane = new THREE.Mesh(planeGeometry, planeMaterial);
         
         // Adjust position as needed
         plane.position.set(positionX, positionY, 0); // Positioned slightly behind the voxel mesh
+        plane.receiveShadow = true;
+        plane.castShadow = false; // typically a plane doesn't need to cast shadows
+
         scene.add(plane);
     });
     texture.encoding = THREE.sRGBEncoding;
@@ -60,7 +77,7 @@ function loadAndCreateBackgroundImage(imageUrl, positionX, positionY, width, hei
 
 function createVoxelMesh(voxelData, index, gridSize, solution_margin) {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial();
+    const material = new THREE.MeshStandardMaterial();
     
     let xOffset = (index % gridSize) * gridSize * solution_margin; // Adjusted for spacing
     let yOffset = Math.floor(index / gridSize) * gridSize * solution_margin; // Adjusted for spacing
@@ -73,6 +90,9 @@ function createVoxelMesh(voxelData, index, gridSize, solution_margin) {
                 voxel.position.set(x + xOffset, y + yOffset, voxelHeight / 2);
                 voxel.scale.set(1, 1, voxelHeight);
                 voxel.material.color.set(new THREE.Color(`hsl(${voxelHeight * 360 / 3}, 50%, 50%)`));
+                voxel.castShadow = true;
+                voxel.receiveShadow = true;
+
                 scene.add(voxel);
 
             }
@@ -80,7 +100,7 @@ function createVoxelMesh(voxelData, index, gridSize, solution_margin) {
     }
 
     // Create and add the border for this voxel mesh
-    maxHeight = 3;
+    let maxHeight = 3;
     const borderGeometry = new THREE.BoxGeometry(voxelData.length, voxelData.length, maxHeight);
     const borderMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
     const borderEdges = new THREE.EdgesGeometry(borderGeometry);
