@@ -3,71 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <base href=".">
+    <title>Resizable Columns</title>
     <script type="module" src="./static/3dgui.js"></script>
     <script type="module" src="./static/interaction.js"></script>
-    
-    <title>OpenSKIZZE</title>
+    <script src="./static/script.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./static/styles.css">
 </head>
-<body class="bg-gray-800 text-white">
-    
+<body>
     <div class="top-bar">
         <div class="text-6xl font-bold"><img src="/static/img/logo.png" alt="O" class="logo-image">penSKIZZE</div>
-        <div class="text-sm">created by Alexander Hagg<br>alexander.hagg@h-brs.de<br>licensed under GNU General Public License v3<br>funded by Deutsche Bundesstiftung Umwelt</b></div>
+        <div class="text-sm">created by Alexander Hagg<br>alexander.hagg@h-brs.de<br>licensed under GNU General Public License v3</div>
 
         <div class="flex items-center space-x-4">
             <img src="/static/img/university_logo.jpg" alt="University Logo">
             <img src="/static/img/tree_logo.png" alt="TREE Logo">
         </div>
     </div>
+    <div class="container">
 
-    <div class="flex min-h-screen">
-        <!-- Input Section -->
-        <div id="inputSection" class="flex flex-col w-1/5 p-4 space-y-4">
-            <div class="text-2xl font-bold">Eingabeparameter</div>
+        <!-- COLUMN !: INPUT -->
+        <div id="inputSection" class="column flex-col-slide flex flex-col w-1/6 p-4 space-y-4">
+            <div class="title text-2xl font-bold">Eingabeparameter</div>
             <div>
-                <div>
-                <div class="font-semibold"><br>Digital Elevation Model</div>
+                <div class="font-semibold"><br>Topographie</div>
                 <div class="space-y-2">
                     <input type="file" disabled class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 </div>
-                <div class="font-semibold"><br>Digital Surface Model</div>
+                <div class="font-semibold"><br>Vorh. Bebauung/Begrünung</div>
                 <div class="space-y-2">
                     <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 </div>
-                <div class="font-semibold"><br>Landcover</div>
+                <div class="font-semibold"><br>Luftströmungsbedingungen</div>
                 <div class="space-y-2">
                     <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 </div>
-            </div>            
-            <div>
-            <div class="font-semibold"><br>Optimierungskriterien</div>
+                <div class="font-semibold"><br>Oberflächenbeschaffenheit</div>
                 <div class="space-y-2">
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" checked>
-                        <span>Porösität Baukörper &uarr;</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Volumenstromdurchsatz (Simulation) &uarr;</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Wärmestrahlung (Oberfläche) &darr;</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Wärmestrahlung (Simulation) &darr;</span>
-                    </label>
-                    <label class="flex items-center space-x-2">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
-                        <span>Fassadenfläche &darr;</span>
-                    </label>
+                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 </div>
-            </div>
-            <div class="font-semibold"><br>Variationseigenschaften</div>
+                <div class="font-semibold"><br>Randbedingungen</div>
+                <div class="space-y-2">
+                    <input type="file" class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+                <div class="font-semibold"><br>Optimierungskriterien</div>
+                    <div class="space-y-2">
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" checked>
+                            <span>Durchströmung &uarr;</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span>Porosität Baukörper &uarr;</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span>Hitzeabstrahlung &darr;</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span>Hitzeaufnahme &darr;</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
+                            <span>Fassadenfläche &darr;</span>
+                        </label>
+                    </div>
+                <div class="font-semibold"><br>Variationseigenschaften</div>
                 <div class="variation-properties space-y-2">
                     <label class="flex items-center space-x-2">
                         <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600">
@@ -85,24 +87,36 @@
             </div>
         </div>
 
-        <!-- Main Content Section -->
-        <div class="main-content-container flex-grow p-4 space-y-4 w-3/6">
-            <div class="text-2xl font-semibold">Planungsentwurfsbeispiele</div>
-            <div class="content-container grid grid-cols-12 gap-0">
-                <!-- Axis Label Placeholders -->
-                <div class="grid-item-labels">
+
+
+
+
+
+        <!-- COLUMN 2: SOLUTIONS -->
+        <div id="solutionSection" class="column">
+            <!-- main-content-container -->
+            <div class="title">Planungsentwurfsbeispiele</div>
+            <!--<div class="text-2xl font-semibold">Planungsentwurfsbeispiele (Repräsentanten)</div>-->
+            <div class="content-container">
                 <div id="x-axis-label" class="x-axis-label">X-Axis Label</div>
                 <div id="y-axis-label" class="y-axis-label">Y-Axis Label</div>
-                </div>
                 <div id="mainContent" class="col-span-12 h-96">
                     <!-- Placeholder for 3D designs -->
                 </div>
             </div>
         </div>
 
-        <!-- Output Section -->
-        <div class="output-map-container grid grid-cols-2 gap-4 w-2/7 p-4">
-            <div class="text-2xl font-semibold col-span-2">Klima Effektanalyse</div>
+
+
+
+
+
+
+
+        <!-- COLUMN 3: ANALYSIS -->
+        <div id="analysisSection" class="column">
+            <div class="title">Analyse</div>
+            <!--<div class="text-2xl font-semibold col-span-2">Urbanklimatologische Bedingungen</div>-->
             <div id="inputMap0" class="input-map col-span-1">
                 <div class="map-title">Kaltluftströmung</div>
                 <!-- Content -->
@@ -111,7 +125,7 @@
                 <div class="map-title">Hitzehotspots</div>
                 <!-- Content -->
             </div>
-            <div class="text-2xl font-semibold col-span-2">Anforderungsanalyse</div>
+            <div class="text-2xl font-semibold col-span-2">Analyse</div>
             <div id="outputMap0" class="output-map col-span-1">
                 <div class="map-title">Bebauungsdichte</div>
                 <!-- Content -->
@@ -136,28 +150,30 @@
                 <div class="map-title">Entsiegelungszwang</div>
                 <!-- Content -->
             </div>
-            <div class="vertical-filler"></div>
         </div>
 
 
-        <!-- New Box for 'formalisieren' Button and Criteria Display -->
-        <div id="formalCriteriaBox" class="space-y-4 w-1/6 p-4 ">
-            <div class="text-2xl font-bold">Formale Kriterien</div>
+
+
+
+
+        <!-- COLUMN 4: LLM -->
+        <div id="llmSection"class="column">
+            <div class="title">Formale Kriterien</div>
+            <!--<div class="text-2xl font-bold">Formale Kriterien</div>-->
             <button id="formalizeButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
                 Formalisieren
-            </button>            
-            <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                Export Kriterien
             </button>
             <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                Export Karten
+                Kriterien exportieren
+            </button>
+            <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Karten exportieren
             </button>
             <div id="formalCriteria" class="text-sm bg-gray-700 p-4 rounded">
                 <!-- This is where the formal criteria will be displayed -->
             </div>
-            
+        </div>
     </div>
-    </div>
-
 </body>
 </html>
