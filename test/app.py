@@ -4,7 +4,8 @@ import numpy as np
 import folium
 import json
 from streamlit_folium import st_folium
-from shapely.geometry import Polygon
+from folium.plugins import Draw
+from shapely.geometry import Polygon, box
 import rasterio
 import geopandas as gpd
 
@@ -36,8 +37,7 @@ def main():
     st.title(translate("title"))
 
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = 'Home'
-
+        st.session_state.current_page = "home"
 
     # Create a sidebar for navigation with buttons
     st.sidebar.title(translate("navigation"))
@@ -67,7 +67,6 @@ def main():
         results_page()
     elif st.session_state.current_page == 'deduced_rules':
         deduced_rules_page()
-
 
 
 def home_page():
@@ -149,31 +148,79 @@ def visualize_models_page():
             opacity=0.6,
         ).add_to(m)
 
-        # Add a simple grid overlay
-        for i in range(0, dem_data.shape[0], 10):
-            for j in range(0, dem_data.shape[1], 10):
-                folium.Rectangle(
+        # Create grid
+        grid_size = 10
+        grid_cells = []
+        for i in range(0, dem_data.shape[0], grid_size):
+            for j in range(0, dem_data.shape[1], grid_size):
+                cell = folium.Rectangle(
                     bounds=[
                         [dem_bounds.bottom + i * (dem_bounds.top - dem_bounds.bottom) / dem_data.shape[0],
                          dem_bounds.left + j * (dem_bounds.right - dem_bounds.left) / dem_data.shape[1]],
-                        [dem_bounds.bottom + (i + 10) * (dem_bounds.top - dem_bounds.bottom) / dem_data.shape[0],
-                         dem_bounds.left + (j + 10) * (dem_bounds.right - dem_bounds.left) / dem_data.shape[1]]
+                        [dem_bounds.bottom + (i + grid_size) * (dem_bounds.top - dem_bounds.bottom) / dem_data.shape[0],
+                         dem_bounds.left + (j + grid_size) * (dem_bounds.right - dem_bounds.left) / dem_data.shape[1]]
                     ],
                     fill=False,
-                    color='blue'
-                ).add_to(m)
+                    color='blue',
+                    weight=1
+                )
+                grid_cells.append(cell)
+                cell.add_to(m)
 
-        # Add the folium map to Streamlit
+        # Add draw control
+        draw = Draw(
+            draw_options={
+                'polyline': False,
+                'circle': False,
+                'circlemarker': False,
+                'marker': False,
+            },
+            edit_options={'edit': False}
+        )
+        draw.add_to(m)
+
+        # Display the map
         output = st_folium(m, width=700, height=500)
 
-        # Placeholder for selecting boundary using mouse clicks and drag
-        st.subheader(translate("select_boundary"))
-        st.text("Click and drag over the squares to select the planning area (feature coming soon)")
+        # Process drawn shapes
+        if output['last_active_drawing']:
+            drawn_shape = output['last_active_drawing']
+            if drawn_shape['geometry']['type'] == 'Polygon':
+                drawn_polygon = Polygon(drawn_shape['geometry']['coordinates'][0])
+                
+                # Determine which cells are selected
+                selected_cells = []
+                for i, cell in enumerate(grid_cells):
+                    cell_bounds = cell.get_bounds()
+                    cell_polygon = box(cell_bounds[0][1], cell_bounds[0][0], cell_bounds[1][1], cell_bounds[1][0])
+                    if drawn_polygon.intersects(cell_polygon):
+                        selected_cells.append(i)
 
-        # Assume user has selected some areas
-        global selected_area
-        selected_area = [Polygon([(dem_bounds.left, dem_bounds.bottom), (dem_bounds.left, dem_bounds.top), (dem_bounds.right, dem_bounds.top), (dem_bounds.right, dem_bounds.bottom)])]
-        st.text(f"{translate('select_boundary')}: {selected_area}")
+                # Save selected cells to session state
+                st.session_state.selected_cells = selected_cells
+                
+                # Color selected cells
+                for i in selected_cells:
+                    folium.Rectangle(
+                        bounds=grid_cells[i].get_bounds(),
+                        fill=True,
+                        fillColor='green',
+                        fillOpacity=0.4,
+                        color='green',
+                        weight=2
+                    ).add_to(m)
+
+                # Re-display the map with colored cells
+                st_folium(m, width=700, height=500)
+                
+                st.success(f"Selected {len(selected_cells)} cells. These will be used in the optimization.")
+
+    # Display selected cells (if any)
+    if 'selected_cells' in st.session_state:
+        st.write(f"Number of selected cells: {len(st.session_state.selected_cells)}")
+        if st.checkbox("Show selected cell indices"):
+            st.write(st.session_state.selected_cells)
+    
 
 
 def optimization_criteria_page():
