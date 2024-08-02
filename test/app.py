@@ -183,7 +183,12 @@ def visualize_models_page():
         for i in range(0, dsm_data.shape[0], grid_size):
             for j in range(0, dsm_data.shape[1], grid_size):
                 cell = folium.Rectangle(
-                    bounds=[[dsm_bounds[2], dsm_bounds[0]], [dsm_bounds[3], dsm_bounds[1]]],
+                    bounds=[
+                        [dsm_bounds[1] + i * (dsm_bounds[3] - dsm_bounds[1]) / dsm_data.shape[0],
+                         dsm_bounds[0] + j * (dsm_bounds[2] - dsm_bounds[0]) / dsm_data.shape[1]],
+                        [dsm_bounds[1] + (i + grid_size) * (dsm_bounds[3] - dsm_bounds[1]) / dsm_data.shape[0],
+                         dsm_bounds[0] + (j + grid_size) * (dsm_bounds[2] - dsm_bounds[0]) / dsm_data.shape[1]]
+                    ],
                     fill=False,
                     color='blue',
                     weight=1
