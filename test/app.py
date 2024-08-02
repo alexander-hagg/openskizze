@@ -13,6 +13,7 @@ from osgeo import gdal
 import matplotlib.pyplot as plt
 
 # Load translations
+@st.cache_resource
 def load_translations(lang):
     with open(f'{lang}.json', 'r') as file:
         translations = json.load(file)
@@ -71,7 +72,6 @@ def main():
     elif st.session_state.current_page == 'deduced_rules':
         deduced_rules_page()
 
-
 def home_page():
     st.header(translate("welcome"))
     st.subheader(translate("how_it_works"))
@@ -93,6 +93,42 @@ selected_area = []
 def load_default_file(filename):
     return open(filename, 'rb')
 
+@st.cache_data
+def load_input_models():
+    if 'uploaded_dsm' in st.session_state and 'uploaded_lcm' in st.session_state:
+        # Define the destination CRS
+        dst_crs = 'EPSG:4326'    
+        
+        with rasterio.open(st.session_state.uploaded_dsm) as dsm_src:
+            # Calculate the transform and dimensions of the reprojected raster
+            transform, width, height = calculate_default_transform(
+                dsm_src.crs, dst_crs, dsm_src.width, dsm_src.height, *dsm_src.bounds)
+            
+            # Create a new array for the reprojected data
+            st.session_state.dsm_data = np.empty((height, width), dtype=dsm_src.dtypes[0])
+
+            # Perform the reprojection
+            reproject(
+                source=rasterio.band(dsm_src, 1),
+                destination=st.session_state.dsm_data,
+                src_transform=dsm_src.transform,
+                src_crs=dsm_src.crs,
+                dst_transform=transform,
+                dst_crs=dst_crs,
+                resampling=Resampling.nearest
+            )
+
+            # Get the bounds of the reprojected raster
+            bounds = rasterio.transform.array_bounds(height, width, transform)
+            st.session_state.dsm_bounds = [bounds[0], bounds[2], bounds[1], bounds[3]]
+
+            # Normalize the elevation data for better visualization
+            st.session_state.dsm_data = np.nan_to_num(st.session_state.dsm_data)
+            st.session_state.dsm_data = (st.session_state.dsm_data - np.min(st.session_state.dsm_data)) / (np.max(st.session_state.dsm_data) - np.min(st.session_state.dsm_data)) * 255
+            st.session_state.dsm_data = st.session_state.dsm_data.astype(np.uint8)
+        with rasterio.open(st.session_state.uploaded_lcm) as lcm_src:
+            lcm_data = lcm_src.read(1)
+            
 def input_models_page():
     st.header(translate("input_models"))
     st.subheader(translate("upload_models"))
@@ -119,49 +155,19 @@ def input_models_page():
     if st.session_state.uploaded_dsm and st.session_state.uploaded_lcm:
         st.success(translate("success_upload"))
 
+    st.session_state.dsm_width = st.slider(translate("ask_scale"), 30, 300, 90, step=3)
+
+    load_input_models()
+
 def visualize_models_page():
     st.header(translate("visualize_models"))
     st.subheader(translate("model_visualization"))
 
     if 'uploaded_dsm' in st.session_state and 'uploaded_lcm' in st.session_state:
-        # Define the destination CRS
-        dst_crs = 'EPSG:4326'    
-        
-        with rasterio.open(st.session_state.uploaded_dsm) as dsm_src:
-            # Calculate the transform and dimensions of the reprojected raster
-            transform, width, height = calculate_default_transform(
-                dsm_src.crs, dst_crs, dsm_src.width, dsm_src.height, *dsm_src.bounds)
-            
-            # Create a new array for the reprojected data
-            dsm_data = np.empty((height, width), dtype=dsm_src.dtypes[0])
-
-            # Perform the reprojection
-            reproject(
-                source=rasterio.band(dsm_src, 1),
-                destination=dsm_data,
-                src_transform=dsm_src.transform,
-                src_crs=dsm_src.crs,
-                dst_transform=transform,
-                dst_crs=dst_crs,
-                resampling=Resampling.nearest
-            )
-
-            # dsm_data = dsm_src.read(1)
-            # dsm_bounds = dsm_src.bounds
-            # Get the bounds of the reprojected raster
-            bounds = rasterio.transform.array_bounds(height, width, transform)
-            dsm_bounds = [bounds[0], bounds[2], bounds[1], bounds[3]]
-
-            # Normalize the elevation data for better visualization
-            dsm_data = np.nan_to_num(dsm_data)
-            dsm_data = (dsm_data - np.min(dsm_data)) / (np.max(dsm_data) - np.min(dsm_data)) * 255
-            dsm_data = dsm_data.astype(np.uint8)
-        with rasterio.open(st.session_state.uploaded_lcm) as lcm_src:
-            lcm_data = lcm_src.read(1)
 
         # Calculate the center of the raster for map centering
-        rasLon = (dsm_bounds[1] + dsm_bounds[0]) / 2
-        rasLat = (dsm_bounds[3] + dsm_bounds[2]) / 2
+        rasLon = (st.session_state.dsm_bounds[1] + st.session_state.dsm_bounds[0]) / 2
+        rasLat = (st.session_state.dsm_bounds[3] + st.session_state.dsm_bounds[2]) / 2
         mapCenter = [rasLat, rasLon]
 
         # Create map
@@ -169,8 +175,8 @@ def visualize_models_page():
 
         # Add DSM overlay
         folium.raster_layers.ImageOverlay(
-            image=dsm_data,
-            bounds=[[dsm_bounds[2], dsm_bounds[0]], [dsm_bounds[3], dsm_bounds[1]]],
+            image=st.session_state.dsm_data,
+            bounds=[[st.session_state.dsm_bounds[2], st.session_state.dsm_bounds[0]], [st.session_state.dsm_bounds[3], st.session_state.dsm_bounds[1]]],
             colormap=lambda x: (x, x, x, 255),  # Grayscale colormap
             opacity=0.8,
             interactive=True,
@@ -178,17 +184,14 @@ def visualize_models_page():
         ).add_to(m)
 
         # Create grid
-        grid_size = 10
+        num_cells = int(st.session_state.dsm_width/3) # We assume dsm_width is x * 3m. So we can divide by 3
         grid_cells = []
-        for i in range(0, dsm_data.shape[0], grid_size):
-            for j in range(0, dsm_data.shape[1], grid_size):
+        coords_y = np.linspace(st.session_state.dsm_bounds[0], st.session_state.dsm_bounds[1], num_cells+1)
+        coords_x = np.linspace(st.session_state.dsm_bounds[2], st.session_state.dsm_bounds[3], num_cells+1)
+        for i in range(len(coords_x)-1):
+            for j in range(len(coords_y)-1):
                 cell = folium.Rectangle(
-                    bounds=[
-                        [dsm_bounds[1] + i * (dsm_bounds[3] - dsm_bounds[1]) / dsm_data.shape[0],
-                         dsm_bounds[0] + j * (dsm_bounds[2] - dsm_bounds[0]) / dsm_data.shape[1]],
-                        [dsm_bounds[1] + (i + grid_size) * (dsm_bounds[3] - dsm_bounds[1]) / dsm_data.shape[0],
-                         dsm_bounds[0] + (j + grid_size) * (dsm_bounds[2] - dsm_bounds[0]) / dsm_data.shape[1]]
-                    ],
+                    bounds=[[coords_x[i],coords_y[j]],[coords_x[i+1],coords_y[j+1]]],
                     fill=False,
                     color='blue',
                     weight=1
@@ -199,7 +202,6 @@ def visualize_models_page():
         # Add draw control
         draw = Draw(
             draw_options={
-                'polyline': False,
                 'circle': False,
                 'circlemarker': False,
                 'marker': False,

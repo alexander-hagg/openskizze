@@ -36,5 +36,6 @@
     "number_buildings": "Anzahl der Gebäude",
     "constructed_area": "Gebäudefläche",
     "total_area_building": "Gesamtfläche des Gebäudes",
-    "other": "Andere"
+    "other": "Andere",
+    "ask_scale": "Bitte wählen Sie die Breite des DSM-Fensters in Metern, um sicherzustellen, dass der Maßstab korrekt ist"
 }

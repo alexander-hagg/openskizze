@@ -36,5 +36,6 @@
     "number_buildings": "Number of buildings",
     "constructed_area": "Area of the constructed area",
     "total_area_building": "Total area of the building",
-    "other": "Other"
+    "other": "Other",
+    "ask_scale": "Please select the width of the DSM window in meters to ensure the scale is correct"
 }

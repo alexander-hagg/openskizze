@@ -36,6 +36,7 @@
     "number_buildings": "Número de edificios",
     "constructed_area": "Área de la zona construida",
     "total_area_building": "Área total del edificio",
-    "other": "Otros"
+    "other": "Otros",
+    "ask_scale": "Seleccione el ancho de la ventana DSM en metros para garantizar que la escala sea correcta"
 }
 
