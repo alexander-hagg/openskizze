@@ -8,6 +8,7 @@ from folium.plugins import Draw
 from shapely.geometry import Polygon, box
 import rasterio
 import geopandas as gpd
+from osgeo import gdal
 
 # Load translations
 def load_translations(lang):
@@ -83,7 +84,6 @@ def home_page():
     # Placeholder for images, which will be provided later
     # st.image("path/to/your/image1.jpg", caption=translate("placeholder"))
     
-uploaded_dem = None
 uploaded_dsm = None
 uploaded_lcm = None
 selected_area = []
@@ -95,70 +95,63 @@ def input_models_page():
     st.header(translate("input_models"))
     st.subheader(translate("upload_models"))
 
-    if 'uploaded_dem' not in st.session_state:
-        st.session_state.uploaded_dem = None
     if 'uploaded_dsm' not in st.session_state:
         st.session_state.uploaded_dsm = None
     if 'uploaded_lcm' not in st.session_state:
         st.session_state.uploaded_lcm = None
 
-    uploaded_dem = st.file_uploader(translate("dem"), type=["tif", "csv", "txt"])
     uploaded_dsm = st.file_uploader(translate("dsm"), type=["tif", "csv", "txt"])
     uploaded_lcm = st.file_uploader(translate("lcm"), type=["tif", "csv", "txt"])
-
-    if uploaded_dem:
-        st.session_state.uploaded_dem = uploaded_dem
-    else:
-        st.session_state.uploaded_dem = load_default_file('example_dem.tif')
 
     if uploaded_dsm:
         st.session_state.uploaded_dsm = uploaded_dsm
     else:
-        st.session_state.uploaded_dsm = load_default_file('example_dsm.tif')
+        dsm_path = 'data/Goteborg_SWEREF99_1200/DSM_KRbig.tif'
+        ds = gdal.Open(dsm_path)
+        st.session_state.uploaded_dsm = ds.GetRasterBand(1).ReadAsArray()
+        # st.session_state.uploaded_dsm = load_default_file('example_dsm.tif')
 
     if uploaded_lcm:
         st.session_state.uploaded_lcm = uploaded_lcm
     else:
-        st.session_state.uploaded_lcm = load_default_file('example_lcm.tif')
+        st.session_state.uploaded_lcm = load_default_file('data/example_lcm.tif')
 
-    if st.session_state.uploaded_dem and st.session_state.uploaded_dsm and st.session_state.uploaded_lcm:
+    if st.session_state.uploaded_dsm and st.session_state.uploaded_lcm:
         st.success(translate("success_upload"))
 
 def visualize_models_page():
     st.header(translate("visualize_models"))
     st.subheader(translate("model_visualization"))
 
-    if 'uploaded_dem' in st.session_state and 'uploaded_dsm' in st.session_state and 'uploaded_lcm' in st.session_state:
-        with rasterio.open(st.session_state.uploaded_dem) as dem_src:
-            dem_data = dem_src.read(1)
-            dem_bounds = dem_src.bounds
+    if 'uploaded_dsm' in st.session_state and 'uploaded_lcm' in st.session_state:
         with rasterio.open(st.session_state.uploaded_dsm) as dsm_src:
             dsm_data = dsm_src.read(1)
+            dsm_bounds = dsm_src.bounds
         with rasterio.open(st.session_state.uploaded_lcm) as lcm_src:
             lcm_data = lcm_src.read(1)
 
         # Create map
-        m = folium.Map(location=[(dem_bounds.top + dem_bounds.bottom) / 2, (dem_bounds.left + dem_bounds.right) / 2], zoom_start=13)
+        m = folium.Map(location=[(dsm_bounds.top + dsm_bounds.bottom) / 2, (dsm_bounds.left + dsm_bounds.right) / 2], zoom_start=13)
 
-        # Add DEM overlay
+        # Add DSM overlay
         folium.raster_layers.ImageOverlay(
-            image=dem_data,
-            bounds=[[dem_bounds.bottom, dem_bounds.left], [dem_bounds.top, dem_bounds.right]],
-            colormap=lambda x: (1, 0, 0, x),  # Red for DEM
+            image=dsm_data,
+            bounds=[[dsm_bounds.bottom, dsm_bounds.left], [dsm_bounds.top, dsm_bounds.right]],
+            colormap=lambda x: (1, 0, 0, x),  # Red for DSM
             opacity=0.6,
         ).add_to(m)
 
         # Create grid
         grid_size = 10
         grid_cells = []
-        for i in range(0, dem_data.shape[0], grid_size):
-            for j in range(0, dem_data.shape[1], grid_size):
+        for i in range(0, dsm_data.shape[0], grid_size):
+            for j in range(0, dsm_data.shape[1], grid_size):
                 cell = folium.Rectangle(
                     bounds=[
-                        [dem_bounds.bottom + i * (dem_bounds.top - dem_bounds.bottom) / dem_data.shape[0],
-                         dem_bounds.left + j * (dem_bounds.right - dem_bounds.left) / dem_data.shape[1]],
-                        [dem_bounds.bottom + (i + grid_size) * (dem_bounds.top - dem_bounds.bottom) / dem_data.shape[0],
-                         dem_bounds.left + (j + grid_size) * (dem_bounds.right - dem_bounds.left) / dem_data.shape[1]]
+                        [dsm_bounds.bottom + i * (dsm_bounds.top - dsm_bounds.bottom) / dsm_data.shape[0],
+                         dsm_bounds.left + j * (dsm_bounds.right - dsm_bounds.left) / dsm_data.shape[1]],
+                        [dsm_bounds.bottom + (i + grid_size) * (dsm_bounds.top - dsm_bounds.bottom) / dsm_data.shape[0],
+                         dsm_bounds.left + (j + grid_size) * (dsm_bounds.right - dsm_bounds.left) / dsm_data.shape[1]]
                     ],
                     fill=False,
                     color='blue',
