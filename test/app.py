@@ -7,8 +7,10 @@ from streamlit_folium import st_folium
 from folium.plugins import Draw
 from shapely.geometry import Polygon, box
 import rasterio
+from rasterio.warp import calculate_default_transform, reproject, Resampling
 import geopandas as gpd
 from osgeo import gdal
+import matplotlib.pyplot as plt
 
 # Load translations
 def load_translations(lang):
@@ -107,9 +109,7 @@ def input_models_page():
         st.session_state.uploaded_dsm = uploaded_dsm
     else:
         dsm_path = 'data/Goteborg_SWEREF99_1200/DSM_KRbig.tif'
-        ds = gdal.Open(dsm_path)
-        st.session_state.uploaded_dsm = ds.GetRasterBand(1).ReadAsArray()
-        # st.session_state.uploaded_dsm = load_default_file('example_dsm.tif')
+        st.session_state.uploaded_dsm = load_default_file(dsm_path)
 
     if uploaded_lcm:
         st.session_state.uploaded_lcm = uploaded_lcm
@@ -124,21 +124,57 @@ def visualize_models_page():
     st.subheader(translate("model_visualization"))
 
     if 'uploaded_dsm' in st.session_state and 'uploaded_lcm' in st.session_state:
+        # Define the destination CRS
+        dst_crs = 'EPSG:4326'    
+        
         with rasterio.open(st.session_state.uploaded_dsm) as dsm_src:
-            dsm_data = dsm_src.read(1)
-            dsm_bounds = dsm_src.bounds
+            # Calculate the transform and dimensions of the reprojected raster
+            transform, width, height = calculate_default_transform(
+                dsm_src.crs, dst_crs, dsm_src.width, dsm_src.height, *dsm_src.bounds)
+            
+            # Create a new array for the reprojected data
+            dsm_data = np.empty((height, width), dtype=dsm_src.dtypes[0])
+
+            # Perform the reprojection
+            reproject(
+                source=rasterio.band(dsm_src, 1),
+                destination=dsm_data,
+                src_transform=dsm_src.transform,
+                src_crs=dsm_src.crs,
+                dst_transform=transform,
+                dst_crs=dst_crs,
+                resampling=Resampling.nearest
+            )
+
+            # dsm_data = dsm_src.read(1)
+            # dsm_bounds = dsm_src.bounds
+            # Get the bounds of the reprojected raster
+            bounds = rasterio.transform.array_bounds(height, width, transform)
+            dsm_bounds = [bounds[0], bounds[2], bounds[1], bounds[3]]
+
+            # Normalize the elevation data for better visualization
+            dsm_data = np.nan_to_num(dsm_data)
+            dsm_data = (dsm_data - np.min(dsm_data)) / (np.max(dsm_data) - np.min(dsm_data)) * 255
+            dsm_data = dsm_data.astype(np.uint8)
         with rasterio.open(st.session_state.uploaded_lcm) as lcm_src:
             lcm_data = lcm_src.read(1)
 
+        # Calculate the center of the raster for map centering
+        rasLon = (dsm_bounds[1] + dsm_bounds[0]) / 2
+        rasLat = (dsm_bounds[3] + dsm_bounds[2]) / 2
+        mapCenter = [rasLat, rasLon]
+
         # Create map
-        m = folium.Map(location=[(dsm_bounds.top + dsm_bounds.bottom) / 2, (dsm_bounds.left + dsm_bounds.right) / 2], zoom_start=13)
+        m = folium.Map(location=mapCenter, zoom_start=16)
 
         # Add DSM overlay
         folium.raster_layers.ImageOverlay(
             image=dsm_data,
-            bounds=[[dsm_bounds.bottom, dsm_bounds.left], [dsm_bounds.top, dsm_bounds.right]],
-            colormap=lambda x: (1, 0, 0, x),  # Red for DSM
-            opacity=0.6,
+            bounds=[[dsm_bounds[2], dsm_bounds[0]], [dsm_bounds[3], dsm_bounds[1]]],
+            colormap=lambda x: (x, x, x, 255),  # Grayscale colormap
+            opacity=0.8,
+            interactive=True,
+            cross_origin=False
         ).add_to(m)
 
         # Create grid
@@ -147,12 +183,7 @@ def visualize_models_page():
         for i in range(0, dsm_data.shape[0], grid_size):
             for j in range(0, dsm_data.shape[1], grid_size):
                 cell = folium.Rectangle(
-                    bounds=[
-                        [dsm_bounds.bottom + i * (dsm_bounds.top - dsm_bounds.bottom) / dsm_data.shape[0],
-                         dsm_bounds.left + j * (dsm_bounds.right - dsm_bounds.left) / dsm_data.shape[1]],
-                        [dsm_bounds.bottom + (i + grid_size) * (dsm_bounds.top - dsm_bounds.bottom) / dsm_data.shape[0],
-                         dsm_bounds.left + (j + grid_size) * (dsm_bounds.right - dsm_bounds.left) / dsm_data.shape[1]]
-                    ],
+                    bounds=[[dsm_bounds[2], dsm_bounds[0]], [dsm_bounds[3], dsm_bounds[1]]],
                     fill=False,
                     color='blue',
                     weight=1

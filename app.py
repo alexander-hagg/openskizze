@@ -64,6 +64,7 @@ def get_voxel_meshes_example():
 @app.route('/update_designs', methods=['POST'])
 def update_designs():
     params = request.json
+    print(f'params: {params}')
     design_src = generate_design_image_name(params)
     print(f'design_src: {design_src}')
     return jsonify({'design': design_src})

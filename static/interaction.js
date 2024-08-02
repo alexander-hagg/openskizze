@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Add event listeners to input elements
     inputSection.addEventListener('change', function(event) {
-        //updateDesigns();
+        updateDesigns();
     });
 
     // Add event listener for output section changes
@@ -63,28 +63,43 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(getInputValues())
+            body: JSON.stringify(getFeatureStr())
         })
         .then(response => response.json())
         .then(data => {
-            updateDesign(data.design);
+            console.log("Updating designs");
         });
     }
 
-    function getInputValues() {
-        let inputValues = {};
+    function getObjectiveStr() {
+        let objective_str = {};
         document.querySelectorAll('#inputSection input[type="checkbox"], #inputSection input[type="radio"]').forEach(input => {
             // Check if nextElementSibling exists to avoid the error
             if (input.nextElementSibling) {
                 let key = input.nextElementSibling.textContent.trim().replace(/\s+/g, '_');
                 if(input.type === 'checkbox' && input.checked) {
-                    inputValues[key] = 'on';
+                    objective_str[key] = 'on';
                 } else if(input.type === 'radio' && input.checked) {
-                    inputValues[input.name] = key;
+                    objective_str[input.name] = key;
                 }
             }
         });
-        return inputValues;
+        return objective_str;
+    }
+
+    function getFeatureStr() {
+        let feature_str = {};
+        document.querySelectorAll('.variation-properties input[type="checkbox"]').forEach(input => {
+            // Check if nextElementSibling exists to avoid the error
+            if (input.nextSibling) {
+                console.log(input.nextSibling.textContent)
+                let key = input.nextSibling.textContent.trim().replace(/\s+/g, '_');
+                if(input.type === 'checkbox' && input.checked) {
+                    feature_str[key] = 'on';
+                } 
+            }
+        });
+        return feature_str;
     }
 
     function updateInputMaps() {
