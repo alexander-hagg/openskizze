@@ -25,6 +25,7 @@ def predict_airflow(selected_design):
 def cluster_designs(design_data):
     return np.random.randint(0, 3, size=(10,))
 
+# Helper functions
 def meters_to_lat_lon(center_lat, center_lon, meters):
     # Constants
     earth_radius = 6378137.0  # in meters
@@ -39,59 +40,67 @@ def meters_to_lat_lon(center_lat, center_lon, meters):
 
     return delta_lat_deg, delta_lon_deg
 
-
-def rotate_and_elongate_polygon(center_lat, center_lon, wind_dir, initial_length=100, elongation_factor=2):
-    # Convert wind direction to radians
+def rotate_and_map_points(center_lat, center_lon, wind_dir, side_length=200):
     wind_dir_rad = np.radians(wind_dir)
     
-    # Calculate the original rectangle's dimensions (before rotation)
-    lat_delta, lon_delta = meters_to_lat_lon(center_lat, center_lon, initial_length)
+    # Calculate half the side length
+    half_side_length = side_length / 2
     
-    # Calculate the elongation based on the elongation factor
-    elongated_lat_delta, elongated_lon_delta = meters_to_lat_lon(center_lat, center_lon, initial_length * elongation_factor)
+    # Define the rectangle's points around the center (local coordinates)
+    local_points = [
+        [-half_side_length, -half_side_length],  # bottom-left
+        [-half_side_length, half_side_length],   # top-left
+        [half_side_length, half_side_length],    # top-right
+        [half_side_length, -half_side_length]    # bottom-right
+    ]
 
-    # Calculate rotated polygon corners
-    sin_wind_dir = np.sin(wind_dir_rad)
-    cos_wind_dir = np.cos(wind_dir_rad)
+    # Rotate and map to geographic coordinates
+    global_points = []
+    for x, y in local_points:
+        # Rotate the point by the wind direction
+        x_rot = x * np.cos(wind_dir_rad) - y * np.sin(wind_dir_rad)
+        y_rot = x * np.sin(wind_dir_rad) + y * np.cos(wind_dir_rad)
+        
+        # Map the rotated point to geographic coordinates
+        delta_lat, delta_lon = meters_to_lat_lon(center_lat, center_lon, x_rot)
+        mapped_lat = center_lat + delta_lat
+        mapped_lon = center_lon + meters_to_lat_lon(center_lat, center_lon, y_rot)[1]
+        
+        global_points.append([mapped_lat, mapped_lon])
 
-    # Four corners of the polygon
-    top_left = [center_lat - lat_delta * cos_wind_dir + lon_delta * sin_wind_dir, 
-                center_lon - lat_delta * sin_wind_dir - lon_delta * cos_wind_dir]
+    return global_points
 
-    top_right = [center_lat - lat_delta * cos_wind_dir - lon_delta * sin_wind_dir, 
-                 center_lon - lat_delta * sin_wind_dir + lon_delta * cos_wind_dir]
-
-    bottom_right = [center_lat + elongated_lat_delta * cos_wind_dir - elongated_lon_delta * sin_wind_dir, 
-                    center_lon + elongated_lat_delta * sin_wind_dir + elongated_lon_delta * cos_wind_dir]
-
-    bottom_left = [center_lat + elongated_lat_delta * cos_wind_dir + elongated_lon_delta * sin_wind_dir, 
-                   center_lon + elongated_lat_delta * sin_wind_dir - elongated_lon_delta * cos_wind_dir]
-
-    # Return the list of corners to form the polygon
-    return [top_left, top_right, bottom_right, bottom_left]
-
-def generate_grid_overlay(bounds):
-    """ Generate a grid overlay within the selected rectangle bounds. """
-    lat_start, lon_start = bounds[0]
-    lat_end, lon_end = bounds[1]
+def generate_grid_overlay(polygon_points):
+    """ Generate a grid overlay within the selected rectangle bounds, properly aligned with the rotated rectangle. """
     grid_lines = []
+    num_lines = 20  # Example: 20x20 grid
 
-    # Create horizontal and vertical lines for the grid
-    num_lines = 20  # Example: 20x20 grid (every 10 m)
-    lat_step = (lat_end - lat_start) / num_lines
-    lon_step = (lon_end - lon_start) / num_lines
-
+    # Define the grid lines within the bounds of the rotated rectangle
     for i in range(1, num_lines):
+        # Horizontal lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) / num_lines
+        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) / num_lines
+        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) / num_lines
+        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) / num_lines
+
         grid_lines.append(dl.Polyline(positions=[
-            [lat_start + i * lat_step, lon_start],
-            [lat_start + i * lat_step, lon_end]
+            [start_lat, start_lon],
+            [end_lat, end_lon]
         ], color="blue", weight=0.5))
+
+        # Vertical lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) / num_lines
+        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) / num_lines
+        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) / num_lines
+        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) / num_lines
+
         grid_lines.append(dl.Polyline(positions=[
-            [lat_start, lon_start + i * lon_step],
-            [lat_end, lon_start + i * lon_step]
+            [start_lat, start_lon],
+            [end_lat, end_lon]
         ], color="blue", weight=0.5))
 
     return dl.LayerGroup(grid_lines)
+
 
 def generate_affected_region(bounds):
     lat_start, lon_start = bounds[0]
@@ -169,8 +178,8 @@ footer = dbc.Container(
 
 # Layouts for different steps
 def get_step1_layout():
-    # Calculate the initial affected region as a polygon
-    polygon_points = rotate_and_elongate_polygon(initial_center['lat'], initial_center['lng'], initial_wind_dir)
+    # Calculate the initial affected region as a rotated rectangle (200m x 200m)
+    polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir)
 
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
@@ -178,10 +187,12 @@ def get_step1_layout():
         [
             html.H2("Step 1: Select a City Quarter"),
             html.P("Move the map to position the 200m x 200m area over the desired region."),
-            dl.Map(center=initial_center, zoom=16, style={'width': '100%', 'height': '500px'}, id="map", children=[
+            dl.Map(center=initial_center, zoom=16, scrollWheelZoom='center', style={'width': '100%', 'height': '500px'}, id="map", children=[
                 dl.TileLayer(),
                 dl.LayerGroup(id="layer", children=[affected_region])
             ]),
+            dcc.Store(id="stored-center", data=initial_center),
+            dcc.Store(id="zoom-level-store", data=16),  # Store the initial zoom level            
             html.Br(),
             html.Div(id="selected-area", style={"marginTop": "20px"}),
             html.Div(id="gis-data-output", style={"marginTop": "20px"}),
@@ -264,25 +275,28 @@ def display_page(pathname):
     else:
         return get_step1_layout()
 
-# Callback to capture the rectangle selection and retrieve GIS data
+# Callback to update the map
 @app.callback(
     [Output("selected-area", "children"),
      Output("gis-data-output", "children"),
-     Output("layer", "children")],
-    [Input("map", "center"), Input("wind-direction-slider", "value")]
+     Output("layer", "children"),
+     Output("stored-center", "data"),  
+     Output("map", "center"),  
+     Output("zoom-level-store", "data")],  # Store the current zoom level
+    [Input("map", "center"), Input("wind-direction-slider", "value"), Input("map", "zoom")],
+    [State("stored-center", "data"), State("zoom-level-store", "data")]
 )
-def update_map(center, wind_dir):
-    if not center:
-        raise dash.exceptions.PreventUpdate
-    
-    # Extract latitude and longitude from the center
-    if isinstance(center, dict) and 'lat' in center and 'lng' in center:
-        lat, lon = center['lat'], center['lng']
-    else:
-        raise dash.exceptions.PreventUpdate
+def update_map(center, wind_dir, zoom, stored_center, previous_zoom):    
 
-    # Calculate the rotated rectangle points based on the current wind direction
-    polygon_points = rotate_and_elongate_polygon(lat, lon, wind_dir)
+    if zoom != previous_zoom:
+        # If the zoom level changed, it means we're zooming, so keep the stored center
+        lat, lon = stored_center['lat'], stored_center['lng']
+    else:
+        # If the zoom level hasn't changed, we're panning, so update the stored center
+        lat, lon = center['lat'], center['lng']
+
+    # Calculate the rotated and mapped rectangle points based on the current wind direction
+    polygon_points = rotate_and_map_points(lat, lon, wind_dir)
 
     coordinates_text = f"Selected area coordinates: {polygon_points}"
 
@@ -294,9 +308,10 @@ def update_map(center, wind_dir):
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
     # Combine all layers
-    layers = [affected_region]
-
-    return coordinates_text, gis_data_text, layers
+    layers = [affected_region, generate_grid_overlay(polygon_points)]
+    
+    # Return updated information, polygon, stored center, and the new zoom level
+    return coordinates_text, gis_data_text, layers, {"lat": lat, "lng": lon}, {"lat": lat, "lng": lon}, zoom
 
 # Callbacks for navigation buttons using pattern matching
 @app.callback(
