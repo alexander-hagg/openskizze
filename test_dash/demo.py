@@ -6,7 +6,6 @@ import dash_leaflet.express as dlx
 import numpy as np
 import plotly.express as px
 import time
-import math
 
 # Initialize the Dash app with Bootstrap CSS and suppress callback exceptions
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -14,7 +13,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_
 # Mock functions for the back-end processes
 def load_geodata(coordinates):
     # Mocking a delay for data retrieval
-    time.sleep(2)
+    time.sleep(0)
     return f"Mocked GIS data for area with coordinates: {coordinates}"
 
 def run_optimization(morph_features):
@@ -26,6 +25,51 @@ def predict_airflow(selected_design):
 def cluster_designs(design_data):
     return np.random.randint(0, 3, size=(10,))
 
+def meters_to_lat_lon(center_lat, center_lon, meters):
+    # Constants
+    earth_radius = 6378137.0  # in meters
+
+    # Latitude calculation
+    delta_lat = meters / earth_radius
+    delta_lat_deg = delta_lat * (180 / np.pi)
+
+    # Longitude calculation (adjusted by latitude)
+    delta_lon = meters / (earth_radius * np.cos(np.pi * center_lat / 180))
+    delta_lon_deg = delta_lon * (180 / np.pi)
+
+    return delta_lat_deg, delta_lon_deg
+
+
+def rotate_and_elongate_polygon(center_lat, center_lon, wind_dir, initial_length=100, elongation_factor=2):
+    # Convert wind direction to radians
+    wind_dir_rad = np.radians(wind_dir)
+    
+    # Calculate the original rectangle's dimensions (before rotation)
+    lat_delta, lon_delta = meters_to_lat_lon(center_lat, center_lon, initial_length)
+    
+    # Calculate the elongation based on the elongation factor
+    elongated_lat_delta, elongated_lon_delta = meters_to_lat_lon(center_lat, center_lon, initial_length * elongation_factor)
+
+    # Calculate rotated polygon corners
+    sin_wind_dir = np.sin(wind_dir_rad)
+    cos_wind_dir = np.cos(wind_dir_rad)
+
+    # Four corners of the polygon
+    top_left = [center_lat - lat_delta * cos_wind_dir + lon_delta * sin_wind_dir, 
+                center_lon - lat_delta * sin_wind_dir - lon_delta * cos_wind_dir]
+
+    top_right = [center_lat - lat_delta * cos_wind_dir - lon_delta * sin_wind_dir, 
+                 center_lon - lat_delta * sin_wind_dir + lon_delta * cos_wind_dir]
+
+    bottom_right = [center_lat + elongated_lat_delta * cos_wind_dir - elongated_lon_delta * sin_wind_dir, 
+                    center_lon + elongated_lat_delta * sin_wind_dir + elongated_lon_delta * cos_wind_dir]
+
+    bottom_left = [center_lat + elongated_lat_delta * cos_wind_dir + elongated_lon_delta * sin_wind_dir, 
+                   center_lon + elongated_lat_delta * sin_wind_dir - elongated_lon_delta * cos_wind_dir]
+
+    # Return the list of corners to form the polygon
+    return [top_left, top_right, bottom_right, bottom_left]
+
 def generate_grid_overlay(bounds):
     """ Generate a grid overlay within the selected rectangle bounds. """
     lat_start, lon_start = bounds[0]
@@ -33,7 +77,7 @@ def generate_grid_overlay(bounds):
     grid_lines = []
 
     # Create horizontal and vertical lines for the grid
-    num_lines = 10  # Example: 10x10 grid
+    num_lines = 20  # Example: 20x20 grid (every 10 m)
     lat_step = (lat_end - lat_start) / num_lines
     lon_step = (lon_end - lon_start) / num_lines
 
@@ -41,18 +85,15 @@ def generate_grid_overlay(bounds):
         grid_lines.append(dl.Polyline(positions=[
             [lat_start + i * lat_step, lon_start],
             [lat_start + i * lat_step, lon_end]
-        ], color="blue", weight=1))
+        ], color="blue", weight=0.5))
         grid_lines.append(dl.Polyline(positions=[
             [lat_start, lon_start + i * lon_step],
             [lat_end, lon_start + i * lon_step]
-        ], color="blue", weight=1))
+        ], color="blue", weight=0.5))
 
     return dl.LayerGroup(grid_lines)
 
-
-
 def generate_affected_region(bounds):
-    """ Generate a larger rectangle around the selected area to mock the affected region. """
     lat_start, lon_start = bounds[0]
     lat_end, lon_end = bounds[1]
 
@@ -69,6 +110,9 @@ def generate_affected_region(bounds):
 
     return dl.Rectangle(bounds=affected_bounds, color="red", fillOpacity=0.2)
 
+# Initial center coordinates
+initial_center = {"lat": 50.734965, "lng": 7.055020}
+initial_wind_dir = 180  # South wind
 
 # Create the header and footer components
 header = dbc.Navbar(
@@ -125,23 +169,36 @@ footer = dbc.Container(
 
 # Layouts for different steps
 def get_step1_layout():
+    # Calculate the initial affected region as a polygon
+    polygon_points = rotate_and_elongate_polygon(initial_center['lat'], initial_center['lng'], initial_wind_dir)
+
+    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
+
     return dbc.Container(
         [
             html.H2("Step 1: Select a City Quarter"),
             html.P("Move the map to position the 200m x 200m area over the desired region."),
-            dl.Map(center=[50.7344, 7.0955], zoom=16, style={'width': '100%', 'height': '500px'}, id="map", children=[
+            dl.Map(center=initial_center, zoom=16, style={'width': '100%', 'height': '500px'}, id="map", children=[
                 dl.TileLayer(),
-                dl.LayerGroup(id="layer")
+                dl.LayerGroup(id="layer", children=[affected_region])
             ]),
             html.Br(),
             html.Div(id="selected-area", style={"marginTop": "20px"}),
             html.Div(id="gis-data-output", style={"marginTop": "20px"}),
+            dbc.Label("Wind Direction"),
+            dcc.Slider(
+                id="wind-direction-slider",
+                min=0,
+                max=360,
+                step=1,
+                value=initial_wind_dir,
+                marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'},
+                tooltip={"placement": "bottom", "always_visible": True}
+            ),
             dbc.Button("Next Step", id={'type': 'next-step', 'index': 1}, color="primary", disabled=False),
         ],
         className="mt-4",
     )
-
-
 
 def get_step2_layout():
     return dbc.Container(
@@ -212,46 +269,34 @@ def display_page(pathname):
     [Output("selected-area", "children"),
      Output("gis-data-output", "children"),
      Output("layer", "children")],
-    [Input("map", "center")],
+    [Input("map", "center"), Input("wind-direction-slider", "value")]
 )
-def update_map(center):
+def update_map(center, wind_dir):
     if not center:
         raise dash.exceptions.PreventUpdate
-
-    if isinstance(center, (list, tuple)) and len(center) >= 2:
-        lat, lon = float(center[0]), float(center[1])
-    elif isinstance(center, dict):
-        lat = float(center.get("lat", 0))
-        lon = float(center.get("lon", 0))
+    
+    # Extract latitude and longitude from the center
+    if isinstance(center, dict) and 'lat' in center and 'lng' in center:
+        lat, lon = center['lat'], center['lng']
     else:
         raise dash.exceptions.PreventUpdate
 
-    # Calculate the bounds of the rectangle based on the new center
-    delta = 0.001  # 200m x 200m rectangle in degrees
-    bounds = [[lat - delta, lon - delta], [lat + delta, lon + delta]]
+    # Calculate the rotated rectangle points based on the current wind direction
+    polygon_points = rotate_and_elongate_polygon(lat, lon, wind_dir)
 
-    coordinates_text = f"Selected area coordinates: {bounds}"
+    coordinates_text = f"Selected area coordinates: {polygon_points}"
 
     # Mock loading of GIS data
-    gis_data = load_geodata(bounds)
+    gis_data = f"Mocked GIS data for area with coordinates: {polygon_points}"
     gis_data_text = f"GIS Data Loaded: {gis_data}"
 
-    # Create the rectangle layer
-    rectangle_layer = dl.Rectangle(bounds=bounds, color="#ff7800", weight=2)
-
-    # Generate grid overlay for marking taboo regions
-    grid_overlay = generate_grid_overlay(bounds)
-
-    # Generate the affected region rectangle
-    affected_region = generate_affected_region(bounds)
+    # Create the polygon layer
+    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
     # Combine all layers
-    layers = [rectangle_layer, grid_overlay, affected_region]
+    layers = [affected_region]
 
     return coordinates_text, gis_data_text, layers
-
-
-
 
 # Callbacks for navigation buttons using pattern matching
 @app.callback(
