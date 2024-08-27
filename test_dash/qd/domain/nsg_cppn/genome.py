@@ -8,11 +8,12 @@ import numpy.typing as npt
 
 import cppn
 
-sys.path.insert(0, "domain/utils")
+sys.path.insert(0, "qd/domain/utils")
 from two_d_map_to_voxel import two_d_map_to_voxel
-from templates.genome import Genome
+sys.path.insert(0, "qd/templates")
+from t_genome import Genome
 
-sys.path.insert(0, "util/quadric")
+sys.path.insert(0, "qd/util/quadric")
 
 EPSILON = 1e-5
 

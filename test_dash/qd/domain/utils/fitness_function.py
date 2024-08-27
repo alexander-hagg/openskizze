@@ -1,12 +1,14 @@
 """Fitness function."""
 from typing import Dict, List, Tuple
 import copy
+import sys
 
 import numpy as np
 from scipy.ndimage import label
 from scipy.stats import norm, uniform
 
-from util import maptorange
+sys.path.insert(0, "qd/util")
+import maptorange
 
 import matplotlib.pyplot as plt
 from PIL import Image

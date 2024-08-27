@@ -1,0 +1,49 @@
+name: 'cppn layers: 2 neurons: 5 p: 0.25 s: 11'
+algorithm: 'mapelites'
+method: cppn
+seeds: [0,1,2,3,4,5,6,7,8,9]
+
+
+algorithm_parameters:
+  resolution: 16
+  num_gens: 25000
+  num_children: 10
+  init_samples: 100
+  save_average_accuracy: true
+  save_coverage_over_generation: true
+  save_pure_diversity: true
+  features: [0,1]
+  labels: ['footprint area', 'number of structures', 'living space area', 'windblock area', 'permeability']
+  # feat_ranges: [[0.0, 1, 0.0, 0.0],[8649.0, 16, 25947.0, 25.0]]
+  feat_ranges: [[500.0, 2, 1000, 0.0, 0.0],[3000.0, 16, 3000.0, 90.0, 1.0]]
+  substrate_length: 93
+  target_area: 2100
+
+methods:
+  max_height: 3
+  num_grid_cells: 30
+
+  cppn:
+    init_weight_variance: 3.0
+    num_layers: 2
+    num_neurons: 5
+    mut_probability: 0.25
+    mut_sigma: 11
+    scale_cppn_out: false
+
+
+plot:
+  create_img_of_archive: false
+  plot_size: 120
+  plotscale: True
+
+file_naming:
+  root: 'data'
+  root_input: 'data/input'
+  root_output: 'data/output'
+  substrate_address: 'substrate.pbm'
+  map_sat_address: 'mapsat.png'
+  mesh_name: "mesh"
+  average_fitness_name: 'avg_fitness'
+  pure_diversity_name: 'diversity'
+  coverage: 'coverage_over_gen'
