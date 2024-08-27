@@ -70,18 +70,17 @@ def rotate_and_map_points(center_lat, center_lon, wind_dir, side_length=200):
 
     return global_points
 
-def generate_grid_overlay(polygon_points):
+def generate_grid_overlay(polygon_points, num_grid_lines = 20):
     """ Generate a grid overlay within the selected rectangle bounds, properly aligned with the rotated rectangle. """
     grid_lines = []
-    num_lines = 20  # Example: 20x20 grid
-
+    
     # Define the grid lines within the bounds of the rotated rectangle
-    for i in range(1, num_lines):
+    for i in range(1, num_grid_lines):
         # Horizontal lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) / num_lines
-        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) / num_lines
-        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) / num_lines
-        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) / num_lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) / num_grid_lines
+        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) / num_grid_lines
+        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) / num_grid_lines
+        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) / num_grid_lines
 
         grid_lines.append(dl.Polyline(positions=[
             [start_lat, start_lon],
@@ -89,10 +88,10 @@ def generate_grid_overlay(polygon_points):
         ], color="blue", weight=0.5))
 
         # Vertical lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) / num_lines
-        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) / num_lines
-        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) / num_lines
-        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) / num_lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) / num_grid_lines
+        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) / num_grid_lines
+        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) / num_grid_lines
+        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) / num_grid_lines
 
         grid_lines.append(dl.Polyline(positions=[
             [start_lat, start_lon],
@@ -101,6 +100,23 @@ def generate_grid_overlay(polygon_points):
 
     return dl.LayerGroup(grid_lines)
 
+def find_nearest_grid_point(click_lat_lng, polygon_points, num_grid_lines=20):
+    # Extract boundaries of the grid
+    lat_min, lon_min = polygon_points[0][0], polygon_points[0][1]
+    lat_max, lon_max = polygon_points[2][0], polygon_points[2][1]
+    
+    # Calculate grid cell size
+    lat_step = (lat_max - lat_min) / num_grid_lines
+    lon_step = (lon_max - lon_min) / num_grid_lines
+    
+    # Snap to nearest grid point
+    lat_idx = np.round((click_lat_lng[0] - lat_min) / lat_step)
+    lon_idx = np.round((click_lat_lng[1] - lon_min) / lon_step)
+    
+    snapped_lat = lat_min + lat_idx * lat_step
+    snapped_lon = lon_min + lon_idx * lon_step
+    
+    return [snapped_lat, snapped_lon]
 
 def generate_affected_region(bounds):
     lat_start, lon_start = bounds[0]
@@ -185,6 +201,9 @@ def get_step1_layout():
 
     return dbc.Container(
         [
+            dbc.Button("Next Step", id={'type': 'next-step', 'index': 1}, color="primary", disabled=False),
+            html.Br(),
+            html.Br(),
             html.H2("Step 1: Select a City Quarter"),
             html.P("Move the map to position the 200m x 200m area over the desired region."),
             dl.Map(center=initial_center, zoom=16, scrollWheelZoom='center', style={'width': '100%', 'height': '500px'}, id="map", children=[
@@ -193,6 +212,7 @@ def get_step1_layout():
             ]),
             dcc.Store(id="stored-center", data=initial_center),
             dcc.Store(id="zoom-level-store", data=16),  # Store the initial zoom level            
+            dcc.Store(id="stored-polygon-coordinates"),  # Store for polygon coordinates            
             html.Br(),
             html.Div(id="selected-area", style={"marginTop": "20px"}),
             html.Div(id="gis-data-output", style={"marginTop": "20px"}),
@@ -206,21 +226,29 @@ def get_step1_layout():
                 marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'},
                 tooltip={"placement": "bottom", "always_visible": True}
             ),
-            dbc.Button("Next Step", id={'type': 'next-step', 'index': 1}, color="primary", disabled=False),
         ],
         className="mt-4",
     )
 
 def get_step2_layout():
+    # Calculate the affected region and grid as in Step 1
+    polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir)
+    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
+    grid_overlay = generate_grid_overlay(polygon_points, num_grid_lines=20)
+
     return dbc.Container(
         [
-            html.H2("Step 2: Run Optimization"),
-            dcc.Dropdown(id='morph-features', options=[{'label': 'Feature 1', 'value': 'feature1'}, {'label': 'Feature 2', 'value': 'feature2'}], value='feature1'),
-            dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
-            html.Div(id='optimization-view', style={'margin-top': '20px'}),
-            html.Br(),
-            dbc.Button("Next Step", id={'type': 'next-step', 'index': 2}, color="primary"),
             dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 2}, color="secondary", className="ms-2"),
+            dbc.Button("Next Step", id={'type': 'next-step', 'index': 2}, color="primary"),
+            html.Br(),
+            html.Br(),
+            html.H2("Step 2: Select Buildable Grid Cells"),
+            html.P("Select the grid cells where building is allowed by clicking on them. Click again to deselect."),
+            dl.Map(center=initial_center, zoom=16, scrollWheelZoom='center', style={'width': '100%', 'height': '500px'}, id="grid-map", children=[
+                dl.TileLayer(),
+                dl.LayerGroup(id="grid-layer", children=[affected_region, grid_overlay])
+            ]),
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),
         ],
         className="mt-4",
     )
@@ -228,13 +256,15 @@ def get_step2_layout():
 def get_step3_layout():
     return dbc.Container(
         [
-            html.H2("Step 3: Analyze and Cluster Designs"),
-            dcc.Dropdown(id='selected-design', options=[{'label': f'Design {i}', 'value': i} for i in range(10)], value=0),
-            dbc.Button("Analyze Design", id="analyze-design-button", color="primary"),
-            html.Div(id='analysis-view', style={'margin-top': '20px'}),
+            dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 2}, color="secondary", className="ms-2"),
+            dbc.Button("Next Step", id={'type': 'next-step', 'index': 2}, color="primary"),
             html.Br(),
-            dbc.Button("Next Step", id={'type': 'next-step', 'index': 3}, color="primary"),
-            dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 3}, color="secondary", className="ms-2"),
+            html.Br(),
+            html.H2("Step 3: Run Optimization"),
+            dcc.Dropdown(id='morph-features', options=[{'label': 'Feature 1', 'value': 'feature1'}, {'label': 'Feature 2', 'value': 'feature2'}], value='feature1'),
+            dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
+            html.Div(id='optimization-view', style={'margin-top': '20px'}),
+            html.Br(),
         ],
         className="mt-4",
     )
@@ -242,12 +272,30 @@ def get_step3_layout():
 def get_step4_layout():
     return dbc.Container(
         [
-            html.H2("Step 4: Compare Designs"),
+            dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 3}, color="secondary", className="ms-2"),
+            dbc.Button("Next Step", id={'type': 'next-step', 'index': 3}, color="primary"),
+            html.Br(),
+            html.Br(),
+            html.H2("Step 4: Analyze and Cluster Designs"),
+            dcc.Dropdown(id='selected-design', options=[{'label': f'Design {i}', 'value': i} for i in range(10)], value=0),
+            dbc.Button("Analyze Design", id="analyze-design-button", color="primary"),
+            html.Div(id='analysis-view', style={'margin-top': '20px'}),
+            html.Br(),
+        ],
+        className="mt-4",
+    )
+
+def get_step5_layout():
+    return dbc.Container(
+        [
+            dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 4}, color="secondary", className="ms-2"),
+            html.Br(),
+            html.Br(),
+            html.H2("Step 5: Compare Designs"),
             dcc.Dropdown(id='compare-designs', options=[{'label': f'Design {i}', 'value': i} for i in range(10)], multi=True),
             dbc.Button("Compare", id="compare-button", color="primary"),
             html.Div(id='compare-view', style={'margin-top': '20px'}),
             html.Br(),
-            dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 4}, color="secondary", className="ms-2"),
         ],
         className="mt-4",
     )
@@ -272,6 +320,8 @@ def display_page(pathname):
         return get_step3_layout()
     elif pathname == '/step4':
         return get_step4_layout()
+    elif pathname == '/step5':
+        return get_step5_layout()
     else:
         return get_step1_layout()
 
@@ -282,11 +332,12 @@ def display_page(pathname):
      Output("layer", "children"),
      Output("stored-center", "data"),  
      Output("map", "center"),  
-     Output("zoom-level-store", "data")],  # Store the current zoom level
+     Output("zoom-level-store", "data"),
+     Output("stored-polygon-coordinates", "data")],  # Store the polygon coordinates
     [Input("map", "center"), Input("wind-direction-slider", "value"), Input("map", "zoom")],
     [State("stored-center", "data"), State("zoom-level-store", "data")]
 )
-def update_map(center, wind_dir, zoom, stored_center, previous_zoom):    
+def update_map(center, wind_dir, zoom, stored_center, previous_zoom, num_grid_lines=20):    
 
     if zoom != previous_zoom:
         # If the zoom level changed, it means we're zooming, so keep the stored center
@@ -308,10 +359,11 @@ def update_map(center, wind_dir, zoom, stored_center, previous_zoom):
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
     # Combine all layers
-    layers = [affected_region, generate_grid_overlay(polygon_points)]
+    layers = [affected_region, generate_grid_overlay(polygon_points, num_grid_lines)]
     
-    # Return updated information, polygon, stored center, and the new zoom level
-    return coordinates_text, gis_data_text, layers, {"lat": lat, "lng": lon}, {"lat": lat, "lng": lon}, zoom
+    # Return updated information, polygon, stored center, and the new zoom level, and the polygon coordinates
+    return coordinates_text, gis_data_text, layers, {"lat": lat, "lng": lon}, {"lat": lat, "lng": lon}, zoom, polygon_points
+
 
 # Callbacks for navigation buttons using pattern matching
 @app.callback(
@@ -328,20 +380,61 @@ def navigate_steps(next_steps, previous_steps, pathname):
 
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     if 'next-step' in button_id:
-        if pathname == '/':
+        if pathname == '/step1':
             return '/step2'
         elif pathname == '/step2':
             return '/step3'
         elif pathname == '/step3':
             return '/step4'
+        elif pathname == '/step4':
+            return '/step5'
     elif 'previous-step' in button_id:
-        if pathname == '/step4':
+        if pathname == '/step5':
+            return '/step4'
+        elif pathname == '/step4':
             return '/step3'
         elif pathname == '/step3':
             return '/step2'
         elif pathname == '/step2':
-            return '/'
+            return '/step1'
     return pathname
+
+@app.callback(
+    Output("grid-layer", "children"),
+    [Input("grid-map", "click_lat_lng"),
+     Input("stored-polygon-coordinates", "data")],
+    [State("grid-layer", "children")]
+)
+def update_grid_selection(click_lat_lng, polygon_points, existing_grid):
+    print(f'click_lat_lng: {click_lat_lng}')  # Debugging print
+    print(f'polygon_points: {polygon_points}')  # Debugging print
+
+    if existing_grid is None:
+        existing_grid = []
+
+    if not polygon_points:
+        return existing_grid
+
+    if click_lat_lng:
+        snapped_lat_lng = find_nearest_grid_point(click_lat_lng, polygon_points)
+        clicked_cell = None
+
+        for cell in existing_grid:
+            if isinstance(cell, dl.CircleMarker) and cell['props']['center'] == snapped_lat_lng:
+                clicked_cell = cell
+                break
+
+        if clicked_cell:
+            existing_grid.remove(clicked_cell)
+        else:
+            new_cell = dl.CircleMarker(center=snapped_lat_lng, radius=5, color="green", fill=True, fillOpacity=0.6)
+            existing_grid.append(new_cell)
+
+    return [dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region"),
+            generate_grid_overlay(polygon_points, num_grid_lines=20)] + existing_grid
+
+
+
 
 # Callbacks for backend interactions
 @app.callback(
