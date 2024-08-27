@@ -2,73 +2,18 @@ import dash
 from dash import dcc, html, Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import dash_leaflet as dl
-import dash_leaflet.express as dlx
-import numpy as np
 import plotly.express as px
-import time
+
+# Import internals from other files
+from utils import rotate_and_map_points, find_nearest_grid_point
+from api_calls import run_optimization, predict_airflow
+
+# Initial center coordinates
+initial_center = {"lat": 50.734965, "lng": 7.055020}
+initial_wind_dir = 180  # South wind
 
 # Initialize the Dash app with Bootstrap CSS and suppress callback exceptions
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
-
-# Mock functions for the back-end processes
-def load_geodata(coordinates):
-    # Mocking a delay for data retrieval
-    time.sleep(0)
-    return f"Mocked GIS data for area with coordinates: {coordinates}"
-
-def run_optimization(morph_features):
-    return np.random.rand(10, 10, 10)
-
-def predict_airflow(selected_design):
-    return np.random.rand(100, 100)
-
-def cluster_designs(design_data):
-    return np.random.randint(0, 3, size=(10,))
-
-# Helper functions
-def meters_to_lat_lon(center_lat, center_lon, meters):
-    # Constants
-    earth_radius = 6378137.0  # in meters
-
-    # Latitude calculation
-    delta_lat = meters / earth_radius
-    delta_lat_deg = delta_lat * (180 / np.pi)
-
-    # Longitude calculation (adjusted by latitude)
-    delta_lon = meters / (earth_radius * np.cos(np.pi * center_lat / 180))
-    delta_lon_deg = delta_lon * (180 / np.pi)
-
-    return delta_lat_deg, delta_lon_deg
-
-def rotate_and_map_points(center_lat, center_lon, wind_dir, side_length=200):
-    wind_dir_rad = np.radians(wind_dir)
-    
-    # Calculate half the side length
-    half_side_length = side_length / 2
-    
-    # Define the rectangle's points around the center (local coordinates)
-    local_points = [
-        [-half_side_length, -half_side_length],  # bottom-left
-        [-half_side_length, half_side_length],   # top-left
-        [half_side_length, half_side_length],    # top-right
-        [half_side_length, -half_side_length]    # bottom-right
-    ]
-
-    # Rotate and map to geographic coordinates
-    global_points = []
-    for x, y in local_points:
-        # Rotate the point by the wind direction
-        x_rot = x * np.cos(wind_dir_rad) - y * np.sin(wind_dir_rad)
-        y_rot = x * np.sin(wind_dir_rad) + y * np.cos(wind_dir_rad)
-        
-        # Map the rotated point to geographic coordinates
-        delta_lat, delta_lon = meters_to_lat_lon(center_lat, center_lon, x_rot)
-        mapped_lat = center_lat + delta_lat
-        mapped_lon = center_lon + meters_to_lat_lon(center_lat, center_lon, y_rot)[1]
-        
-        global_points.append([mapped_lat, mapped_lon])
-
-    return global_points
 
 def generate_grid_overlay(polygon_points, num_grid_lines = 20):
     """ Generate a grid overlay within the selected rectangle bounds, properly aligned with the rotated rectangle. """
@@ -100,24 +45,6 @@ def generate_grid_overlay(polygon_points, num_grid_lines = 20):
 
     return dl.LayerGroup(grid_lines)
 
-def find_nearest_grid_point(click_lat_lng, polygon_points, num_grid_lines=20):
-    # Extract boundaries of the grid
-    lat_min, lon_min = polygon_points[0][0], polygon_points[0][1]
-    lat_max, lon_max = polygon_points[2][0], polygon_points[2][1]
-    
-    # Calculate grid cell size
-    lat_step = (lat_max - lat_min) / num_grid_lines
-    lon_step = (lon_max - lon_min) / num_grid_lines
-    
-    # Snap to nearest grid point
-    lat_idx = np.round((click_lat_lng[0] - lat_min) / lat_step)
-    lon_idx = np.round((click_lat_lng[1] - lon_min) / lon_step)
-    
-    snapped_lat = lat_min + lat_idx * lat_step
-    snapped_lon = lon_min + lon_idx * lon_step
-    
-    return [snapped_lat, snapped_lon]
-
 def generate_affected_region(bounds):
     lat_start, lon_start = bounds[0]
     lat_end, lon_end = bounds[1]
@@ -135,9 +62,6 @@ def generate_affected_region(bounds):
 
     return dl.Rectangle(bounds=affected_bounds, color="red", fillOpacity=0.2)
 
-# Initial center coordinates
-initial_center = {"lat": 50.734965, "lng": 7.055020}
-initial_wind_dir = 180  # South wind
 
 # Create the header and footer components
 header = dbc.Navbar(
@@ -380,7 +304,7 @@ def navigate_steps(next_steps, previous_steps, pathname):
 
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     if 'next-step' in button_id:
-        if pathname == '/step1':
+        if pathname == '/step1' or pathname == '/':
             return '/step2'
         elif pathname == '/step2':
             return '/step3'
