@@ -11,9 +11,12 @@ import pickle
 from datetime import datetime
 from typing import Dict
 
+import matplotlib.pyplot as plt
+
 from ribs.archives import GridArchive
 from ribs.emitters import EvolutionStrategyEmitter
 from ribs.schedulers import Scheduler
+from ribs.visualize import parallel_axes_plot
 
 sys.path.insert(0, "qd/util")
 from set_substrate import set as set_substrate
@@ -28,14 +31,14 @@ def load_geodata(coordinates):
     time.sleep(0)
     return f"Mocked GIS data for area with coordinates: {coordinates}"
 
-def run_optimization(morph_features):
-    num_generations = 10
-    num_emitters = 10
+def run_optimization(morph_features, progress_callback=None):
+    num_generations = 100
+    num_emitters = 16
     dims = [10, 10, 5, 10]
     mu = 0.0                # Used for initialization, probably want to keep it at 0
     sigma = 2.0             # Used for initialization and mutation
     learning_rate = 0.001
-    batch_size = 8
+    batch_size = 4
     output_inv_frequency = 10
     cppn_config = [3,3]
 
@@ -55,11 +58,11 @@ def run_optimization(morph_features):
     genome_config["algorithm_parameters"]["substrate_length"] = genome_config["substrate"].shape[0]
     genome_template = CPPNGenome(genome_config)
     solution_dim, _, _ = genome_template.get_dimension()
-    print(f'solution_dim: {solution_dim}')
+    
     labels = genome_config["algorithm_parameters"]["labels"]
     feat_ranges = genome_config.get("algorithm_parameters").get("feat_ranges")
     cfg_features = genome_config["algorithm_parameters"]["features"]
-
+    
     nb_cpus = psutil.cpu_count(logical=True)
     print(f'Running on {nb_cpus} CPU cores')
     pool = multiprocessing.Pool(processes=nb_cpus)
@@ -79,8 +82,7 @@ def run_optimization(morph_features):
         ranges=[(feat_ranges[0][cfg_features[0]],feat_ranges[1][cfg_features[0]]), (feat_ranges[0][cfg_features[1]],feat_ranges[1][cfg_features[1]]), (feat_ranges[0][cfg_features[2]],feat_ranges[1][cfg_features[2]]), (feat_ranges[0][cfg_features[3]],feat_ranges[1][cfg_features[3]])],
     )
 
-    emitters = []
-    emitters.append([
+    emitters = [
         EvolutionStrategyEmitter(
             working_archive,
             x0=[mu] * solution_dim,
@@ -91,7 +93,7 @@ def run_optimization(morph_features):
             batch_size = batch_size,
             es="sep_cma_es",
         ) for _ in range(num_emitters)
-    ])
+    ]
 
     scheduler = Scheduler(working_archive, emitters, result_archive=result_archive)
 
@@ -110,6 +112,10 @@ def run_optimization(morph_features):
 
         stats.append(result_archive.stats)
 
+        # Call the progress callback if provided
+        if progress_callback:
+            progress_callback(itr + 1, num_generations)
+
         if itr%output_inv_frequency==0 or itr==num_generations-1:
             with open(f'{output_path}archive.pkl', 'wb') as output:
                 pickle.dump(result_archive, output)
@@ -119,14 +125,7 @@ def run_optimization(morph_features):
             
             print(f'QD score: {result_archive.stats.qd_score}')
             print(f'Coverage: {result_archive.stats.coverage}')
-
-    # Extract the optimized volume
-    # volume = np.zeros((10, 10, 10))
-    # for index, solution in zip(archive.as_pandas().index, archive.as_pandas().solution):
-    #     x, y = index
-    #     volume[x, y, :] = solution[0] * 3  # Scale the solution to height values between 0 and 3
-
-    return result_archive
+    return result_archive, [labels[i] for i in cfg_features]
 
 def predict_airflow(selected_design):
     # Generate airflow data influenced by the design

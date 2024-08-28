@@ -157,6 +157,8 @@ def main(num_generations: int, num_emitters: int, batch_size: int, dims: list, c
         fig, (ax1) = plt.subplots(nrows=1, ncols=1, figsize=(25, 5))
     emitters = emitters_meta[0]
 
+    print(f'archives[0]: {archives[0]}')
+
     scheduler = Scheduler(archives[0], emitters, result_archive=result_archives[0])
     print(f'Running: {emitter_name}')
     

@@ -12,7 +12,7 @@ algorithm_parameters:
   save_average_accuracy: true
   save_coverage_over_generation: true
   save_pure_diversity: true
-  features: [0, 1, 2, 3, 5]
+  features: [0, 1, 2, 3, 4]
   labels: ['footprint [m²]', 'living space [m²]', 'wind perp. [m²]', '# buildings', 'windblock area [m²]', 'permeability [%]']
   feat_ranges: [[500.0, 500.0, 0.0, 1, 0.0, 0.0],[8100.0, 24000.0, 810.0, 10, 810.0, 1.0]]
   substrate_length: 93

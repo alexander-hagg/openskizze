@@ -3,6 +3,9 @@ from dash import dcc, html, Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import dash_leaflet as dl
 import plotly.express as px
+import pandas as pd
+import threading
+
 
 # Import internals from other files
 from utils import rotate_and_map_points, find_nearest_grid_point
@@ -11,6 +14,9 @@ from api_calls import run_optimization, predict_airflow
 # Initial center coordinates
 initial_center = {"lat": 50.734965, "lng": 7.055020}
 initial_wind_dir = 180  # South wind
+progress = {'value': 0}
+optimization_result = None 
+measures_labels = None
 
 # Initialize the Dash app with Bootstrap CSS and suppress callback exceptions
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -187,6 +193,8 @@ def get_step3_layout():
             html.H2("Step 3: Run Optimization"),
             dcc.Dropdown(id='morph-features', options=[{'label': 'Feature 1', 'value': 'feature1'}, {'label': 'Feature 2', 'value': 'feature2'}], value='feature1'),
             dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
+            dcc.Interval(id='progress-interval', interval=1000, n_intervals=0, disabled=True),
+            dbc.Progress(id="optimization-progress", value=0, striped=True, animated=True, style={"margin-top": "20px"}),
             html.Div(id='optimization-view', style={'margin-top': '20px'}),
             html.Br(),
         ],
@@ -360,18 +368,66 @@ def update_grid_selection(click_lat_lng, polygon_points, existing_grid):
 
 
 
+
+def run_optimization_in_background(morph_features):
+    global progress, optimization_result, measures_labels
+
+    def progress_callback(current_iteration, total_iterations):
+        progress['value'] = int((current_iteration / total_iterations) * 100)
+    
+    # Run optimization (this function call is blocking, so it's run in a separate thread)
+    optimization_result, measures_labels = run_optimization(morph_features, progress_callback)
+
+def start_optimization(morph_features):
+    optimization_thread = threading.Thread(target=run_optimization_in_background, args=(morph_features,))
+    optimization_thread.start()
+
 # Callbacks for backend interactions
 @app.callback(
-    Output('optimization-view', 'children'),
-    Input('run-optimization-button', 'n_clicks'),
-    State('morph-features', 'value')
+    [Output('optimization-progress', 'value'),
+     Output('optimization-view', 'children'),
+     Output('progress-interval', 'disabled')],
+    [Input('run-optimization-button', 'n_clicks'),
+     Input('progress-interval', 'n_intervals')],
+    State('morph-features', 'value'),
+    prevent_initial_call=True
 )
-def update_optimization_view(n_clicks, morph_features):
-    if n_clicks is None:
-        return None
-    optimization_result = run_optimization(morph_features)
-    fig = px.imshow(optimization_result.mean(axis=0), title=f'Optimization Results for {morph_features}')
-    return dcc.Graph(figure=fig)
+def update_optimization_view(n_clicks, n_intervals, morph_features): 
+    global progress, optimization_result
+
+    if n_clicks is not None and n_intervals == 0:
+        # Start the optimization in a background thread
+        start_optimization(morph_features)
+        return 0, dash.no_update, False
+
+    if n_intervals > 0:
+        # Update the progress bar with the current progress
+        if progress['value'] == 100:
+            # Optimization is complete, display the results
+            dat = optimization_result.data()
+            df = pd.DataFrame({
+                'feat1': dat['measures'][:, 0], 
+                'feat2': dat['measures'][:, 1], 
+                'feat3': dat['measures'][:, 2], 
+                'feat4': dat['measures'][:, 3], 
+                'objective': dat['objective']
+            })
+            fig = px.parallel_coordinates(df, color="objective", labels={
+                "feat1": measures_labels[0],
+                "feat2": measures_labels[1],
+                "feat3": measures_labels[2],
+                "feat4": measures_labels[3],
+                "objective": "Objective"
+            },
+            color_continuous_scale=px.colors.diverging.Tealrose,
+            color_continuous_midpoint=2)
+            
+            return 100, dcc.Graph(figure=fig), True  # Stop the interval and display results
+
+        return progress['value'], dash.no_update, False
+
+    return dash.no_update, dash.no_update, True
+
 
 @app.callback(
     Output('analysis-view', 'children'),
