@@ -31,7 +31,7 @@ def load_geodata(coordinates):
     time.sleep(0)
     return f"Mocked GIS data for area with coordinates: {coordinates}"
 
-def run_optimization(morph_features, progress_callback=None):
+def run_optimization(progress_callback=None):
     num_generations = 10
     num_emitters = 16
     dims = [10, 10, 5, 10]
@@ -58,7 +58,7 @@ def run_optimization(morph_features, progress_callback=None):
     genome_config["algorithm_parameters"]["substrate_length"] = genome_config["substrate"].shape[0]
     genome_template = CPPNGenome(genome_config)
     solution_dim, _, _ = genome_template.get_dimension()
-    
+
     labels = genome_config["algorithm_parameters"]["labels"]
     feat_ranges = genome_config.get("algorithm_parameters").get("feat_ranges")
     cfg_features = genome_config["algorithm_parameters"]["features"]
@@ -67,6 +67,9 @@ def run_optimization(morph_features, progress_callback=None):
     print(f'Running on {nb_cpus} CPU cores')
     pool = multiprocessing.Pool(processes=nb_cpus)
 
+    # Height map width/length l
+    l = genome_config["methods"]["num_grid_cells"]
+
     # Define the search space and archive
     working_archive = GridArchive(
         solution_dim=solution_dim,
@@ -74,12 +77,14 @@ def run_optimization(morph_features, progress_callback=None):
         ranges=[(feat_ranges[0][cfg_features[0]],feat_ranges[1][cfg_features[0]]), (feat_ranges[0][cfg_features[1]],feat_ranges[1][cfg_features[1]]), (feat_ranges[0][cfg_features[2]],feat_ranges[1][cfg_features[2]]), (feat_ranges[0][cfg_features[3]],feat_ranges[1][cfg_features[3]])],
         learning_rate=learning_rate,
         threshold_min=0.0,
+        extra_fields = {'heightmaps': ((l*l,), np.float32)}
     )
 
     result_archive = GridArchive(
         solution_dim=solution_dim,
         dims=dims,
         ranges=[(feat_ranges[0][cfg_features[0]],feat_ranges[1][cfg_features[0]]), (feat_ranges[0][cfg_features[1]],feat_ranges[1][cfg_features[1]]), (feat_ranges[0][cfg_features[2]],feat_ranges[1][cfg_features[2]]), (feat_ranges[0][cfg_features[3]],feat_ranges[1][cfg_features[3]])],
+        extra_fields = {'heightmaps': ((l*l,), np.float32)}
     )
 
     emitters = [
@@ -109,16 +114,9 @@ def run_optimization(morph_features, progress_callback=None):
         results = [ar.get() for ar in async_results]
         results = np.squeeze(np.array(results))
 
-        scheduler.tell(results[:,0], results[:,1:])
-
-        # print(f'=================')
-        # print(results)
-        # print(results[:,0].shape)
-        # print(results[:,1].shape)
-        # print(results[:,2].shape)
-        # print(results[:,3][0])
-        # print(results[:,4].shape)
-
+        heightmaps = results[:,5:]
+        scheduler.tell(results[:,0], results[:,1:5], heightmaps=heightmaps)
+        
         stats.append(result_archive.stats)
 
         # Call the progress callback if provided
@@ -135,7 +133,7 @@ def run_optimization(morph_features, progress_callback=None):
             print(f'QD score: {result_archive.stats.qd_score}')
             print(f'Coverage: {result_archive.stats.coverage}')
 
-    
+    # result_archive['heightmaps'] = heightmaps
     return result_archive, [labels[i] for i in cfg_features]
 
 def predict_airflow(selected_design):

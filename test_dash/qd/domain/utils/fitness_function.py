@@ -39,7 +39,7 @@ def ribs_to_genome(genome, genome_template, mu = 0.0, sigma = 1.0):
     genome_template.set_genome(activation_indices.tolist(), weights.tolist())
     return copy.deepcopy(genome_template)
 
-def ribs_eval_cppn(solution, genome_template, genome_config, mu = 0.0, sigma = 1.0, get_full_data = False):
+def ribs_eval_cppn(solution, genome_template, genome_config, mu = 0.0, sigma = 1.0):
     """
     Turn pyribs solution into openskizze Genomes and evaluate. 
     Assumption: pyribs mutation operators always operate using a Gaussian distribution
@@ -50,11 +50,8 @@ def ribs_eval_cppn(solution, genome_template, genome_config, mu = 0.0, sigma = 1
     population = []
     genome = ribs_to_genome(solution, genome_template, mu, sigma)
     population.append(genome)
-    if get_full_data:
-        results = get(population, genome_config)
-    else:
-        fitness, features, _, _, _ = get(population, genome_config)
-        results = np.vstack([fitness[0], features.transpose()])
+    fitness, features, _, heightmap, _ = get(population, genome_config)
+    results = np.vstack([fitness[0], features.transpose(), heightmap[0].reshape(heightmap[0].size,-1)])
     return results
 
 def get(list_genomes: List, domain: Dict) -> Tuple:

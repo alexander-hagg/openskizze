@@ -2,10 +2,11 @@ import dash
 from dash import dcc, html, Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import dash_leaflet as dl
+import plotly.graph_objs as go
+import numpy as np
 import plotly.express as px
 import pandas as pd
 import threading
-
 
 # Import internals from other files
 from utils import rotate_and_map_points, find_nearest_grid_point
@@ -18,6 +19,7 @@ initial_wind_dir = 180  # South wind
 progress = {'value': 0}
 optimization_result = None 
 measures_labels = None
+
 
 # Initialize the Dash app with Bootstrap CSS and suppress callback exceptions
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
@@ -192,7 +194,7 @@ def get_step3_layout():
             html.Br(),
             html.Br(),
             html.H2("Step 3: Run Optimization"),
-            dcc.Dropdown(id='morph-features', options=[{'label': 'Feature 1', 'value': 'feature1'}, {'label': 'Feature 2', 'value': 'feature2'}], value='feature1'),
+            # dcc.Dropdown(id='morph-features', options=[{'label': 'Feature 1', 'value': 'feature1'}, {'label': 'Feature 2', 'value': 'feature2'}], value='feature1'),
             dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
             dcc.Interval(id='progress-interval', interval=1000, n_intervals=0, disabled=True),
             dbc.Progress(id="optimization-progress", value=0, striped=True, animated=True, style={"margin-top": "20px"}),
@@ -203,17 +205,62 @@ def get_step3_layout():
     )
 
 def get_step4_layout():
+
     return dbc.Container(
         [
+
+            # Interval component to check for optimization_result updates
+            dcc.Interval(
+                id='interval-component',
+                interval=1000,  # in milliseconds (e.g., check every second)
+                n_intervals=0,
+                disabled=True  # Start as disabled
+            ),
+            
             dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 3}, color="secondary", className="ms-2"),
             dbc.Button("Next Step", id={'type': 'next-step', 'index': 3}, color="primary"),
             html.Br(),
             html.Br(),
             html.H2("Step 4: Analyze and Cluster Designs"),
-            dcc.Dropdown(id='selected-design', options=[{'label': f'Design {i}', 'value': i} for i in range(10)], value=0),
-            dbc.Button("Analyze Design", id="analyze-design-button", color="primary"),
+           
+            # Existing Dropdown and Button
+            dbc.Button("Show Designs", id="analyze-design-button", color="primary"),
             html.Div(id='analysis-view', style={'margin-top': '20px'}),
+            
             html.Br(),
+            html.H3("Visualization of All Solutions' Height Maps"),
+            
+            # Dropdowns for selecting measure dimensions
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            html.Label("Select X-axis Measure"),
+                            dcc.Dropdown(
+                                id='measure-x',
+                                options=[],  # To be populated dynamically
+                                value=None  # Default to first measure
+                            )
+                        ],
+                        width=6
+                    ),
+                    dbc.Col(
+                        [
+                            html.Label("Select Y-axis Measure"),
+                            dcc.Dropdown(
+                                id='measure-y',
+                                options=[],  # To be populated dynamically
+                                value=None  # Default to second measure
+                            )
+                        ],
+                        width=6
+                    ),
+                ],
+                className="mb-4",
+            ),
+            
+            # Container for the grid of height maps
+            html.Div(id='height-maps-grid', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '10px'}),
         ],
         className="mt-4",
     )
@@ -370,35 +417,36 @@ def update_grid_selection(click_lat_lng, polygon_points, existing_grid):
 
 
 
-def run_optimization_in_background(morph_features):
+def run_optimization_in_background():
     global progress, optimization_result, measures_labels
 
     def progress_callback(current_iteration, total_iterations):
         progress['value'] = int((current_iteration / total_iterations) * 100)
     
     # Run optimization (this function call is blocking, so it's run in a separate thread)
-    optimization_result, measures_labels = run_optimization(morph_features, progress_callback)
+    optimization_result, measures_labels = run_optimization(progress_callback)
 
-def start_optimization(morph_features):
-    optimization_thread = threading.Thread(target=run_optimization_in_background, args=(morph_features,))
+def start_optimization():
+    optimization_thread = threading.Thread(target=run_optimization_in_background)
+    # , args=(morph_features,)
     optimization_thread.start()
 
 # Callbacks for backend interactions
 @app.callback(
     [Output('optimization-progress', 'value'),
      Output('optimization-view', 'children'),
-     Output('progress-interval', 'disabled')],
+     Output('progress-interval', 'disabled'),],
     [Input('run-optimization-button', 'n_clicks'),
      Input('progress-interval', 'n_intervals')],
-    State('morph-features', 'value'),
+    # State('morph-features', 'value'),
     prevent_initial_call=True
 )
-def update_optimization_view(n_clicks, n_intervals, morph_features): 
+def update_optimization_view(n_clicks, n_intervals): 
     global progress, optimization_result
 
     if n_clicks is not None and n_intervals == 0:
         # Start the optimization in a background thread
-        start_optimization(morph_features)
+        start_optimization()
         return 0, dash.no_update, False
 
     if n_intervals > 0:
@@ -406,8 +454,6 @@ def update_optimization_view(n_clicks, n_intervals, morph_features):
         if progress['value'] == 100:
             # Optimization is complete, display the results
             dat = optimization_result.data()
-            print(type(dat['solution']))
-            print(dat['solution'].shape)
             df = pd.DataFrame({
                 'feat1': dat['measures'][:, 0], 
                 'feat2': dat['measures'][:, 1], 
@@ -432,18 +478,6 @@ def update_optimization_view(n_clicks, n_intervals, morph_features):
     return dash.no_update, dash.no_update, True
 
 
-@app.callback(
-    Output('analysis-view', 'children'),
-    Input('analyze-design-button', 'n_clicks'),
-    State('selected-design', 'value')
-)
-def update_analysis_view(n_clicks, selected_design):
-    if n_clicks is None:
-        return None
-    # airflow = predict_airflow(selected_design)
-    # airflow = 0
-    # fig = px.imshow(airflow, title=f'Airflow Prediction for Design {selected_design}')
-    return dcc.Graph(figure=fig)
 
 @app.callback(
     Output('compare-view', 'children'),
@@ -457,6 +491,146 @@ def update_compare_view(n_clicks, compare_designs):
     comparison_data = [0 for design in compare_designs]
     figs = [dcc.Graph(figure=px.imshow(data, title=f'Design {design}')) for design, data in zip(compare_designs, comparison_data)]
     return html.Div(figs)
+
+
+# @app.callback(
+#     Output('analysis-view', 'children'),
+#     Input('analyze-design-button', 'n_clicks'),
+#     State('selected-design', 'value')
+# )
+
+@app.callback(
+    Output('height-maps-grid', 'children'),
+    [
+        Input('measure-x', 'value'),
+        Input('measure-y', 'value'),
+        Input('analyze-design-button', 'n_clicks'),
+    ]
+)
+def update_height_maps_grid(measure_x, measure_y, n_clicks):
+    global optimization_result, measures_labels
+    if n_clicks is None:
+        return None    
+    if not optimization_result:
+        return "No optimization_result available."
+    
+    dat = optimization_result.data()
+    
+    measures = dat['measures']
+    solutions = dat['solution']
+    heightmaps = dat['heightmaps']
+    
+    if isinstance(measures, np.ndarray):
+        measure_x_values = [m[measure_x] for m in measures]
+        measure_y_values = [m[measure_y] for m in measures]
+    else:
+        return "Invalid measures format."
+    
+    # Convert floating point measures to integers for grid positioning
+    # Normalize measures to a grid size, e.g., 10x10
+    grid_size = 10
+    x_min, x_max = min(measure_x_values), max(measure_x_values)
+    y_min, y_max = min(measure_y_values), max(measure_y_values)
+    
+    def normalize(value, min_val, max_val):
+        if max_val - min_val == 0:
+            return 0
+        return int(((value - min_val) / (max_val - min_val)) * (grid_size - 1))
+    
+    positions = [
+        (normalize(x, x_min, x_max), normalize(y, y_min, y_max))
+        for x, y in zip(measure_x_values, measure_y_values)
+    ]
+    
+    # Create a dictionary to hold grid cells
+    grid_cells = {}
+    for pos, sol_idx in zip(positions, range(len(solutions))):
+        row, col = pos
+        key = (row, col)
+        if key not in grid_cells:
+            grid_cells[key] = []
+        grid_cells[key].append(sol_idx)
+    
+    # Generate grid layout
+    grid_children = []
+    for row in range(grid_size):
+        for col in range(grid_size):
+            sols_in_cell = grid_cells.get((row, col), [])
+            if sols_in_cell:
+                # Display thumbnails of height maps
+                thumbnails = []
+                for sol_idx in sols_in_cell:
+                    solution = dat['solution'][sol_idx]
+                    height_map = dat['heightmaps'][sol_idx]
+                    nrows = np.sqrt(height_map.size).astype(int)
+                    height_map = height_map.reshape(nrows,nrows)
+
+                    # Convert height_map to an image using Plotly
+                    fig = px.imshow(height_map, color_continuous_scale='Greys', aspect='auto')
+                    fig.update_layout(
+                        margin=dict(l=0, r=0, t=0, b=0),
+                        coloraxis_showscale=False
+                    )
+                    fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
+                    
+                    thumbnail = dcc.Graph(
+                        figure=fig,
+                        style={'height': '100px', 'width': '100px', 'display': 'inline-block'}
+                    )
+                    thumbnails.append(thumbnail)
+                
+                grid_children.append(
+                    dbc.Card(
+                        dbc.CardBody(thumbnails),
+                        style={'width': '120px', 'height': '120px', 'overflow': 'auto'}
+                    )
+                )
+            else:
+                # Empty cell
+                grid_children.append(
+                    dbc.Card(
+                        dbc.CardBody(""),
+                        style={'width': '120px', 'height': '120px', 'backgroundColor': '#f8f9fa'}
+                    )
+                )
+    
+    # Arrange the grid using CSS Grid
+    grid_style = {
+        'display': 'grid',
+        'gridTemplateColumns': f'repeat({grid_size}, 120px)',
+        'gridGap': '10px',
+        'justifyContent': 'center'
+    }
+    
+    return html.Div(grid_children, style=grid_style)
+
+@app.callback(
+    [
+        Output('measure-x', 'options'),
+        Output('measure-x', 'value'),
+        Output('measure-y', 'options'),
+        Output('measure-y', 'value'),
+        Output('interval-component', 'disabled')  # Disable the interval once data is loaded
+    ],
+    Input('interval-component', 'n_intervals')
+)
+def populate_measure_dropdowns(n_intervals):
+    global optimization_result, measures_labels
+    if optimization_result is None:
+        # Data not ready yet; keep interval running
+        return [], None, [], None, False  # Not disabled
+    else:
+        # Create dropdown options with separate 'label' and 'value'
+        print(measures_labels)
+        options = [{'label': label, 'value': idx} for idx, label in enumerate(measures_labels)]
+        
+        # Set default values to the first two measures, if available
+        default_x = 0
+        default_y = 1
+        
+        # Disable the interval since data is now available
+        return options, default_x, options, default_y, True
+        
 
 # Run the app
 if __name__ == '__main__':
