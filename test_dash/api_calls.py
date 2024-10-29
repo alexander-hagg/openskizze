@@ -32,15 +32,15 @@ def load_geodata(coordinates):
     return f"Mocked GIS data for area with coordinates: {coordinates}"
 
 def run_optimization(morph_features, progress_callback=None):
-    num_generations = 100
+    num_generations = 10
     num_emitters = 16
     dims = [10, 10, 5, 10]
     mu = 0.0                # Used for initialization, probably want to keep it at 0
     sigma = 2.0             # Used for initialization and mutation
-    learning_rate = 0.001
+    learning_rate = 0.005
     batch_size = 4
     output_inv_frequency = 10
-    cppn_config = [3,3]
+    cppn_config = [1,1]
 
     config_file = f'qd/config/cppn/cfg.yml'
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -104,11 +104,20 @@ def run_optimization(morph_features, progress_callback=None):
             print(f'Generation: {itr}')
         solutions = scheduler.ask()
 
+        # fitness_function returns: fitness, features, phenotypes, phenotypes_heightmaps, raw_features
         async_results = [pool.apply_async(fitness_function.ribs_eval_cppn, args=(sol, genome_template, genome_config, mu, sigma)) for sol in solutions]
         results = [ar.get() for ar in async_results]
         results = np.squeeze(np.array(results))
 
         scheduler.tell(results[:,0], results[:,1:])
+
+        # print(f'=================')
+        # print(results)
+        # print(results[:,0].shape)
+        # print(results[:,1].shape)
+        # print(results[:,2].shape)
+        # print(results[:,3][0])
+        # print(results[:,4].shape)
 
         stats.append(result_archive.stats)
 
@@ -125,6 +134,8 @@ def run_optimization(morph_features, progress_callback=None):
             
             print(f'QD score: {result_archive.stats.qd_score}')
             print(f'Coverage: {result_archive.stats.coverage}')
+
+    
     return result_archive, [labels[i] for i in cfg_features]
 
 def predict_airflow(selected_design):

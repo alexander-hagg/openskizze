@@ -39,7 +39,7 @@ def ribs_to_genome(genome, genome_template, mu = 0.0, sigma = 1.0):
     genome_template.set_genome(activation_indices.tolist(), weights.tolist())
     return copy.deepcopy(genome_template)
 
-def ribs_eval_cppn(solution, genome_template, genome_config, mu = 0.0, sigma = 1.0):
+def ribs_eval_cppn(solution, genome_template, genome_config, mu = 0.0, sigma = 1.0, get_full_data = False):
     """
     Turn pyribs solution into openskizze Genomes and evaluate. 
     Assumption: pyribs mutation operators always operate using a Gaussian distribution
@@ -50,8 +50,11 @@ def ribs_eval_cppn(solution, genome_template, genome_config, mu = 0.0, sigma = 1
     population = []
     genome = ribs_to_genome(solution, genome_template, mu, sigma)
     population.append(genome)
-    fitness, features, _, _ = get(population, genome_config)
-    results = np.vstack([fitness[0], features.transpose()])
+    if get_full_data:
+        results = get(population, genome_config)
+    else:
+        fitness, features, _, _, _ = get(population, genome_config)
+        results = np.vstack([fitness[0], features.transpose()])
     return results
 
 def get(list_genomes: List, domain: Dict) -> Tuple:
@@ -70,9 +73,11 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
     fitness = np.zeros(shape=[len(list_genomes), 1])
     raw_features = np.zeros(shape=[len(list_genomes), 5])
     phenotypes = []
+    phenotypes_heightmaps = []
 
     for i in range(len(list_genomes)):
         phenotypes.append(list_genomes[i].express(as_height_map=False))
+        phenotypes_heightmaps.append(list_genomes[i].express(as_height_map=True))
         meter_squared_per_cell = (
             domain.get("algorithm_parameters").get("substrate_length")
             / domain.get("methods").get("num_grid_cells")
@@ -138,5 +143,5 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
     #         ],
     #     )
     fitness = np.transpose(fitness)
-
-    return fitness, raw_features, phenotypes, raw_features
+    
+    return fitness, features, phenotypes, phenotypes_heightmaps, raw_features

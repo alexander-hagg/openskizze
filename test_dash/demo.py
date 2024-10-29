@@ -9,7 +9,8 @@ import threading
 
 # Import internals from other files
 from utils import rotate_and_map_points, find_nearest_grid_point
-from api_calls import run_optimization, predict_airflow
+from api_calls import run_optimization# , predict_airflow
+
 
 # Initial center coordinates
 initial_center = {"lat": 50.734965, "lng": 7.055020}
@@ -405,6 +406,8 @@ def update_optimization_view(n_clicks, n_intervals, morph_features):
         if progress['value'] == 100:
             # Optimization is complete, display the results
             dat = optimization_result.data()
+            print(type(dat['solution']))
+            print(dat['solution'].shape)
             df = pd.DataFrame({
                 'feat1': dat['measures'][:, 0], 
                 'feat2': dat['measures'][:, 1], 
@@ -437,8 +440,9 @@ def update_optimization_view(n_clicks, n_intervals, morph_features):
 def update_analysis_view(n_clicks, selected_design):
     if n_clicks is None:
         return None
-    airflow = predict_airflow(selected_design)
-    fig = px.imshow(airflow, title=f'Airflow Prediction for Design {selected_design}')
+    # airflow = predict_airflow(selected_design)
+    # airflow = 0
+    # fig = px.imshow(airflow, title=f'Airflow Prediction for Design {selected_design}')
     return dcc.Graph(figure=fig)
 
 @app.callback(
@@ -449,7 +453,8 @@ def update_analysis_view(n_clicks, selected_design):
 def update_compare_view(n_clicks, compare_designs):
     if n_clicks is None:
         return None
-    comparison_data = [predict_airflow(design) for design in compare_designs]
+    # comparison_data = [predict_airflow(design) for design in compare_designs]
+    comparison_data = [0 for design in compare_designs]
     figs = [dcc.Graph(figure=px.imshow(data, title=f'Design {design}')) for design, data in zip(compare_designs, comparison_data)]
     return html.Div(figs)
 
