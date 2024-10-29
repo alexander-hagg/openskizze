@@ -19,14 +19,14 @@ def two_d_map_to_voxel(two_d_map: npt.NDArray, domain: Dict) -> npt.NDArray:
     """
     voxels = np.zeros(
         [
-            domain.get("methods").get("num_grid_cells"),
-            domain.get("methods").get("num_grid_cells"),
-            domain.get("methods").get("max_height"),
+            domain.get("solution").get("num_grid_cells"),
+            domain.get("solution").get("num_grid_cells"),
+            domain.get("solution").get("max_height"),
         ]
     )
 
-    for x in range(domain.get("methods").get("num_grid_cells")):
-        for y in range(domain.get("methods").get("num_grid_cells")):
+    for x in range(domain.get("solution").get("num_grid_cells")):
+        for y in range(domain.get("solution").get("num_grid_cells")):
             if domain["substrate"][x, y]:
                 for z in range(two_d_map[x, y]):
                     voxels[x, y, z] = 1

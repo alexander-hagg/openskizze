@@ -32,98 +32,90 @@ def load_geodata(coordinates):
     return f"Mocked GIS data for area with coordinates: {coordinates}"
 
 def run_optimization(progress_callback=None):
-    num_generations = 10
-    num_emitters = 16
-    dims = [10, 10, 5, 10]
-    mu = 0.0                # Used for initialization, probably want to keep it at 0
-    sigma = 2.0             # Used for initialization and mutation
-    learning_rate = 0.005
-    batch_size = 4
-    output_inv_frequency = 10
-    cppn_config = [1,1]
-
     config_file = f'qd/config/cppn/cfg.yml'
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     str_current_datetime = str(current_datetime)
 
-    output_path = f'results/{str(cppn_config)}_{str_current_datetime}/'
+    output_path = f'results/{str_current_datetime}/'
     print(f'Outputting results to path: {output_path}')
     if not os.path.exists(output_path):
         os.mkdir(output_path)
     shutil.copyfile(config_file, f'{output_path}/cfg.yml')
 
     genome_config: Dict = yaml.safe_load(open(config_file))
-    genome_config["methods"]["cppn"]["hidden_layers"] = cppn_config
     genome_config["substrate"] = set_substrate(genome_config)
-    genome_config["algorithm_parameters"]["substrate_length"] = genome_config["substrate"].shape[0]
+    genome_config["alg"]["substrate_length"] = genome_config["substrate"].shape[0]
     genome_template = CPPNGenome(genome_config)
-    solution_dim, _, _ = genome_template.get_dimension()
 
-    labels = genome_config["algorithm_parameters"]["labels"]
-    feat_ranges = genome_config.get("algorithm_parameters").get("feat_ranges")
-    cfg_features = genome_config["algorithm_parameters"]["features"]
+    labels = genome_config["alg"]["labels"]
+    feat_ranges = genome_config.get("alg").get("feat_ranges")
+    feat_ranges = np.array(feat_ranges)
+    feat_ranges = feat_ranges.T
+    cfg_features = genome_config["alg"]["features"]
+
+    dims = [genome_config["alg"]["num_niches"]] * (len(labels))    
     
     nb_cpus = psutil.cpu_count(logical=True)
     print(f'Running on {nb_cpus} CPU cores')
     pool = multiprocessing.Pool(processes=nb_cpus)
 
     # Height map width/length l
-    l = genome_config["methods"]["num_grid_cells"]
-
+    l = genome_config["solution"]["num_grid_cells"]
     # Define the search space and archive
     working_archive = GridArchive(
-        solution_dim=solution_dim,
+        solution_dim=genome_template.get_dimension()[0],
         dims=dims,
-        ranges=[(feat_ranges[0][cfg_features[0]],feat_ranges[1][cfg_features[0]]), (feat_ranges[0][cfg_features[1]],feat_ranges[1][cfg_features[1]]), (feat_ranges[0][cfg_features[2]],feat_ranges[1][cfg_features[2]]), (feat_ranges[0][cfg_features[3]],feat_ranges[1][cfg_features[3]])],
-        learning_rate=learning_rate,
+        ranges = feat_ranges,
+        learning_rate=genome_config["alg"]["learning_rate"],
         threshold_min=0.0,
         extra_fields = {'heightmaps': ((l*l,), np.float32)}
     )
 
     result_archive = GridArchive(
-        solution_dim=solution_dim,
+        solution_dim=genome_template.get_dimension()[0],
         dims=dims,
-        ranges=[(feat_ranges[0][cfg_features[0]],feat_ranges[1][cfg_features[0]]), (feat_ranges[0][cfg_features[1]],feat_ranges[1][cfg_features[1]]), (feat_ranges[0][cfg_features[2]],feat_ranges[1][cfg_features[2]]), (feat_ranges[0][cfg_features[3]],feat_ranges[1][cfg_features[3]])],
+        ranges = feat_ranges,
         extra_fields = {'heightmaps': ((l*l,), np.float32)}
     )
 
     emitters = [
         EvolutionStrategyEmitter(
             working_archive,
-            x0=[mu] * solution_dim,
-            sigma0=sigma,
+            x0=[genome_config["alg"]["mu"]] * genome_template.get_dimension()[0],
+            sigma0=genome_config["alg"]["sigma"],
             ranker="imp",
             selection_rule="mu",
             restart_rule="basic",
-            batch_size = batch_size,
+            batch_size = genome_config["alg"]["batch_size"],
             es="sep_cma_es",
-        ) for _ in range(num_emitters)
+        ) for _ in range(genome_config["alg"]["num_emitters"])
     ]
 
     scheduler = Scheduler(working_archive, emitters, result_archive=result_archive)
 
     # Run the optimization
     stats = []
-    for itr in range(num_generations):
-        if itr%output_inv_frequency == 0:
+    for itr in range(genome_config["alg"]["num_generations"]):
+        if itr%genome_config["alg"]["output_inv_frequency"] == 0:
             print(f'Generation: {itr}')
         solutions = scheduler.ask()
 
         # fitness_function returns: fitness, features, phenotypes, phenotypes_heightmaps, raw_features
-        async_results = [pool.apply_async(fitness_function.ribs_eval_cppn, args=(sol, genome_template, genome_config, mu, sigma)) for sol in solutions]
+        async_results = [pool.apply_async(fitness_function.ribs_eval_cppn, args=(sol, genome_template, genome_config, genome_config["alg"]["mu"], genome_config["alg"]["sigma"])) for sol in solutions]
         results = [ar.get() for ar in async_results]
         results = np.squeeze(np.array(results))
 
-        heightmaps = results[:,5:]
-        scheduler.tell(results[:,0], results[:,1:5], heightmaps=heightmaps)
+        num_features = feat_ranges.shape[0]
+        heightmaps = results[:,num_features+1:]
+        scheduler.tell(results[:,0], results[:,1:num_features+1], heightmaps=heightmaps)
         
         stats.append(result_archive.stats)
 
         # Call the progress callback if provided
         if progress_callback:
-            progress_callback(itr + 1, num_generations)
+            progress_callback(itr + 1, genome_config["alg"]["num_generations"])
 
-        if itr%output_inv_frequency==0 or itr==num_generations-1:
+        if itr%genome_config["alg"]["output_inv_frequency"]==0 or itr==genome_config["alg"]["num_generations"]-1:
             with open(f'{output_path}archive.pkl', 'wb') as output:
                 pickle.dump(result_archive, output)
             
@@ -133,8 +125,11 @@ def run_optimization(progress_callback=None):
             print(f'QD score: {result_archive.stats.qd_score}')
             print(f'Coverage: {result_archive.stats.coverage}')
 
-    # result_archive['heightmaps'] = heightmaps
     return result_archive, [labels[i] for i in cfg_features]
+
+def archive_to_2d(archive, measures = [0, 1]):
+    pass
+
 
 def predict_airflow(selected_design):
     # Generate airflow data influenced by the design

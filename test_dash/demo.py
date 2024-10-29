@@ -10,14 +10,14 @@ import threading
 
 # Import internals from other files
 from utils import rotate_and_map_points, find_nearest_grid_point
-from api_calls import run_optimization# , predict_airflow
+from api_calls import run_optimization, archive_to_2d# , predict_airflow
 
 
 # Initial center coordinates
 initial_center = {"lat": 50.734965, "lng": 7.055020}
 initial_wind_dir = 180  # South wind
 progress = {'value': 0}
-optimization_result = None 
+result_archive = None 
 measures_labels = None
 
 
@@ -209,7 +209,7 @@ def get_step4_layout():
     return dbc.Container(
         [
 
-            # Interval component to check for optimization_result updates
+            # Interval component to check for result_archive updates
             dcc.Interval(
                 id='interval-component',
                 interval=1000,  # in milliseconds (e.g., check every second)
@@ -414,21 +414,20 @@ def update_grid_selection(click_lat_lng, polygon_points, existing_grid):
             generate_grid_overlay(polygon_points, num_grid_lines=20)] + existing_grid
 
 
-
-
-
 def run_optimization_in_background():
-    global progress, optimization_result, measures_labels
+    global progress, result_archive, measures_labels
 
     def progress_callback(current_iteration, total_iterations):
         progress['value'] = int((current_iteration / total_iterations) * 100)
     
     # Run optimization (this function call is blocking, so it's run in a separate thread)
-    optimization_result, measures_labels = run_optimization(progress_callback)
+    result_archive, measures_labels = run_optimization(progress_callback)
+
+    archive_2d = archive_to_2d(result_archive)
+    print(archive_2d)
 
 def start_optimization():
     optimization_thread = threading.Thread(target=run_optimization_in_background)
-    # , args=(morph_features,)
     optimization_thread.start()
 
 # Callbacks for backend interactions
@@ -442,7 +441,7 @@ def start_optimization():
     prevent_initial_call=True
 )
 def update_optimization_view(n_clicks, n_intervals): 
-    global progress, optimization_result
+    global progress, result_archive
 
     if n_clicks is not None and n_intervals == 0:
         # Start the optimization in a background thread
@@ -453,7 +452,7 @@ def update_optimization_view(n_clicks, n_intervals):
         # Update the progress bar with the current progress
         if progress['value'] == 100:
             # Optimization is complete, display the results
-            dat = optimization_result.data()
+            dat = result_archive.data()
             df = pd.DataFrame({
                 'feat1': dat['measures'][:, 0], 
                 'feat2': dat['measures'][:, 1], 
@@ -469,7 +468,7 @@ def update_optimization_view(n_clicks, n_intervals):
                 "objective": "Objective"
             },
             color_continuous_scale=px.colors.diverging.Tealrose,
-            color_continuous_midpoint=2)
+            range_color=[0,1])
             
             return 100, dcc.Graph(figure=fig), True  # Stop the interval and display results
 
@@ -508,15 +507,16 @@ def update_compare_view(n_clicks, compare_designs):
     ]
 )
 def update_height_maps_grid(measure_x, measure_y, n_clicks):
-    global optimization_result, measures_labels
+    global result_archive, measures_labels
     if n_clicks is None:
         return None    
-    if not optimization_result:
-        return "No optimization_result available."
+    if not result_archive:
+        return "No result_archive available."
     
-    dat = optimization_result.data()
+    dat = result_archive.data()
     
     measures = dat['measures']
+    objective = dat['objective']
     solutions = dat['solution']
     heightmaps = dat['heightmaps']
     
@@ -528,7 +528,7 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     
     # Convert floating point measures to integers for grid positioning
     # Normalize measures to a grid size, e.g., 10x10
-    grid_size = 10
+    grid_size = 5
     x_min, x_max = min(measure_x_values), max(measure_x_values)
     y_min, y_max = min(measure_y_values), max(measure_y_values)
     
@@ -556,28 +556,32 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     for row in range(grid_size):
         for col in range(grid_size):
             sols_in_cell = grid_cells.get((row, col), [])
+            # print(sols_in_cell)
             if sols_in_cell:
+                # Select best solution in view
                 # Display thumbnails of height maps
                 thumbnails = []
-                for sol_idx in sols_in_cell:
-                    solution = dat['solution'][sol_idx]
-                    height_map = dat['heightmaps'][sol_idx]
-                    nrows = np.sqrt(height_map.size).astype(int)
-                    height_map = height_map.reshape(nrows,nrows)
+                # print(np.max(dat['objective'][sols_in_cell]))
+                # print(np.argmax(dat['objective'][sols_in_cell]))
+                best_ID_in_cell = np.argmax(dat['objective'][sols_in_cell])
+                # for sol_idx in sols_in_cell:
+                height_map = dat['heightmaps'][sols_in_cell[best_ID_in_cell]]
+                nrows = np.sqrt(height_map.size).astype(int)
+                height_map = height_map.reshape(nrows,nrows)
 
-                    # Convert height_map to an image using Plotly
-                    fig = px.imshow(height_map, color_continuous_scale='Greys', aspect='auto')
-                    fig.update_layout(
-                        margin=dict(l=0, r=0, t=0, b=0),
-                        coloraxis_showscale=False
-                    )
-                    fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
-                    
-                    thumbnail = dcc.Graph(
-                        figure=fig,
-                        style={'height': '100px', 'width': '100px', 'display': 'inline-block'}
-                    )
-                    thumbnails.append(thumbnail)
+                # Convert height_map to an image using Plotly
+                fig = px.imshow(height_map, color_continuous_scale='Greys', aspect='auto')
+                fig.update_layout(
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    coloraxis_showscale=False
+                )
+                fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
+                
+                thumbnail = dcc.Graph(
+                    figure=fig,
+                    style={'height': '100px', 'width': '100px', 'display': 'inline-block'}
+                )
+                thumbnails.append(thumbnail)
                 
                 grid_children.append(
                     dbc.Card(
@@ -615,13 +619,12 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     Input('interval-component', 'n_intervals')
 )
 def populate_measure_dropdowns(n_intervals):
-    global optimization_result, measures_labels
-    if optimization_result is None:
+    global result_archive, measures_labels
+    if result_archive is None:
         # Data not ready yet; keep interval running
         return [], None, [], None, False  # Not disabled
     else:
         # Create dropdown options with separate 'label' and 'value'
-        print(measures_labels)
         options = [{'label': label, 'value': idx} for idx, label in enumerate(measures_labels)]
         
         # Set default values to the first two measures, if available

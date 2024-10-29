@@ -76,8 +76,8 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
         phenotypes.append(list_genomes[i].express(as_height_map=False))
         phenotypes_heightmaps.append(list_genomes[i].express(as_height_map=True))
         meter_squared_per_cell = (
-            domain.get("algorithm_parameters").get("substrate_length")
-            / domain.get("methods").get("num_grid_cells")
+            domain.get("alg").get("substrate_length")
+            / domain.get("solution").get("num_grid_cells")
         ) ** 2.0 * (3.0 ** 2)
         
         living_space_area = np.sum(phenotypes[i]) * meter_squared_per_cell
@@ -100,6 +100,11 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
         img = (phenotypes[i]>0).astype(int)
         _, num_buildings = label(np.sum(img, axis=2), connection_directions)
         
+
+        # TODO get rid of magic numbers! Get those from config instead
+        fitness[i] = 2.0 / (1 + (windblock_area/810))-1
+        
+
         raw_features[i, :] = [
             footprint,
             living_space_area,
@@ -109,26 +114,21 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
         ]
         
         
-        #fitness[i] = (
-        #    1.0 / (1 + windblock_area)  ) ** (1 / 5)
-        
-        # TODO get rid of magic numbers! Get those from config instead
-        fitness[i] = 2.0 / (1 + (windblock_area/810))-1
         # Penalize if number of buildings is too high
         if num_buildings > 10:
             fitness[i] = 1.0 / (num_buildings**2)
         
 
-    features = raw_features[
-        :,
-        [
-            domain.get("algorithm_parameters").get("features")[0],
-            domain.get("algorithm_parameters").get("features")[1],
-            domain.get("algorithm_parameters").get("features")[2],
-            domain.get("algorithm_parameters").get("features")[3],
-        ],
-    ]
-    raw_features = features
+    # features = raw_features[
+    #     :,
+    #     [
+    #         domain.get("algorithm_parameters").get("features")[0],
+    #         domain.get("algorithm_parameters").get("features")[1],
+    #         domain.get("algorithm_parameters").get("features")[2],
+    #         domain.get("algorithm_parameters").get("features")[3],
+    #     ],
+    # ]
+    features = raw_features
     # for fid in range(features.shape[1]):
     #     features[:, fid] = maptorange.do(
     #         features[:, fid],

@@ -34,8 +34,8 @@ class CPPNGenome(Genome):
         if not bool(CPPNGenome.config):
             CPPNGenome.config = config
         self.genes = cppn.CPPN(
-            CPPNGenome.config.get("methods").get("cppn").get("input_dim"),
-            CPPNGenome.config.get("methods").get("cppn").get("hidden_layers"),
+            CPPNGenome.config.get("solution").get("cppn").get("input_dim"),
+            CPPNGenome.config.get("solution").get("cppn").get("hidden_layers"),
         )
         self._computed_phenotype = None
 
@@ -44,9 +44,9 @@ class CPPNGenome(Genome):
         """Compute the dimensionality of the CPPN encoding."""
         num_act = 0
         num_weights = 0
-        n_inputs = CPPNGenome.config.get("methods").get("cppn").get("input_dim")
-        hidden_layers = CPPNGenome.config.get("methods").get("cppn").get("hidden_layers")
-        n_outputs = CPPNGenome.config.get("methods").get("cppn").get("output_dim")
+        n_inputs = CPPNGenome.config.get("solution").get("cppn").get("input_dim")
+        hidden_layers = CPPNGenome.config.get("solution").get("cppn").get("hidden_layers")
+        n_outputs = CPPNGenome.config.get("solution").get("cppn").get("output_dim")
         prev_size = n_inputs
         for size in hidden_layers:
             num_act += size
@@ -61,17 +61,17 @@ class CPPNGenome(Genome):
         """Mutate the genes of the individual."""
         with np.nditer(self.genes.activations, op_flags=["readwrite"]) as it:
             for x in it:
-                if np.random.random() < CPPNGenome.config.get("methods").get("cppn").get(
+                if np.random.random() < CPPNGenome.config.get("solution").get("cppn").get(
                     "mut_probability"
                 ):
                     x[...] = np.random.randint(0, len(self.genes.act_funcs) - 1)
         with np.nditer(self.genes.weights, op_flags=["readwrite"]) as it:
             for x in it:
-                if np.random.random() < CPPNGenome.config.get("methods").get("cppn").get(
+                if np.random.random() < CPPNGenome.config.get("solution").get("cppn").get(
                     "mut_probability"
                 ):
                     x[...] = x[...] + np.random.normal(
-                        0, CPPNGenome.config.get("methods").get("cppn").get("mut_sigma")
+                        0, CPPNGenome.config.get("solution").get("cppn").get("mut_sigma")
                     )
 
     def express(self, as_height_map: bool) -> npt.NDArray:
@@ -83,28 +83,28 @@ class CPPNGenome(Genome):
         """
         if self.genes is None:
             return None, None, None
-        x_coord = np.arange(0, CPPNGenome.config.get("methods").get("num_grid_cells"), 1)
-        y_coord = np.arange(0, CPPNGenome.config.get("methods").get("num_grid_cells"), 1)
+        x_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
+        y_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
         x_coord, y_coord = np.meshgrid(x_coord, y_coord)
         raw_sample = self.genes.sample(CPPNGenome.config["substrate"], CPPNGenome.config)
-        if CPPNGenome.config.get("methods").get("cppn").get("scale_cppn_out"):
+        if CPPNGenome.config.get("solution").get("cppn").get("scale_cppn_out"):
             ranges = np.max(raw_sample) - np.min(raw_sample)
             if ranges == 0:
                 ranges = 1
             two_d_map = (
-                CPPNGenome.config.get("methods").get("max_height")
+                CPPNGenome.config.get("solution").get("max_height")
                 * (raw_sample - np.min(raw_sample))
                 / ranges
             )
         else:
-            two_d_map = CPPNGenome.config.get("methods").get("max_height") * raw_sample
+            two_d_map = CPPNGenome.config.get("solution").get("max_height") * raw_sample
             two_d_map = np.floor(two_d_map).astype(int)
             maximum = np.max(two_d_map)
-            two_d_map = two_d_map - (maximum - CPPNGenome.config.get("methods").get("max_height"))
+            two_d_map = two_d_map - (maximum - CPPNGenome.config.get("solution").get("max_height"))
 
         two_d_map *= CPPNGenome.config["substrate"]
         self.height_map = np.clip(
-            two_d_map.astype(int), 0, CPPNGenome.config.get("methods").get("max_height")
+            two_d_map.astype(int), 0, CPPNGenome.config.get("solution").get("max_height")
         )
 
         if as_height_map:
