@@ -7,6 +7,10 @@ import numpy as np
 from scipy.ndimage import label
 from scipy.stats import norm, uniform
 
+from functools import reduce
+import operator
+
+
 sys.path.insert(0, "qd/util")
 import maptorange
 
@@ -68,56 +72,91 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
     """
     # Express shapes
     fitness = np.zeros(shape=[len(list_genomes), 1])
-    raw_features = np.zeros(shape=[len(list_genomes), 5])
+    # Populate raw_features with all features, we will subselect afterwards
+    raw_features = np.zeros(shape=[len(list_genomes), len(domain.get("alg").get("labels"))])
     phenotypes = []
     phenotypes_heightmaps = []
 
     for i in range(len(list_genomes)):
         phenotypes.append(list_genomes[i].express(as_height_map=False))
+        # print(phenotypes[i].shape)
         phenotypes_heightmaps.append(list_genomes[i].express(as_height_map=True))
         meter_squared_per_cell = (
             domain.get("alg").get("substrate_length")
             / domain.get("solution").get("num_grid_cells")
         ) ** 2.0 * (3.0 ** 2)
         
+        occupancy_grid = phenotypes[i][:, :, 0]
+
         living_space_area = np.sum(phenotypes[i]) * meter_squared_per_cell
-        footprint = np.sum(phenotypes[i], axis=2)
-        footprint = footprint > 0
-        footprint = np.sum(footprint) * meter_squared_per_cell
+        footprint = np.sum(occupancy_grid) * meter_squared_per_cell
 
-        windblock_area = np.sum(phenotypes[i], axis=0)
-        windblock_area = windblock_area > 0
-        windblock_area = np.sum(windblock_area) * meter_squared_per_cell
-        if windblock_area == 0:
-            windblock_area = 9999
+        windblock_area_NS = np.sum(phenotypes[i], axis=0)
+        windblock_area_NS = windblock_area_NS > 0
+        windblock_area_NS = np.sum(windblock_area_NS) * meter_squared_per_cell
+        
+        windblock_area_WE = np.sum(phenotypes[i], axis=1)
+        windblock_area_WE = windblock_area_WE > 0
+        windblock_area_WE = np.sum(windblock_area_WE) * meter_squared_per_cell
+        
+        # Count the number of buildings, either using 4- or 9-connectivity
+        structure4 = np.array([[0, 1, 0],
+                               [1, 1, 1],
+                               [0, 1, 0]])  # 4-connectivity
+        structure9 = np.array([[1, 1, 1],
+                               [1, 1, 1],
+                               [1, 1, 1]])  # 9-connectivity
+        connection_directions = structure4
+        img = (occupancy_grid>0).astype(int)
+        _, num_buildings = label(img, connection_directions)
 
-        
-        windperpendicular_area = np.sum(phenotypes[i], axis=1)
-        windperpendicular_area = windperpendicular_area > 0
-        windperpendicular_area = np.sum(windperpendicular_area) * meter_squared_per_cell
-        
-        connection_directions = np.ones((3, 3), dtype=int)
-        img = (phenotypes[i]>0).astype(int)
-        _, num_buildings = label(np.sum(img, axis=2), connection_directions)
-        
+        # Step 1: Extract the occupancy grid (assuming occupancy is in the first channel)
+        empty_cells = (occupancy_grid == 0).astype(int)
+        n_rows, n_cols = empty_cells.shape
 
-        # TODO get rid of magic numbers! Get those from config instead
-        fitness[i] = 2.0 / (1 + (windblock_area/810))-1
+        # Step 2: Initialize DP table to store the number of ways to reach each cell
+        dp = np.zeros_like(empty_cells, dtype=np.float64)
+
+        # Initialize the first row (south edge)
+        dp[0, :] = empty_cells[0, :]
+        # Step 3: Iterate through the grid
+        for row in range(1, n_rows):
+            for col in range(n_cols):
+                if empty_cells[row, col]:
+                    # Sum the number of ways to reach adjacent cells in the previous row
+                    total_paths = 0
+                    for delta_col in [-1, 0, 1]:  # Adjacent positions: west, straight, east
+                        prev_col = col + delta_col
+                        if 0 <= prev_col < n_cols:
+                            total_paths += dp[row - 1, prev_col]
+                    dp[row, col] = total_paths
         
+        # Compute the logarithm of the number of paths
+        log_dp = np.log(dp + 1e-10)  # Add a small value to avoid log(0)
+
+        # Sum the logs in the last row
+        log_estimated_paths = np.logaddexp.reduce(log_dp[-1, :])
+
+        # print(f"Logarithm of estimated number of paths for phenotype {i}: {log_estimated_paths}")
+
+        # fitness[i] = 2.0 / (1 + (windblock_area_NS/domain.get("alg").get("feat_ranges")[1][4]))-1
+        fitness[i] = log_estimated_paths
+        # Penalize if number of buildings is too high
+        if num_buildings > 10:
+            fitness[i] = fitness[i] / (num_buildings)
+
+
 
         raw_features[i, :] = [
             footprint,
             living_space_area,
-            windperpendicular_area,
             num_buildings,
-            windblock_area,
+            windblock_area_NS,
+            windblock_area_WE,
+            log_estimated_paths,
         ]
         
-        
-        # Penalize if number of buildings is too high
-        if num_buildings > 10:
-            fitness[i] = 1.0 / (num_buildings**2)
-        
+                
 
     # features = raw_features[
     #     :,
@@ -128,7 +167,7 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
     #         domain.get("algorithm_parameters").get("features")[3],
     #     ],
     # ]
-    features = raw_features
+    features = raw_features[:,domain.get("alg").get("features")]
     # for fid in range(features.shape[1]):
     #     features[:, fid] = maptorange.do(
     #         features[:, fid],

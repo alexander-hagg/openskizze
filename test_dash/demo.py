@@ -10,13 +10,12 @@ import threading
 
 # Import internals from other files
 from utils import rotate_and_map_points, find_nearest_grid_point
-from api_calls import run_optimization, archive_to_2d# , predict_airflow
+from api_calls import run_optimization# , predict_airflow
 
 
 # Initial center coordinates
 initial_center = {"lat": 50.734965, "lng": 7.055020}
 initial_wind_dir = 180  # South wind
-visualization_grid_size = 5
 progress = {'value': 0}
 result_archive = None 
 measures_labels = None
@@ -424,9 +423,6 @@ def run_optimization_in_background():
     # Run optimization (this function call is blocking, so it's run in a separate thread)
     result_archive, measures_labels = run_optimization(progress_callback)
 
-    archive_2d = archive_to_2d(result_archive)
-    print(archive_2d)
-
 def start_optimization():
     optimization_thread = threading.Thread(target=run_optimization_in_background)
     optimization_thread.start()
@@ -454,22 +450,22 @@ def update_optimization_view(n_clicks, n_intervals):
         if progress['value'] == 100:
             # Optimization is complete, display the results
             dat = result_archive.data()
-            df = pd.DataFrame({
-                'feat1': dat['measures'][:, 0], 
-                'feat2': dat['measures'][:, 1], 
-                'feat3': dat['measures'][:, 2], 
-                'feat4': dat['measures'][:, 3], 
-                'objective': dat['objective']
-            })
-            fig = px.parallel_coordinates(df, color="objective", labels={
-                "feat1": measures_labels[0],
-                "feat2": measures_labels[1],
-                "feat3": measures_labels[2],
-                "feat4": measures_labels[3],
-                "objective": "Objective"
-            },
-            color_continuous_scale=px.colors.diverging.Tealrose,
-            range_color=[0,1])
+
+            df = pd.DataFrame(
+                    {f'feat{i+1}': dat['measures'][:, i] for i in range(len(measures_labels))}
+            )
+            df['Objective'] = dat['objective']
+            labels = {f'feat{i+1}': label for i, label in enumerate(measures_labels)}
+            labels['Objective'] = 'Objective'  # Label for the objective axis
+
+            # Generate the parallel coordinates plot
+            fig = px.parallel_coordinates(
+                df,
+                color="Objective",
+                labels=labels,
+                color_continuous_scale=px.colors.diverging.Tealrose,
+                color_continuous_midpoint=df["Objective"].mean()
+            )
             
             return 100, dcc.Graph(figure=fig), True  # Stop the interval and display results
 
@@ -492,12 +488,6 @@ def update_compare_view(n_clicks, compare_designs):
     figs = [dcc.Graph(figure=px.imshow(data, title=f'Design {design}')) for design, data in zip(compare_designs, comparison_data)]
     return html.Div(figs)
 
-
-# @app.callback(
-#     Output('analysis-view', 'children'),
-#     Input('analyze-design-button', 'n_clicks'),
-#     State('selected-design', 'value')
-# )
 
 @app.callback(
     Output('height-maps-grid', 'children'),
@@ -572,8 +562,18 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
                     nrows = int(np.sqrt(height_map.size))
                     height_map = height_map.reshape(nrows, nrows)
                 
+                # Check if all values are zero
+                if np.all(height_map == 0):
+                    # Define a single-color scale mapping to white
+                    color_scale = [
+                        [0.0, 'white'],
+                        [1.0, 'white']
+                    ]
+                else:
+                    color_scale = 'Greys'
+
                 # Convert height_map to an image using Plotly
-                fig = px.imshow(height_map, color_continuous_scale='Greys', aspect='auto')
+                fig = px.imshow(height_map, color_continuous_scale=color_scale, aspect='auto')
                 fig.update_layout(
                     margin=dict(l=0, r=0, t=0, b=0),
                     coloraxis_showscale=False
