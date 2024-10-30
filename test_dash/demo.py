@@ -16,6 +16,7 @@ from api_calls import run_optimization, archive_to_2d# , predict_airflow
 # Initial center coordinates
 initial_center = {"lat": 50.734965, "lng": 7.055020}
 initial_wind_dir = 180  # South wind
+visualization_grid_size = 5
 progress = {'value': 0}
 result_archive = None 
 measures_labels = None
@@ -515,37 +516,42 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     
     dat = result_archive.data()
     
+    # Determine number of cells per dimension from boundaries
+    num_cells_per_dim_x = len(result_archive.boundaries[measure_x]) - 1
+    num_cells_per_dim_y = len(result_archive.boundaries[measure_y]) - 1
+    visualization_grid_size_x = num_cells_per_dim_x
+    visualization_grid_size_y = num_cells_per_dim_y
+    
     measures = dat['measures']
     objective = dat['objective']
     solutions = dat['solution']
     heightmaps = dat['heightmaps']
     
     if isinstance(measures, np.ndarray):
-        measure_x_values = [m[measure_x] for m in measures]
-        measure_y_values = [m[measure_y] for m in measures]
+        # Assuming measures is a 2D ndarray where each row corresponds to a solution
+        measure_x_values = measures[:, measure_x]
+        measure_y_values = measures[:, measure_y]
     else:
         return "Invalid measures format."
     
-    # Convert floating point measures to integers for grid positioning
-    # Normalize measures to a grid size, e.g., 10x10
-    grid_size = 5
-    x_min, x_max = min(measure_x_values), max(measure_x_values)
-    y_min, y_max = min(measure_y_values), max(measure_y_values)
+    # Retrieve boundaries for each measure
+    boundaries_x = result_archive.boundaries[measure_x]
+    boundaries_y = result_archive.boundaries[measure_y]
     
-    def normalize(value, min_val, max_val):
-        if max_val - min_val == 0:
-            return 0
-        return int(((value - min_val) / (max_val - min_val)) * (grid_size - 1))
+    # Assign measure values to grid cell indices using predefined boundaries
+    measure_x_bins = boundaries_x
+    measure_y_bins = boundaries_y
     
-    positions = [
-        (normalize(x, x_min, x_max), normalize(y, y_min, y_max))
-        for x, y in zip(measure_x_values, measure_y_values)
-    ]
+    measure_x_indices = np.digitize(measure_x_values, measure_x_bins, right=False) - 1
+    measure_y_indices = np.digitize(measure_y_values, measure_y_bins, right=False) - 1
     
-    # Create a dictionary to hold grid cells
+    # Ensure indices are within valid range
+    measure_x_indices = np.clip(measure_x_indices, 0, visualization_grid_size_x - 1)
+    measure_y_indices = np.clip(measure_y_indices, 0, visualization_grid_size_y - 1)
+    
+    # Map solutions to grid cells
     grid_cells = {}
-    for pos, sol_idx in zip(positions, range(len(solutions))):
-        row, col = pos
+    for row, col, sol_idx in zip(measure_y_indices, measure_x_indices, range(len(solutions))):
         key = (row, col)
         if key not in grid_cells:
             grid_cells[key] = []
@@ -553,22 +559,19 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     
     # Generate grid layout
     grid_children = []
-    for row in range(grid_size):
-        for col in range(grid_size):
+    for row in range(visualization_grid_size_y):
+        for col in range(visualization_grid_size_x):
             sols_in_cell = grid_cells.get((row, col), [])
-            # print(sols_in_cell)
             if sols_in_cell:
-                # Select best solution in view
-                # Display thumbnails of height maps
-                thumbnails = []
-                # print(np.max(dat['objective'][sols_in_cell]))
-                # print(np.argmax(dat['objective'][sols_in_cell]))
-                best_ID_in_cell = np.argmax(dat['objective'][sols_in_cell])
-                # for sol_idx in sols_in_cell:
-                height_map = dat['heightmaps'][sols_in_cell[best_ID_in_cell]]
-                nrows = np.sqrt(height_map.size).astype(int)
-                height_map = height_map.reshape(nrows,nrows)
-
+                # Select best solution in the cell based on objective
+                best_id_in_cell = sols_in_cell[np.argmax(objective[sols_in_cell])]
+                height_map = heightmaps[best_id_in_cell]
+                
+                # If height_map is not already a 2D array, reshape it
+                if height_map.ndim != 2:
+                    nrows = int(np.sqrt(height_map.size))
+                    height_map = height_map.reshape(nrows, nrows)
+                
                 # Convert height_map to an image using Plotly
                 fig = px.imshow(height_map, color_continuous_scale='Greys', aspect='auto')
                 fig.update_layout(
@@ -581,11 +584,10 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
                     figure=fig,
                     style={'height': '100px', 'width': '100px', 'display': 'inline-block'}
                 )
-                thumbnails.append(thumbnail)
                 
                 grid_children.append(
                     dbc.Card(
-                        dbc.CardBody(thumbnails),
+                        dbc.CardBody(thumbnail),
                         style={'width': '120px', 'height': '120px', 'overflow': 'auto'}
                     )
                 )
@@ -601,7 +603,7 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     # Arrange the grid using CSS Grid
     grid_style = {
         'display': 'grid',
-        'gridTemplateColumns': f'repeat({grid_size}, 120px)',
+        'gridTemplateColumns': f'repeat({visualization_grid_size_x}, 120px)',
         'gridGap': '10px',
         'justifyContent': 'center'
     }
