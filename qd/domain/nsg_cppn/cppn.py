@@ -27,14 +27,14 @@ class CPPN:
         self.act_funcs = {
             0: gaussian,
             1: unit,
-            2: tanh,
+            2: _tanh,
             3: one,
-            4: sin,
+            4: _sin,
             5: zero,
             6: relu,
             7: sigmoid,
             8: step,
-            9: cos,
+            9: _cos,
         }
 
         self.activation_indices = []
@@ -48,7 +48,9 @@ class CPPN:
         
         # Initialize output layer with a fixed activation function (e.g., sigmoid scaled)
         self.weights.append(np.random.randn(prev_size, self.output_dim))
-        self.activation_indices.append(np.array([1] * self.output_dim))  # Using sigmoid index for output
+        # self.activation_indices.append(np.array([1] * self.output_dim))  # Using sigmoid index for output
+        self.activation_indices.append(np.random.randint(len(self.act_funcs), size= self.output_dim))  # Using sigmoid index for output
+
 
     def set_parameters(self, activation_indices, weights) -> None:
         """
@@ -63,7 +65,7 @@ class CPPN:
             num_elements = self.weights[i].shape[0]
             for j in range(num_elements):
                 self.weights[i][j] = weights.pop(0)
-        
+
     def get_parameters(self) -> npt.NDArray:
         """
         Get the parameters of the CPPN as vector.
@@ -76,13 +78,12 @@ class CPPN:
         flatweights = np.concatenate([arr.flatten() for arr in self.weights])
         return np.concatenate([flatweights, flatacts]) # , flatacts, flatweights
 
-    def sample(self, binary_sample_grid, domain: Dict) -> npt.NDArray:
+    def sample(self, binary_sample_grid) -> npt.NDArray:
         """
         Predict the value in the grid.
 
         Args:
             binary_sample_grid (ndarray): A grid indicating points to sample.
-            domain (Dict): Parameters of the experiment.
 
         Returns:
             npt.NDArray: The phenotype of the individual.
@@ -99,44 +100,53 @@ class CPPN:
         # Assuming forward is modified to accept a batch of inputs and return a batch of outputs
         if len(scaled_indices) > 0:  # Check if there are any True values to process
             outputs = self.forward(scaled_indices)
-
             # Place the outputs back into the grid
             for i, (x, y) in enumerate(true_indices):
-                output_grid[x, y] = outputs[i]
+                output_grid[x, y] = np.squeeze(outputs[0])[i]
 
         return output_grid
 
-
-    def forward(self, coordinates: Tuple):
+    def forward(self, coordinates: npt.NDArray) -> npt.NDArray:
         """
         Predict.
 
         Args:
-            coordinates (Tuple): coordinate in x and y.
+            coordinates (npt.NDArray): Coordinates as input, typically (num_samples, input_dim).
 
         Returns:
-            Predicted value.
-
+            npt.NDArray: Predicted output.
         """
+        # Set initial output as coordinates
         output = coordinates
-        for i, (w, activation_idx) in enumerate(zip(self.weights, self.activation_indices)):
-            z = np.dot(output, w)
-            activation_func = [self.act_funcs[idx] for idx in activation_idx]
-            output = np.array([func(z_elem) for func, z_elem in zip(activation_func, z.T)]).T
+
+        # Iterate over each layer
+        for i, (activation_idx) in enumerate(self.activation_indices):
+            # Each layer now only applies an activation function without linear transformation
+
+            # Apply all activation functions for the layer
+            activation_funcs = [self.act_funcs[idx] for idx in activation_idx]
+
+            # Apply all activations on the entire vector for each neuron simultaneously
+            output = np.array([activation_funcs[j](output) for j in range(len(activation_funcs))]).T
+
         return output
 
-def gaussian(x: float) -> float:
+
+def gaussian(x: npt.NDArray) -> npt.NDArray:
     """
-    Gaussian Kernel.
+    Multivariate Gaussian Kernel.
 
     Args:
-        x (float): Input value.
+        x (npt.NDArray): Input values, typically representing the combined input coordinates.
 
     Returns:
-        float: e^{(-x^2)}.
-
+        npt.NDArray: Gaussian output computed across the magnitude of each coordinate set.
     """
-    return np.exp(-(x**2))
+    # x is expected to be 2D with shape (num_samples, input_dim)
+    # Compute the sum of squares across each input vector (Euclidean distance squared)
+    distance_squared = np.sum(x**2, axis=-1, keepdims=True)
+    # Apply Gaussian: return a symmetric response for the entire input vector
+    return np.exp(-0.5 * distance_squared)
 
 
 def sigmoid(x: float) -> float:
@@ -150,8 +160,48 @@ def sigmoid(x: float) -> float:
         float: \frac{1}{1+e^{(-x)}.
 
     """
+    x = np.sum(x, axis=-1, keepdims=True)
     x_clipped = np.clip(x, -500, 500)
     return 1 / (1 + np.exp(-x_clipped))
+
+def _tanh(x: float) -> int:
+    """
+    Output tanh.
+
+    Args:
+        _ (float): The input value.
+
+    Returns:
+        float: tanh.
+    """
+    x = np.sum(x, axis=-1, keepdims=True)    
+    return tanh(x)
+
+def _sin(x: float) -> int:
+    """
+    Output sin.
+
+    Args:
+        _ (float): The input value.
+
+    Returns:
+        float: sin.
+    """
+    x = np.sum(x, axis=-1, keepdims=True)    
+    return sin(x)
+
+def _cos(x: float) -> int:
+    """
+    Output cos.
+
+    Args:
+        _ (float): The input value.
+
+    Returns:
+        float: cos.
+    """
+    x = np.sum(x, axis=-1, keepdims=True)    
+    return cos(x)
 
 
 def zero(x: float) -> int:
@@ -164,6 +214,7 @@ def zero(x: float) -> int:
     Returns:
         int: zero.
     """
+    x = np.sum(x, axis=-1, keepdims=True)    
     return np.zeros_like(x)
 
 
@@ -177,6 +228,7 @@ def unit(x: float) -> float:
     Returns:
         float: x.
     """
+    x = np.sum(x, axis=-1, keepdims=True)    
     return x
 
 
@@ -190,6 +242,7 @@ def step(x: float) -> int:
     Returns:
         int: 1 if x>0  else 0.
     """
+    x = np.sum(x, axis=-1, keepdims=True)
     return (x > 0).astype(int)
 
 
@@ -203,6 +256,7 @@ def one(x: float) -> int:
     Returns:
         int: one.
     """
+    x = np.sum(x, axis=-1, keepdims=True)
     return np.ones_like(x)
 
 
@@ -216,7 +270,7 @@ def relu(x: float) -> float:
     Returns:
         float: x.
     """
-    
+    x = np.sum(x, axis=-1, keepdims=True)
     return np.maximum(0, x)
 
 # def exp(x: float) -> float:

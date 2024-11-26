@@ -1,12 +1,16 @@
+import numpy as np
+import pandas as pd
+
 import dash
-from dash import dcc, html, Input, Output, State, ALL
+from dash import dcc, ctx, html, Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import dash_leaflet as dl
 import plotly.graph_objs as go
-import numpy as np
 import plotly.express as px
-import pandas as pd
+
+import base64
 import threading
+import pickle
 
 # Import internals from other files
 from utils import rotate_and_map_points, find_nearest_grid_point
@@ -194,15 +198,36 @@ def get_step3_layout():
             html.Br(),
             html.Br(),
             html.H2("Step 3: Run Optimization"),
-            # dcc.Dropdown(id='morph-features', options=[{'label': 'Feature 1', 'value': 'feature1'}, {'label': 'Feature 2', 'value': 'feature2'}], value='feature1'),
             dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
             dcc.Interval(id='progress-interval', interval=1000, n_intervals=0, disabled=True),
             dbc.Progress(id="optimization-progress", value=0, striped=True, animated=True, style={"margin-top": "20px"}),
             html.Div(id='optimization-view', style={'margin-top': '20px'}),
             html.Br(),
+            # New addition for loading previous results
+            html.H5("Load Previous Optimization Run"),
+            dcc.Upload(
+                id='upload-optimization-file',
+                children=html.Div([
+                    'Drag and Drop or ',
+                    html.A('Select a File')
+                ]),
+                style={
+                    'width': '100%',
+                    'height': '60px',
+                    'lineHeight': '60px',
+                    'borderWidth': '1px',
+                    'borderStyle': 'dashed',
+                    'borderRadius': '5px',
+                    'textAlign': 'center',
+                    'margin': '10px'
+                },
+                multiple=False
+            ),
+            html.Div(id='file-upload-feedback', style={'margin-top': '10px'}),
         ],
         className="mt-4",
     )
+
 
 def get_step4_layout():
 
@@ -423,14 +448,66 @@ def run_optimization_in_background():
     # Run optimization (this function call is blocking, so it's run in a separate thread)
     result_archive, measures_labels = run_optimization(progress_callback)
 
+    # Save result to file using pickle
+    with open('last_optimization_run.pkl', 'wb') as f:
+        pickle.dump({'data': result_archive, 'measures_labels': measures_labels}, f)
+
+
+
 def start_optimization():
     optimization_thread = threading.Thread(target=run_optimization_in_background)
     optimization_thread.start()
 
+
+@app.callback(
+    [Output('file-upload-feedback', 'children'),
+     Output('optimization-view', 'children')],
+    Input('upload-optimization-file', 'contents'),
+    State('upload-optimization-file', 'filename'),
+    prevent_initial_call=True
+)
+def load_optimization_file(contents, filename):
+    global result_archive, measures_labels
+
+    if not contents:
+        return "No file selected.", dash.no_update
+
+    content_type, content_string = contents.split(',')
+    decoded = base64.b64decode(content_string)
+
+    try:
+        # Load the data using pickle
+        loaded_data = pickle.loads(decoded)
+        result_archive = loaded_data['data']
+        measures_labels = loaded_data['measures_labels']
+
+        # Show feedback and visualization of the loaded data
+        df = pd.DataFrame(
+            {f'feat{i+1}': result_archive.data()['measures'][:, i] for i in range(len(measures_labels))}
+        )
+        df['Objective'] = result_archive.data()['objective']
+        labels = {f'feat{i+1}': label for i, label in enumerate(measures_labels)}
+        labels['Objective'] = 'Objective'  # Label for the objective axis
+
+        # Generate the parallel coordinates plot
+        fig = px.parallel_coordinates(
+            df,
+            color="Objective",
+            labels=labels,
+            color_continuous_scale=px.colors.diverging.Tealrose,
+            color_continuous_midpoint=df["Objective"].mean()
+        )
+
+        return f"Successfully loaded {filename}.", dcc.Graph(figure=fig)
+
+    except Exception as e:
+        return f"Error processing the file {filename}: {str(e)}", dash.no_update
+
+
 # Callbacks for backend interactions
 @app.callback(
     [Output('optimization-progress', 'value'),
-     Output('optimization-view', 'children'),
+     Output('optimization-view', 'children', allow_duplicate=True),
      Output('progress-interval', 'disabled'),],
     [Input('run-optimization-button', 'n_clicks'),
      Input('progress-interval', 'n_intervals')],

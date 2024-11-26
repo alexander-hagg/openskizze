@@ -79,7 +79,6 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
 
     for i in range(len(list_genomes)):
         phenotypes.append(list_genomes[i].express(as_height_map=False))
-        # print(phenotypes[i].shape)
         phenotypes_heightmaps.append(list_genomes[i].express(as_height_map=True))
         meter_squared_per_cell = (
             domain.get("alg").get("substrate_length")
@@ -145,8 +144,6 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
         if num_buildings > 10:
             fitness[i] = fitness[i] / (num_buildings)
 
-
-
         raw_features[i, :] = [
             footprint,
             living_space_area,
@@ -154,8 +151,7 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
             windblock_area_NS,
             windblock_area_WE,
             log_estimated_paths,
-        ]
-        
+        ]        
                 
 
     # features = raw_features[

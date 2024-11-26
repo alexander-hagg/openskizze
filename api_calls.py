@@ -62,7 +62,7 @@ def run_optimization(progress_callback=None):
             dims=dims,
             ranges = feat_ranges,
             learning_rate=genome_config["alg"]["learning_rate"],
-            threshold_min=0.0,
+            threshold_min=-100.0,
             extra_fields = {'heightmaps': ((l*l,), np.float32)}
         )
 
@@ -95,13 +95,13 @@ def run_optimization(progress_callback=None):
                 print(f'Generation: {itr}')
 
             solutions = scheduler.ask()
-
             async_results = [
                 pool.apply_async(fitness_function.ribs_eval_cppn, args=(sol, genome_template, genome_config, genome_config["alg"]["mu"], genome_config["alg"]["sigma"])) 
                 for sol in solutions
             ]
             results = np.array([ar.get() for ar in async_results])
             results = np.squeeze(results)
+        
             num_features = len(feat_ranges)
             heightmaps = results[:,num_features+1:]
             

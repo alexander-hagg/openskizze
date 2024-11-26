@@ -1,3 +1,4 @@
 static/vendor/*
 node_modules/*
 *.pyc
+results/

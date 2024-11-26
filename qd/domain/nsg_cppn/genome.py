@@ -73,6 +73,7 @@ class CPPNGenome(Genome):
                     x[...] = x[...] + np.random.normal(
                         0, CPPNGenome.config.get("solution").get("cppn").get("mut_sigma")
                     )
+        
 
     def express(self, as_height_map: bool) -> npt.NDArray:
         """
@@ -86,7 +87,7 @@ class CPPNGenome(Genome):
         x_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
         y_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
         x_coord, y_coord = np.meshgrid(x_coord, y_coord)
-        raw_sample = self.genes.sample(CPPNGenome.config["substrate"], CPPNGenome.config)
+        raw_sample = self.genes.sample(CPPNGenome.config["substrate"])
         if CPPNGenome.config.get("solution").get("cppn").get("scale_cppn_out"):
             ranges = np.max(raw_sample) - np.min(raw_sample)
             if ranges == 0:
