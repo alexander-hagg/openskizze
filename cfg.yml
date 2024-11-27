@@ -1,0 +1,47 @@
+name: 'cppn'
+algorithm: 'mapelites'
+encoding: cppn
+seeds: [0,1,2,3,4,5,6,7,8,9]
+
+alg:
+  num_niches: 10 # per feature/measure dimension
+  num_generations: 100
+  num_emitters: 8
+  mu: 0.0
+  sigma: 1.0
+  output_inv_frequency: 50
+  learning_rate: 0.01
+  batch_size: 4
+  init_samples: 1000
+  save_average_accuracy: true
+  save_coverage_over_generation: true
+  save_pure_diversity: true
+  features: [0, 1, 2, 3, 4]
+  labels: ['footprint [m²]', 'living space [m²]', '# buildings', 'windblock area NS [m²]', 'windblock area WE [m²]', 'permeability']
+  feat_ranges: [[500.0, 500.0, 1, 0.0, 0.0, -20],[8100.0, 24000.0, 10, 810.0, 810.0, 50]]
+  substrate_length: 93
+  target_area: 2100
+
+solution:
+  max_height: 3
+  num_grid_cells: 30 # 30
+  cppn:
+    input_dim: 2
+    hidden_layers: [5,5]
+    output_dim: 1
+
+plot:
+  create_img_of_archive: false
+  plot_size: 120
+  plotscale: True
+
+file_naming:
+  root: 'qd/data'
+  root_input: 'qd/data'
+  root_output: 'qd/data/output'
+  substrate_address: 'substrate.pbm'
+  map_sat_address: 'mapsat.png'
+  mesh_name: "mesh"
+  average_fitness_name: 'avg_fitness'
+  pure_diversity_name: 'diversity'
+  coverage: 'coverage_over_gen'
