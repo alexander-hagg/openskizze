@@ -22,6 +22,5 @@ def set(config: Dict):
     img = img.resize(
         (config.get("solution").get("num_grid_cells"), config.get("solution").get("num_grid_cells"))
     )
-    img = img.transpose(Image.FLIP_LEFT_RIGHT)
     img = np.array(img)
     return img.astype("bool")
