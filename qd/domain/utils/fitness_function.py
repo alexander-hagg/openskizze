@@ -99,16 +99,23 @@ def get(list_genomes: List, domain: Dict) -> Tuple:
         windblock_area_WE = np.sum(windblock_area_WE) * meter_squared_per_cell
         
         # Count the number of buildings, either using 4- or 9-connectivity
+        # Define connectivity structures
         structure4 = np.array([[0, 1, 0],
-                               [1, 1, 1],
-                               [0, 1, 0]])  # 4-connectivity
+                            [1, 1, 1],
+                            [0, 1, 0]])  # 4-connectivity
         structure9 = np.array([[1, 1, 1],
-                               [1, 1, 1],
-                               [1, 1, 1]])  # 9-connectivity
-        connection_directions = structure4
-        img = (occupancy_grid>0).astype(int)
-        _, num_buildings = label(img, connection_directions)
+                            [1, 1, 1],
+                            [1, 1, 1]])  # 9-connectivity
 
+        # Choose connectivity: structure4 or structure9
+        connection_directions = structure9
+
+        # Convert occupancy grid to binary image (1 for occupied, 0 for free)
+        img = (occupancy_grid > 0).astype(int)
+
+        # Label connected components
+        labeled_img, num_buildings = label(img, structure=connection_directions)
+        
         # Step 1: Extract the occupancy grid (assuming occupancy is in the first channel)
         empty_cells = (occupancy_grid == 0).astype(int)
         n_rows, n_cols = empty_cells.shape

@@ -5,12 +5,12 @@ seeds: [0,1,2,3,4,5,6,7,8,9]
 
 alg:
   num_niches: 10 # per feature/measure dimension
-  num_generations: 100
+  num_generations: 5000
   num_emitters: 8
   mu: 0.0
   sigma: 1.0
   output_inv_frequency: 50
-  learning_rate: 0.01
+  learning_rate: 0.001
   batch_size: 4
   init_samples: 1000
   save_average_accuracy: true
@@ -27,7 +27,7 @@ solution:
   num_grid_cells: 30 # 30
   cppn:
     input_dim: 2
-    hidden_layers: [5,5]
+    hidden_layers: [3,3,3]
     output_dim: 1
 
 plot:
