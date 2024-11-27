@@ -6,6 +6,7 @@ from typing import Dict
 import numpy as np
 import numpy.typing as npt
 
+from scipy.ndimage import label
 import cppn
 
 sys.path.insert(0, "qd/domain/utils")
@@ -36,6 +37,7 @@ class CPPNGenome(Genome):
         self.genes = cppn.CPPN(
             CPPNGenome.config.get("solution").get("cppn").get("input_dim"),
             CPPNGenome.config.get("solution").get("cppn").get("hidden_layers"),
+            CPPNGenome.config.get("solution").get("cppn").get("output_dim"),  # Added output_dim parameter
         )
         self._computed_phenotype = None
 
@@ -50,34 +52,34 @@ class CPPNGenome(Genome):
         prev_size = n_inputs
         for size in hidden_layers:
             num_act += size
-            num_weights += prev_size * size
+            num_weights += (prev_size + 1) * size  # +1 for bias weights
             prev_size = size
         num_act += n_outputs
-        num_weights += prev_size*n_outputs
+        num_weights += (prev_size + 1) * n_outputs  # +1 for bias weights
         dim = num_act + num_weights
         return dim, num_act, num_weights
 
     def mutate(self) -> None:
         """Mutate the genes of the individual."""
-        with np.nditer(self.genes.activations, op_flags=["readwrite"]) as it:
+        cppn_config = CPPNGenome.config.get("solution").get("cppn")
+        cppn_mut_prob = cppn_config.get("mut_probability")
+        cppn_mut_sigma = cppn_config.get("mut_sigma")
+
+        # Mutate activation indices
+        with np.nditer(self.genes.activation_indices, op_flags=["readwrite"]) as it:
             for x in it:
-                if np.random.random() < CPPNGenome.config.get("solution").get("cppn").get(
-                    "mut_probability"
-                ):
-                    x[...] = np.random.randint(0, len(self.genes.act_funcs) - 1)
+                if np.random.random() < cppn_mut_prob:
+                    x[...] = np.random.randint(0, len(self.genes.act_funcs))
+
+        # Mutate weights (including biases)
         with np.nditer(self.genes.weights, op_flags=["readwrite"]) as it:
             for x in it:
-                if np.random.random() < CPPNGenome.config.get("solution").get("cppn").get(
-                    "mut_probability"
-                ):
-                    x[...] = x[...] + np.random.normal(
-                        0, CPPNGenome.config.get("solution").get("cppn").get("mut_sigma")
-                    )
-        
+                if np.random.random() < cppn_mut_prob:
+                    x[...] += np.random.normal(0, cppn_mut_sigma)
 
     def express(self, as_height_map: bool) -> npt.NDArray:
         """
-        Generate the phenopype from the genotype.
+        Generate the phenotype from the genotype.
 
         Returns:
             npt.NDArray that represent the occupancy of the voxels.
@@ -88,6 +90,32 @@ class CPPNGenome(Genome):
         y_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
         x_coord, y_coord = np.meshgrid(x_coord, y_coord)
         raw_sample = self.genes.sample(CPPNGenome.config["substrate"])
+
+        # Filter out noise
+        structure4 = np.array([ [0, 1, 0],
+                                [1, 1, 1],
+                                [0, 1, 0]])  # 4-connectivity
+        # Convert occupancy grid to binary image (1 for occupied, 0 for free)
+        img = (raw_sample > 0).astype(int)
+
+        # Label connected components
+        labeled_img, num_labels = label(img, structure=structure4)
+
+        # Define minimum cluster size (number of pixels)
+        min_cluster_size = 8  # Example value, adjust as needed
+
+        # Compute the size of each labeled cluster
+        # Note: label 0 is the background, so we start counting from label 1
+        label_sizes = np.bincount(labeled_img.flatten())
+
+        # Create a mask of labels that meet the minimum size requirement
+        # Exclude the background label (label 0)
+        valid_labels = np.where(label_sizes >= min_cluster_size)[0]
+        valid_labels = valid_labels[valid_labels != 0]
+        valid_buildings_mask = np.isin(labeled_img, valid_labels)
+        raw_sample = raw_sample * valid_buildings_mask
+        
+
         if CPPNGenome.config.get("solution").get("cppn").get("scale_cppn_out"):
             ranges = np.max(raw_sample) - np.min(raw_sample)
             if ranges == 0:
@@ -101,11 +129,15 @@ class CPPNGenome(Genome):
             two_d_map = CPPNGenome.config.get("solution").get("max_height") * raw_sample
             two_d_map = np.floor(two_d_map).astype(int)
             maximum = np.max(two_d_map)
-            two_d_map = two_d_map - (maximum - CPPNGenome.config.get("solution").get("max_height"))
+            two_d_map = two_d_map - (
+                maximum - CPPNGenome.config.get("solution").get("max_height")
+            )
 
         two_d_map *= CPPNGenome.config["substrate"]
         self.height_map = np.clip(
-            two_d_map.astype(int), 0, CPPNGenome.config.get("solution").get("max_height")
+            two_d_map.astype(int),
+            0,
+            CPPNGenome.config.get("solution").get("max_height"),
         )
 
         if as_height_map:
@@ -125,10 +157,9 @@ class CPPNGenome(Genome):
         Get the genome of the individual.
 
         Returns:
-            npt.NDArray: Encoded genome in a vector [activations.flatten | self.weights.flatten].
+            npt.NDArray: Encoded genome in a vector [weights.flatten | activations.flatten].
         """
         g = self.genes.get_parameters()
-        # g = np.expand_dims(g, 1)
         return g
 
     def reload_config(self, config: Dict):
