@@ -12,12 +12,12 @@ from datetime import datetime
 from typing import Dict
 
 from ribs.archives import GridArchive
-from ribs.emitters import EvolutionStrategyEmitter
+from ribs.emitters import EvolutionStrategyEmitter, GaussianEmitter
 from ribs.schedulers import Scheduler
 
 sys.path.insert(0, "qd/util")
 from set_substrate import set as set_substrate
-sys.path.insert(0, "qd/domain/nsg_cppn")
+sys.path.insert(0, "qd/domain/cppn")
 from genome import CPPNGenome
 sys.path.insert(0, "qd/domain/utils")
 import fitness_function
@@ -28,8 +28,8 @@ def load_geodata(coordinates):
     time.sleep(0)
     return f"Mocked GIS data for area with coordinates: {coordinates}"
 
-def run_optimization(progress_callback=None):
-    config_file = 'qd/config/cppn/cfg.yml'
+def run_optimization(progress_callback=None, visualize_genome_selection=False):
+    config_file = 'qd/config/cfg.yml'
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_path = f'results/{current_datetime}/'
     print(f'Outputting results to path: {output_path}')
@@ -72,8 +72,9 @@ def run_optimization(progress_callback=None):
             ranges = feat_ranges,
             extra_fields = {'heightmaps': ((l*l,), np.float32)}
         )
+        
 
-        emitters = [
+        emitters_ES = [
             EvolutionStrategyEmitter(
                 working_archive,
                 x0=[genome_config["alg"]["mu"]] * genome_template.get_dimension()[0],
@@ -84,7 +85,17 @@ def run_optimization(progress_callback=None):
                 batch_size = genome_config["alg"]["batch_size"],
                 es="sep_cma_es",
             ) for _ in range(genome_config["alg"]["num_emitters"])
-        ]
+        ] 
+        
+        emitters_GA = [
+            GaussianEmitter(
+                working_archive,
+                x0=[np.random.uniform(-1.0, 1.0)] * genome_template.get_dimension()[0],
+                sigma=genome_config["alg"]["sigma"],
+                batch_size = genome_config["alg"]["batch_size"],
+            ) for _ in range(genome_config["alg"]["num_emitters"])
+        ] 
+        emitters = emitters_ES + emitters_GA
 
         scheduler = Scheduler(working_archive, emitters, result_archive=result_archive)
 
@@ -121,7 +132,14 @@ def run_optimization(progress_callback=None):
                 
                 print(f'QD score: {result_archive.stats.qd_score}')
                 print(f'Coverage: {result_archive.stats.coverage}')
-    
+
+                if visualize_genome_selection:
+                    dat = result_archive.data()
+                    from fitness_function import ribs_to_genome
+                    for elite_id in range(min(5, len(dat['solution']))):
+                        genome = ribs_to_genome(dat['solution'][elite_id], genome_template)
+                        genome.genes.visualize(save_path=f'{output_path}genome_itr_{itr}_id_{elite_id}.png')
+
     return result_archive, labels
 
 
