@@ -28,17 +28,18 @@ measures_labels = None
 # Initialize the Dash app with Bootstrap CSS and suppress callback exceptions
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
 
-def generate_grid_overlay(polygon_points, num_grid_lines = 20):
-    """ Generate a grid overlay within the selected rectangle bounds, properly aligned with the rotated rectangle. """
+def generate_grid_overlay(polygon_points, grid_size=100):
+    """Generate a grid overlay within the rectangle bounds with steps of 10 meters."""
+    step_fraction = 3 / grid_size  # Fractional step size based on grid size
+    num_steps = int(grid_size / 3)
+
     grid_lines = []
-    
-    # Define the grid lines within the bounds of the rotated rectangle
-    for i in range(1, num_grid_lines):
+    for i in range(1, num_steps):
         # Horizontal lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) / num_grid_lines
-        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) / num_grid_lines
-        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) / num_grid_lines
-        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) / num_grid_lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) * step_fraction
+        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) * step_fraction
+        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) * step_fraction
+        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) * step_fraction
 
         grid_lines.append(dl.Polyline(positions=[
             [start_lat, start_lon],
@@ -46,10 +47,10 @@ def generate_grid_overlay(polygon_points, num_grid_lines = 20):
         ], color="blue", weight=0.5))
 
         # Vertical lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) / num_grid_lines
-        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) / num_grid_lines
-        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) / num_grid_lines
-        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) / num_grid_lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) * step_fraction
+        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) * step_fraction
+        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) * step_fraction
+        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) * step_fraction
 
         grid_lines.append(dl.Polyline(positions=[
             [start_lat, start_lon],
@@ -131,8 +132,8 @@ footer = dbc.Container(
 
 # Layouts for different steps
 def get_step1_layout():
-    # Calculate the initial affected region as a rotated rectangle (200m x 200m)
-    polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir)
+    grid_size = 100  # Default grid size
+    polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir, grid_size)
 
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
@@ -142,14 +143,23 @@ def get_step1_layout():
             html.Br(),
             html.Br(),
             html.H2("Step 1: Select a City Quarter"),
-            html.P("Move the map to position the 200m x 200m area over the desired region."),
+            html.P(
+                id="grid-size-text",
+                children=f"Move the map to position the {grid_size}m x {grid_size}m area over the desired region."
+            ),
             dl.Map(center=initial_center, zoom=16, scrollWheelZoom='center', style={'width': '100%', 'height': '500px'}, id="map", children=[
                 dl.TileLayer(),
-                dl.LayerGroup(id="layer", children=[affected_region])
+                dl.LayerGroup(id="layer", children=[affected_region, generate_grid_overlay(polygon_points, grid_size)])
+            ]),
+            dbc.Row([
+                dbc.Col(dbc.Label("Set Square Grid Size (meters):")),
+                dbc.Col(dcc.Input(id="grid-size-input", type="number", value=grid_size, min=10, step=10)),
+                dbc.Col(dbc.Button("Reset to Default", id="reset-grid-size", color="secondary"))
             ]),
             dcc.Store(id="stored-center", data=initial_center),
-            dcc.Store(id="zoom-level-store", data=16),  # Store the initial zoom level            
-            dcc.Store(id="stored-polygon-coordinates"),  # Store for polygon coordinates            
+            dcc.Store(id="zoom-level-store", data=16),
+            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
             html.Br(),
             html.Div(id="selected-area", style={"marginTop": "20px"}),
             html.Div(id="gis-data-output", style={"marginTop": "20px"}),
@@ -167,11 +177,12 @@ def get_step1_layout():
         className="mt-4",
     )
 
-def get_step2_layout():
-    # Calculate the affected region and grid as in Step 1
-    polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir)
+
+
+def get_step2_layout(grid_size, polygon_points):
+    # Use the passed coordinates and grid size to define the affected region and grid overlay
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
-    grid_overlay = generate_grid_overlay(polygon_points, num_grid_lines=20)
+    grid_overlay = generate_grid_overlay(polygon_points, grid_size)
 
     return dbc.Container(
         [
@@ -185,10 +196,13 @@ def get_step2_layout():
                 dl.TileLayer(),
                 dl.LayerGroup(id="grid-layer", children=[affected_region, grid_overlay])
             ]),
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
+            dcc.Store(id="stored-grid-size", data=grid_size),  # Pass stored grid size
         ],
         className="mt-4",
     )
+
+
 
 def get_step3_layout():
     return dbc.Container(
@@ -310,17 +324,24 @@ app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     header,
     html.Div(id='page-content'),
+    dcc.Store(id="stored-grid-size", data=100),  # Default grid size
+    dcc.Store(id="stored-polygon-coordinates", data=None),  # Default empty polygon coordinates
     footer
 ])
 
-# Callback to handle navigation between steps and dynamically load content
 @app.callback(
     Output('page-content', 'children'),
-    Input('url', 'pathname')
+    [Input('url', 'pathname')],
+    [State('stored-grid-size', 'data'),
+     State('stored-polygon-coordinates', 'data')]
 )
-def display_page(pathname):
+def display_page(pathname, grid_size, polygon_points):
+    # Default polygon points if not yet defined
+    if not polygon_points:
+        polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir, grid_size)
+
     if pathname == '/step2':
-        return get_step2_layout()
+        return get_step2_layout(grid_size, polygon_points)
     elif pathname == '/step3':
         return get_step3_layout()
     elif pathname == '/step4':
@@ -329,6 +350,8 @@ def display_page(pathname):
         return get_step5_layout()
     else:
         return get_step1_layout()
+
+
 
 # Callback to update the map
 @app.callback(
@@ -339,10 +362,10 @@ def display_page(pathname):
      Output("map", "center"),  
      Output("zoom-level-store", "data"),
      Output("stored-polygon-coordinates", "data")],  # Store the polygon coordinates
-    [Input("map", "center"), Input("wind-direction-slider", "value"), Input("map", "zoom")],
+    [Input("map", "center"), Input("wind-direction-slider", "value"), Input("map", "zoom"), Input("grid-size-input", "value")],
     [State("stored-center", "data"), State("zoom-level-store", "data")]
 )
-def update_map(center, wind_dir, zoom, stored_center, previous_zoom, num_grid_lines=20):    
+def update_map(center, wind_dir, zoom, grid_size, stored_center, previous_zoom):    
 
     if zoom != previous_zoom:
         # If the zoom level changed, it means we're zooming, so keep the stored center
@@ -352,7 +375,7 @@ def update_map(center, wind_dir, zoom, stored_center, previous_zoom, num_grid_li
         lat, lon = center['lat'], center['lng']
 
     # Calculate the rotated and mapped rectangle points based on the current wind direction
-    polygon_points = rotate_and_map_points(lat, lon, wind_dir)
+    polygon_points = rotate_and_map_points(lat, lon, wind_dir, grid_size)
 
     coordinates_text = f"Selected area coordinates: {polygon_points}"
 
@@ -364,7 +387,7 @@ def update_map(center, wind_dir, zoom, stored_center, previous_zoom, num_grid_li
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
     # Combine all layers
-    layers = [affected_region, generate_grid_overlay(polygon_points, num_grid_lines)]
+    layers = [affected_region, generate_grid_overlay(polygon_points, grid_size)]
     
     # Return updated information, polygon, stored center, and the new zoom level, and the polygon coordinates
     return coordinates_text, gis_data_text, layers, {"lat": lat, "lng": lon}, {"lat": lat, "lng": lon}, zoom, polygon_points
@@ -408,12 +431,10 @@ def navigate_steps(next_steps, previous_steps, pathname):
     Output("grid-layer", "children"),
     [Input("grid-map", "click_lat_lng"),
      Input("stored-polygon-coordinates", "data")],
-    [State("grid-layer", "children")]
+    [State("grid-layer", "children"),
+     State("stored-grid-size", "data")]  # Access grid size
 )
-def update_grid_selection(click_lat_lng, polygon_points, existing_grid):
-    print(f'click_lat_lng: {click_lat_lng}')  # Debugging print
-    print(f'polygon_points: {polygon_points}')  # Debugging print
-
+def update_grid_selection(click_lat_lng, polygon_points, existing_grid, grid_size):
     if existing_grid is None:
         existing_grid = []
 
@@ -435,8 +456,37 @@ def update_grid_selection(click_lat_lng, polygon_points, existing_grid):
             new_cell = dl.CircleMarker(center=snapped_lat_lng, radius=5, color="green", fill=True, fillOpacity=0.6)
             existing_grid.append(new_cell)
 
+    # Regenerate the grid overlay using the updated grid size
+    grid_overlay = generate_grid_overlay(polygon_points, grid_size)
+
     return [dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region"),
-            generate_grid_overlay(polygon_points, num_grid_lines=20)] + existing_grid
+            grid_overlay] + existing_grid
+
+
+@app.callback(
+    [Output("grid-size-text", "children", allow_duplicate=True),
+     Output("stored-grid-size", "data", allow_duplicate=True),
+     Output("layer", "children", allow_duplicate=True)],
+    [Input("grid-size-input", "value"),
+     Input("reset-grid-size", "n_clicks"),
+     Input("wind-direction-slider", "value")],
+    [State("stored-center", "data"), State("stored-grid-size", "data")],
+    prevent_initial_call=True
+)
+def update_grid_size(grid_size, reset_clicks, wind_dir, stored_center, current_grid_size):
+    ctx_trigger = ctx.triggered_id
+    if ctx_trigger == "reset-grid-size":
+        grid_size = 100  # Reset to default
+
+    lat, lon = stored_center['lat'], stored_center['lng']
+    polygon_points = rotate_and_map_points(lat, lon, wind_dir, grid_size)
+
+    grid_size_text = f"Move the map to position the {grid_size}m x {grid_size}m area over the desired region."
+    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
+    grid_overlay = generate_grid_overlay(polygon_points, grid_size)
+
+    return grid_size_text, grid_size, [affected_region, grid_overlay]
+
 
 
 def run_optimization_in_background():

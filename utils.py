@@ -48,18 +48,18 @@ def meters_to_lat_lon(center_lat, center_lon, meters):
 
     return delta_lat_deg, delta_lon_deg
 
-def rotate_and_map_points(center_lat, center_lon, wind_dir, side_length=200):
+def rotate_and_map_points(center_lat, center_lon, wind_dir, grid_size=100):
     wind_dir_rad = np.radians(wind_dir)
     
     # Calculate half the side length
-    half_side_length = side_length / 2
+    half_grid_size = grid_size / 2
     
     # Define the rectangle's points around the center (local coordinates)
     local_points = [
-        [-half_side_length, -half_side_length],  # bottom-left
-        [-half_side_length, half_side_length],   # top-left
-        [half_side_length, half_side_length],    # top-right
-        [half_side_length, -half_side_length]    # bottom-right
+        [-half_grid_size, -half_grid_size],  # bottom-left
+        [-half_grid_size, half_grid_size],   # top-left
+        [half_grid_size, half_grid_size],    # top-right
+        [half_grid_size, -half_grid_size]    # bottom-right
     ]
 
     # Rotate and map to geographic coordinates
