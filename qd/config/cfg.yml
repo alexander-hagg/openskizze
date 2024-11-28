@@ -40,7 +40,8 @@ file_naming:
   root: 'qd/data'
   root_input: 'qd/data'
   root_output: 'qd/data/output'
-  substrate_address: 'substrate.pbm'
+  # substrate_address: 'substrate.pbm'
+  substrate_address: '../../assets/selected_grid.pbm'
   map_sat_address: 'mapsat.png'
   mesh_name: "mesh"
   average_fitness_name: 'avg_fitness'

@@ -5,9 +5,12 @@ import dash
 from dash import dcc, ctx, html, Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import dash_leaflet as dl
+from dash_extensions.javascript import assign
+
 import plotly.graph_objs as go
 import plotly.express as px
 
+import json
 import base64
 import threading
 import pickle
@@ -27,55 +30,6 @@ measures_labels = None
 
 # Initialize the Dash app with Bootstrap CSS and suppress callback exceptions
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
-
-def generate_grid_overlay(polygon_points, grid_size=100):
-    """Generate a grid overlay within the rectangle bounds with steps of 10 meters."""
-    step_fraction = 3 / grid_size  # Fractional step size based on grid size
-    num_steps = int(grid_size / 3)
-
-    grid_lines = []
-    for i in range(1, num_steps):
-        # Horizontal lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) * step_fraction
-        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) * step_fraction
-        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) * step_fraction
-        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) * step_fraction
-
-        grid_lines.append(dl.Polyline(positions=[
-            [start_lat, start_lon],
-            [end_lat, end_lon]
-        ], color="blue", weight=0.5))
-
-        # Vertical lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) * step_fraction
-        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) * step_fraction
-        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) * step_fraction
-        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) * step_fraction
-
-        grid_lines.append(dl.Polyline(positions=[
-            [start_lat, start_lon],
-            [end_lat, end_lon]
-        ], color="blue", weight=0.5))
-
-    return dl.LayerGroup(grid_lines)
-
-def generate_affected_region(bounds):
-    lat_start, lon_start = bounds[0]
-    lat_end, lon_end = bounds[1]
-
-    # Mock affected region as 50% larger
-    lat_buffer = (lat_end - lat_start) * 0.5
-    lon_buffer = (lon_end - lon_start) * 0.5
-
-    affected_bounds = [
-        [lat_start - lat_buffer, lon_start - lon_buffer],
-        [lat_start - lat_buffer, lon_end + lon_buffer],
-        [lat_end + lat_buffer, lon_end + lon_buffer],
-        [lat_end + lat_buffer, lon_start - lon_buffer]
-    ]
-
-    return dl.Rectangle(bounds=affected_bounds, color="red", fillOpacity=0.2)
-
 
 # Create the header and footer components
 header = dbc.Navbar(
@@ -131,7 +85,7 @@ footer = dbc.Container(
 )
 
 # Layouts for different steps
-def get_step1_layout():
+def get_step1_layout(grid_size, polygon_points):
     grid_size = 100  # Default grid size
     polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir, grid_size)
 
@@ -154,7 +108,8 @@ def get_step1_layout():
             dbc.Row([
                 dbc.Col(dbc.Label("Set Square Grid Size (meters):")),
                 dbc.Col(dcc.Input(id="grid-size-input", type="number", value=grid_size, min=10, step=10)),
-                dbc.Col(dbc.Button("Reset to Default", id="reset-grid-size", color="secondary"))
+                dbc.Col(dbc.Button("Reset to Default", id="reset-grid-size", color="secondary")),
+                dbc.Col(dbc.Button("Save Grid", id="save-grid-btn", color="success", style={"marginLeft": "10px"}))  # Save Grid Button                
             ]),
             dcc.Store(id="stored-center", data=initial_center),
             dcc.Store(id="zoom-level-store", data=16),
@@ -180,9 +135,29 @@ def get_step1_layout():
 
 
 def get_step2_layout(grid_size, polygon_points):
-    # Use the passed coordinates and grid size to define the affected region and grid overlay
-    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
-    grid_overlay = generate_grid_overlay(polygon_points, grid_size)
+    # Assign style to selected cells
+    style_handle = assign("""function(feature, context){
+        const {selected} = context.hideout;
+        if(selected.includes(feature.properties.name)){
+            return {fillColor: 'red', color: 'grey'}
+        }
+        return {fillColor: 'grey', color: 'grey'}
+    }""")
+
+    # Calculate the center of the polygon
+    lat_min, lon_min = polygon_points[0]
+    lat_max, lon_max = polygon_points[2]
+    center_lat = (lat_min + lat_max) / 2
+    center_lon = (lon_min + lon_max) / 2
+
+    # Calculate the number of grid cells
+    num_cells = int(grid_size / 10)
+    initial_matrix = [[0] * num_cells for _ in range(num_cells)]  # 0 = empty, 1 = filled
+    print(f'grid_size: {grid_size}')
+    print(f'initial_matrix: {initial_matrix}')
+    
+    # affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
+    # grid_overlay = generate_grid_overlay(polygon_points, grid_size)
 
     return dbc.Container(
         [
@@ -191,20 +166,40 @@ def get_step2_layout(grid_size, polygon_points):
             html.Br(),
             html.Br(),
             html.H2("Step 2: Select Buildable Grid Cells"),
-            html.P("Select the grid cells where building is allowed by clicking on them. Click again to deselect."),
-            dl.Map(center=initial_center, zoom=16, scrollWheelZoom='center', style={'width': '100%', 'height': '500px'}, id="grid-map", children=[
-                dl.TileLayer(),
-                dl.LayerGroup(id="grid-layer", children=[affected_region, grid_overlay])
-            ]),
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
-            dcc.Store(id="stored-grid-size", data=grid_size),  # Pass stored grid size
+            html.P("Click on a cell or drag a selection to toggle buildable areas."),
+            dl.Map(
+                center=[center_lat, center_lon],
+                zoom=16,
+                dragging=False,  # Disable dragging
+                doubleClickZoom=False,  # Disable double-click zoom
+                scrollWheelZoom=True,  # Disable scroll wheel zoom
+                style={'width': '100%', 'height': '500px'},
+                id="grid-map",
+                children=[
+                    dl.TileLayer(),
+                    dl.GeoJSON(
+                        url="/assets/selected_grid.json",
+                        zoomToBounds=True,
+                        id="geojson",
+                        hideout=dict(selected=[]),
+                        style=style_handle
+                    ),
+                    #dl.LayerGroup(id="grid-layer", children=[affected_region, grid_overlay]),
+                ],
+            ),
+            dbc.Button("Save as PBM", id="save-pbm-btn", color="primary", style={"marginTop": "10px"}),            
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),
+            dcc.Store(id="stored-grid-size", data=grid_size),
+            dcc.Store(id="grid-matrix", data=initial_matrix),
+            # dcc.Store(id="selected-area", data=None),
         ],
         className="mt-4",
     )
 
 
 
-def get_step3_layout():
+
+def get_step3_layout(grid_size, polygon_points):
     return dbc.Container(
         [
             dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 2}, color="secondary", className="ms-2"),
@@ -212,6 +207,13 @@ def get_step3_layout():
             html.Br(),
             html.Br(),
             html.H2("Step 3: Run Optimization"),
+            html.P("The grid matrix has been loaded. You can now proceed with the optimization."),
+            html.Div(id="matrix-output"),  # For debugging or visualization
+            dcc.Store(id="grid-matrix"),  # Include the grid matrix
+            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
+            
+
             dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
             dcc.Interval(id='progress-interval', interval=1000, n_intervals=0, disabled=True),
             dbc.Progress(id="optimization-progress", value=0, striped=True, animated=True, style={"margin-top": "20px"}),
@@ -243,7 +245,7 @@ def get_step3_layout():
     )
 
 
-def get_step4_layout():
+def get_step4_layout(grid_size, polygon_points):
 
     return dbc.Container(
         [
@@ -300,11 +302,13 @@ def get_step4_layout():
             
             # Container for the grid of height maps
             html.Div(id='height-maps-grid', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '10px'}),
+            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
         ],
         className="mt-4",
     )
 
-def get_step5_layout():
+def get_step5_layout(grid_size, polygon_points):
     return dbc.Container(
         [
             dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 4}, color="secondary", className="ms-2"),
@@ -315,6 +319,8 @@ def get_step5_layout():
             dbc.Button("Compare", id="compare-button", color="primary"),
             html.Div(id='compare-view', style={'margin-top': '20px'}),
             html.Br(),
+            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
+            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
         ],
         className="mt-4",
     )
@@ -343,13 +349,14 @@ def display_page(pathname, grid_size, polygon_points):
     if pathname == '/step2':
         return get_step2_layout(grid_size, polygon_points)
     elif pathname == '/step3':
-        return get_step3_layout()
+        return get_step3_layout(grid_size, polygon_points)
     elif pathname == '/step4':
-        return get_step4_layout()
+        return get_step4_layout(grid_size, polygon_points)
     elif pathname == '/step5':
-        return get_step5_layout()
+        return get_step5_layout(grid_size, polygon_points)
     else:
-        return get_step1_layout()
+        return get_step1_layout(grid_size, polygon_points)
+
 
 
 
@@ -496,7 +503,7 @@ def run_optimization_in_background():
         progress['value'] = int((current_iteration / total_iterations) * 100)
     
     # Run optimization (this function call is blocking, so it's run in a separate thread)
-    result_archive, measures_labels = run_optimization(progress_callback)
+    result_archive, measures_labels = run_optimization(progress_callback=progress_callback)
 
     # Save result to file using pickle
     with open('last_optimization_run.pkl', 'wb') as f:
@@ -738,6 +745,55 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     return html.Div(grid_children, style=grid_style)
 
 @app.callback(
+    Output("selected-area", "children", allow_duplicate=True),
+    [Input("save-grid-btn", "n_clicks")],
+    [State("stored-polygon-coordinates", "data"),
+     State("stored-grid-size", "data")],
+    prevent_initial_call=True
+)
+def save_grid_as_geojson(n_clicks, polygon_points, grid_size):
+    if not polygon_points:
+        return "No grid to save."
+
+    # Generate GeoJSON features for the grid cells
+    num_cells = int(grid_size / 10)
+    lat_min, lon_min = polygon_points[0]
+    lat_max, lon_max = polygon_points[2]
+    cell_size_lat = (lat_max - lat_min) / num_cells
+    cell_size_lon = (lon_max - lon_min) / num_cells
+
+    features = []
+    for row in range(num_cells):
+        for col in range(num_cells):
+            cell = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [lon_min + col * cell_size_lon, lat_min + row * cell_size_lat],
+                        [lon_min + (col + 1) * cell_size_lon, lat_min + row * cell_size_lat],
+                        [lon_min + (col + 1) * cell_size_lon, lat_min + (row + 1) * cell_size_lat],
+                        [lon_min + col * cell_size_lon, lat_min + (row + 1) * cell_size_lat],
+                        [lon_min + col * cell_size_lon, lat_min + row * cell_size_lat]
+                    ]]
+                },
+                "properties": {"name": f"cell-{row}-{col}"}
+            }
+            features.append(cell)
+
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+    # Save to /assets/selected_grid.json
+    with open("assets/selected_grid.json", "w") as f:
+        json.dump(geojson, f)
+
+    return "Grid saved to /assets/selected_grid.json."
+
+
+@app.callback(
     [
         Output('measure-x', 'options'),
         Output('measure-x', 'value'),
@@ -762,7 +818,113 @@ def populate_measure_dropdowns(n_intervals):
         
         # Disable the interval since data is now available
         return options, default_x, options, default_y, True
-        
+
+
+
+@app.callback(
+    [Output("geojson", "hideout"), Output("grid-matrix", "data")],
+    Input("geojson", "n_clicks"),
+    State("geojson", "clickData"),
+    State("geojson", "hideout"),
+    State("grid-matrix", "data"),
+    prevent_initial_call=True
+)
+def toggle_geojson_cell(n_clicks, click_data, hideout, grid_matrix):
+    if click_data is None:
+        return hideout
+
+    selected = hideout.get("selected", [])
+    clicked_name = click_data["properties"]["name"]
+
+    clicked_id = click_data["properties"]["id"]
+    nrows = len(grid_matrix[0])
+    ncols = len(grid_matrix)
+    row_id = clicked_id // ncols
+    col_id = nrows - 1 - (clicked_id % nrows)
+    grid_matrix[col_id][row_id] = 1 - grid_matrix[col_id][row_id]  # Toggle the cell value
+
+    if clicked_name in selected:
+        selected.remove(clicked_name)  # Deselect if already selected
+    else:
+        selected.append(clicked_name)  # Select otherwise
+
+    
+    return {"selected": selected}, grid_matrix
+
+
+def generate_grid_overlay(polygon_points, grid_size=100):
+    """Generate a grid overlay within the rectangle bounds with steps of 10 meters."""
+    step_fraction = 3 / grid_size  # Fractional step size based on grid size
+    num_steps = int(grid_size / 3)
+
+    grid_lines = []
+    for i in range(1, num_steps):
+        # Horizontal lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) * step_fraction
+        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) * step_fraction
+        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) * step_fraction
+        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) * step_fraction
+
+        grid_lines.append(dl.Polyline(positions=[
+            [start_lat, start_lon],
+            [end_lat, end_lon]
+        ], color="blue", weight=0.5))
+
+        # Vertical lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) * step_fraction
+        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) * step_fraction
+        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) * step_fraction
+        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) * step_fraction
+
+        grid_lines.append(dl.Polyline(positions=[
+            [start_lat, start_lon],
+            [end_lat, end_lon]
+        ], color="blue", weight=0.5))
+
+    return dl.LayerGroup(grid_lines)
+
+def generate_affected_region(bounds):
+    lat_start, lon_start = bounds[0]
+    lat_end, lon_end = bounds[1]
+
+    # Mock affected region as 50% larger
+    lat_buffer = (lat_end - lat_start) * 0.5
+    lon_buffer = (lon_end - lon_start) * 0.5
+
+    affected_bounds = [
+        [lat_start - lat_buffer, lon_start - lon_buffer],
+        [lat_start - lat_buffer, lon_end + lon_buffer],
+        [lat_end + lat_buffer, lon_end + lon_buffer],
+        [lat_end + lat_buffer, lon_start - lon_buffer]
+    ]
+
+    return dl.Rectangle(bounds=affected_bounds, color="red", fillOpacity=0.2)
+
+@app.callback(
+    Input("save-pbm-btn", "n_clicks"),  # Triggered by the Save as PBM button
+    State("geojson", "hideout"),
+    State("grid-matrix", "data"),
+    prevent_initial_call=True
+)
+def save_grid_as_pbm(n_clicks, hideout, grid_matrix):
+    if not grid_matrix:
+        return "No grid to save."
+
+    # Generate the PBM content
+    # Invert the matrix for PBM format
+    grid_matrix = grid_matrix[::-1]
+    # flip the matrix
+    grid_matrix = np.flip(grid_matrix, axis=1)
+    num_rows = len(grid_matrix)
+    num_cols = len(grid_matrix[0])
+    pbm_header = f"P1\n{num_cols} {num_rows}\n"  # PBM format header
+    pbm_data = "\n".join(" ".join(str(cell) for cell in row) for row in grid_matrix)  # Invert for PBM: 0=white, 1=black
+    pbm_content = pbm_header + pbm_data + "\n"
+    
+    # Save to /assets/selected_grid.pbm
+    file_path = "assets/selected_grid.pbm"
+    with open(file_path, "w") as f:
+        f.write(pbm_content)
 
 # Run the app
 if __name__ == '__main__':
