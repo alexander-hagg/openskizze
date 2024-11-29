@@ -19,8 +19,10 @@ def set(config: Dict):
             config.get("file_naming").get("substrate_address"),
         )
     )
-    img = img.resize(
-        (config.get("solution").get("num_grid_cells"), config.get("solution").get("num_grid_cells"))
-    )
+    print(f'root input: {config.get("file_naming").get("root_input")}')
+    print(f'substrate_address: {config.get("file_naming").get("substrate_address")}')
+    # img = img.resize(
+    #     (config.get("solution").get("num_grid_cells"), config.get("solution").get("num_grid_cells"))
+    # )
     img = np.array(img)
     return img.astype("bool")

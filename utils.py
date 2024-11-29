@@ -1,5 +1,6 @@
 import time
 import numpy as np
+import dash_leaflet as dl
 
 # Mock functions for the back-end processes
 def load_geodata(coordinates):
@@ -97,3 +98,33 @@ def find_nearest_grid_point(click_lat_lng, polygon_points, num_grid_lines=20):
     
     return [snapped_lat, snapped_lon]
 
+def generate_grid_overlay(polygon_points, grid_size=100):
+    """Generate a grid overlay within the rectangle bounds with steps of 10 meters."""
+    step_fraction = 3 / grid_size  # Fractional step size based on grid size
+    num_steps = int(grid_size / 3)
+
+    grid_lines = []
+    for i in range(1, num_steps):
+        # Horizontal lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) * step_fraction
+        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) * step_fraction
+        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) * step_fraction
+        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) * step_fraction
+
+        grid_lines.append(dl.Polyline(positions=[
+            [start_lat, start_lon],
+            [end_lat, end_lon]
+        ], color="blue", weight=0.5))
+
+        # Vertical lines
+        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) * step_fraction
+        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) * step_fraction
+        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) * step_fraction
+        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) * step_fraction
+
+        grid_lines.append(dl.Polyline(positions=[
+            [start_lat, start_lon],
+            [end_lat, end_lon]
+        ], color="blue", weight=0.5))
+
+    return dl.LayerGroup(grid_lines)

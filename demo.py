@@ -12,12 +12,12 @@ import plotly.express as px
 
 import json
 import base64
-import threading
 import pickle
+import threading
 
 # Import internals from other files
-from utils import rotate_and_map_points, find_nearest_grid_point
-from api_calls import run_optimization# , predict_airflow
+from utils import rotate_and_map_points, find_nearest_grid_point, generate_grid_overlay
+from api_calls import run_optimization
 
 
 # Initial center coordinates
@@ -84,9 +84,45 @@ footer = dbc.Container(
     className="bg-dark text-light mt-5 p-3",
 )
 
-# Layouts for different steps
+# App layout with header, footer, and dynamic content
+app.layout = html.Div([
+    dcc.Location(id='url', refresh=False),
+    header,
+    html.Div(id='page-content'),
+    dcc.Store(id="stored-grid-size", data=100),  # Default grid size
+    dcc.Store(id="stored-polygon-coordinates", data=None),  # Default empty polygon coordinates
+    dcc.Store(id="grid-matrix", data=None),
+    footer
+])
+
+@app.callback(
+    Output('page-content', 'children'),
+    [Input('url', 'pathname')],
+    [State('stored-grid-size', 'data'),
+     State('stored-polygon-coordinates', 'data')]
+)
+def display_page(pathname, grid_size, polygon_points):
+    # Default polygon points if not yet defined
+    if not polygon_points:
+        polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir, grid_size)
+
+    if pathname == '/step2':
+        return get_step2_layout(grid_size, polygon_points)
+    elif pathname == '/step3':
+        return get_step3_layout(grid_size, polygon_points)
+    elif pathname == '/step4':
+        return get_step4_layout(grid_size, polygon_points)
+    elif pathname == '/step5':
+        return get_step5_layout(grid_size, polygon_points)
+    else:
+        return get_step1_layout(grid_size, polygon_points)
+
+
+#####################################################################################
+# Layouts for each step
+#####################################################################################
+
 def get_step1_layout(grid_size, polygon_points):
-    grid_size = 100  # Default grid size
     polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir, grid_size)
 
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
@@ -113,8 +149,6 @@ def get_step1_layout(grid_size, polygon_points):
             ]),
             dcc.Store(id="stored-center", data=initial_center),
             dcc.Store(id="zoom-level-store", data=16),
-            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
             html.Br(),
             html.Div(id="selected-area", style={"marginTop": "20px"}),
             html.Div(id="gis-data-output", style={"marginTop": "20px"}),
@@ -131,7 +165,6 @@ def get_step1_layout(grid_size, polygon_points):
         ],
         className="mt-4",
     )
-
 
 
 def get_step2_layout(grid_size, polygon_points):
@@ -151,14 +184,8 @@ def get_step2_layout(grid_size, polygon_points):
     center_lon = (lon_min + lon_max) / 2
 
     # Calculate the number of grid cells
-    num_cells = int(grid_size / 10)
-    initial_matrix = [[0] * num_cells for _ in range(num_cells)]  # 0 = empty, 1 = filled
-    print(f'grid_size: {grid_size}')
-    print(f'initial_matrix: {initial_matrix}')
+    print(f'Step 2. grid size: {grid_size}')
     
-    # affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
-    # grid_overlay = generate_grid_overlay(polygon_points, grid_size)
-
     return dbc.Container(
         [
             dbc.Button("Previous Step", id={'type': 'previous-step', 'index': 2}, color="secondary", className="ms-2"),
@@ -184,14 +211,9 @@ def get_step2_layout(grid_size, polygon_points):
                         hideout=dict(selected=[]),
                         style=style_handle
                     ),
-                    #dl.LayerGroup(id="grid-layer", children=[affected_region, grid_overlay]),
                 ],
             ),
-            dbc.Button("Save as PBM", id="save-pbm-btn", color="primary", style={"marginTop": "10px"}),            
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),
-            dcc.Store(id="stored-grid-size", data=grid_size),
-            dcc.Store(id="grid-matrix", data=initial_matrix),
-            # dcc.Store(id="selected-area", data=None),
+            # dbc.Button("Save as PBM", id="save-pbm-btn", color="primary", style={"marginTop": "10px"}),            
         ],
         className="mt-4",
     )
@@ -210,10 +232,6 @@ def get_step3_layout(grid_size, polygon_points):
             html.P("The grid matrix has been loaded. You can now proceed with the optimization."),
             html.Div(id="matrix-output"),  # For debugging or visualization
             dcc.Store(id="grid-matrix"),  # Include the grid matrix
-            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
-            
-
             dbc.Button("Run Optimization", id="run-optimization-button", color="primary"),
             dcc.Interval(id='progress-interval', interval=1000, n_intervals=0, disabled=True),
             dbc.Progress(id="optimization-progress", value=0, striped=True, animated=True, style={"margin-top": "20px"}),
@@ -302,8 +320,6 @@ def get_step4_layout(grid_size, polygon_points):
             
             # Container for the grid of height maps
             html.Div(id='height-maps-grid', style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '10px'}),
-            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
         ],
         className="mt-4",
     )
@@ -319,86 +335,14 @@ def get_step5_layout(grid_size, polygon_points):
             dbc.Button("Compare", id="compare-button", color="primary"),
             html.Div(id='compare-view', style={'margin-top': '20px'}),
             html.Br(),
-            dcc.Store(id="stored-grid-size", data=grid_size),  # Store grid size
-            dcc.Store(id="stored-polygon-coordinates", data=polygon_points),  # Store polygon coordinates
         ],
         className="mt-4",
     )
 
-# App layout with header, footer, and dynamic content
-app.layout = html.Div([
-    dcc.Location(id='url', refresh=False),
-    header,
-    html.Div(id='page-content'),
-    dcc.Store(id="stored-grid-size", data=100),  # Default grid size
-    dcc.Store(id="stored-polygon-coordinates", data=None),  # Default empty polygon coordinates
-    footer
-])
 
-@app.callback(
-    Output('page-content', 'children'),
-    [Input('url', 'pathname')],
-    [State('stored-grid-size', 'data'),
-     State('stored-polygon-coordinates', 'data')]
-)
-def display_page(pathname, grid_size, polygon_points):
-    # Default polygon points if not yet defined
-    if not polygon_points:
-        polygon_points = rotate_and_map_points(initial_center['lat'], initial_center['lng'], initial_wind_dir, grid_size)
-
-    if pathname == '/step2':
-        return get_step2_layout(grid_size, polygon_points)
-    elif pathname == '/step3':
-        return get_step3_layout(grid_size, polygon_points)
-    elif pathname == '/step4':
-        return get_step4_layout(grid_size, polygon_points)
-    elif pathname == '/step5':
-        return get_step5_layout(grid_size, polygon_points)
-    else:
-        return get_step1_layout(grid_size, polygon_points)
-
-
-
-
-# Callback to update the map
-@app.callback(
-    [Output("selected-area", "children"),
-     Output("gis-data-output", "children"),
-     Output("layer", "children"),
-     Output("stored-center", "data"),  
-     Output("map", "center"),  
-     Output("zoom-level-store", "data"),
-     Output("stored-polygon-coordinates", "data")],  # Store the polygon coordinates
-    [Input("map", "center"), Input("wind-direction-slider", "value"), Input("map", "zoom"), Input("grid-size-input", "value")],
-    [State("stored-center", "data"), State("zoom-level-store", "data")]
-)
-def update_map(center, wind_dir, zoom, grid_size, stored_center, previous_zoom):    
-
-    if zoom != previous_zoom:
-        # If the zoom level changed, it means we're zooming, so keep the stored center
-        lat, lon = stored_center['lat'], stored_center['lng']
-    else:
-        # If the zoom level hasn't changed, we're panning, so update the stored center
-        lat, lon = center['lat'], center['lng']
-
-    # Calculate the rotated and mapped rectangle points based on the current wind direction
-    polygon_points = rotate_and_map_points(lat, lon, wind_dir, grid_size)
-
-    coordinates_text = f"Selected area coordinates: {polygon_points}"
-
-    # Mock loading of GIS data
-    gis_data = f"Mocked GIS data for area with coordinates: {polygon_points}"
-    gis_data_text = f"GIS Data Loaded: {gis_data}"
-
-    # Create the polygon layer
-    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
-
-    # Combine all layers
-    layers = [affected_region, generate_grid_overlay(polygon_points, grid_size)]
-    
-    # Return updated information, polygon, stored center, and the new zoom level, and the polygon coordinates
-    return coordinates_text, gis_data_text, layers, {"lat": lat, "lng": lon}, {"lat": lat, "lng": lon}, zoom, polygon_points
-
+#####################################################################################
+# Callback functions
+#####################################################################################
 
 # Callbacks for navigation buttons using pattern matching
 @app.callback(
@@ -434,46 +378,55 @@ def navigate_steps(next_steps, previous_steps, pathname):
             return '/step1'
     return pathname
 
+#####################################################################################
+# Step 1 callback functions
+#####################################################################################
+
 @app.callback(
-    Output("grid-layer", "children"),
-    [Input("grid-map", "click_lat_lng"),
-     Input("stored-polygon-coordinates", "data")],
-    [State("grid-layer", "children"),
-     State("stored-grid-size", "data")]  # Access grid size
+    [Output("selected-area", "children"),
+     Output("gis-data-output", "children"),
+     Output("layer", "children"),
+     Output("stored-center", "data"),  
+     Output("map", "center"),  
+     Output("zoom-level-store", "data"),
+     Output("stored-polygon-coordinates", "data")],  # Store the polygon coordinates
+    [Input("map", "center"), Input("wind-direction-slider", "value"), Input("map", "zoom"), Input("grid-size-input", "value")],
+    [State("stored-center", "data"), State("zoom-level-store", "data")]
 )
-def update_grid_selection(click_lat_lng, polygon_points, existing_grid, grid_size):
-    if existing_grid is None:
-        existing_grid = []
+def update_map(center, wind_dir, zoom, grid_size, stored_center, previous_zoom):    
+    if grid_size is None:
+        return "Invalid grid size.", "", [], stored_center, center, zoom, None
+    if zoom != previous_zoom:
+        # If the zoom level changed, it means we're zooming, so keep the stored center
+        lat, lon = stored_center['lat'], stored_center['lng']
+    else:
+        # If the zoom level hasn't changed, we're panning, so update the stored center
+        lat, lon = center['lat'], center['lng']
 
-    if not polygon_points:
-        return existing_grid
+    # Calculate the rotated and mapped rectangle points based on the current wind direction
+    polygon_points = rotate_and_map_points(lat, lon, wind_dir, grid_size)
 
-    if click_lat_lng:
-        snapped_lat_lng = find_nearest_grid_point(click_lat_lng, polygon_points)
-        clicked_cell = None
+    coordinates_text = f"Selected area coordinates: {polygon_points}"
 
-        for cell in existing_grid:
-            if isinstance(cell, dl.CircleMarker) and cell['props']['center'] == snapped_lat_lng:
-                clicked_cell = cell
-                break
+    # Mock loading of GIS data
+    gis_data = f"Mocked GIS data for area with coordinates: {polygon_points}"
+    gis_data_text = f"GIS Data Loaded: {gis_data}"
 
-        if clicked_cell:
-            existing_grid.remove(clicked_cell)
-        else:
-            new_cell = dl.CircleMarker(center=snapped_lat_lng, radius=5, color="green", fill=True, fillOpacity=0.6)
-            existing_grid.append(new_cell)
+    # Create the polygon layer
+    affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
 
-    # Regenerate the grid overlay using the updated grid size
-    grid_overlay = generate_grid_overlay(polygon_points, grid_size)
-
-    return [dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region"),
-            grid_overlay] + existing_grid
-
+    # Combine all layers
+    layers = [affected_region, generate_grid_overlay(polygon_points, grid_size)]
+    
+    # Return updated information, polygon, stored center, and the new zoom level, and the polygon coordinates
+    return coordinates_text, gis_data_text, layers, {"lat": lat, "lng": lon}, {"lat": lat, "lng": lon}, zoom, polygon_points
 
 @app.callback(
     [Output("grid-size-text", "children", allow_duplicate=True),
      Output("stored-grid-size", "data", allow_duplicate=True),
-     Output("layer", "children", allow_duplicate=True)],
+     Output("layer", "children", allow_duplicate=True),
+     Output("grid-matrix", "data")
+     ],
     [Input("grid-size-input", "value"),
      Input("reset-grid-size", "n_clicks"),
      Input("wind-direction-slider", "value")],
@@ -484,37 +437,111 @@ def update_grid_size(grid_size, reset_clicks, wind_dir, stored_center, current_g
     ctx_trigger = ctx.triggered_id
     if ctx_trigger == "reset-grid-size":
         grid_size = 100  # Reset to default
-
+    if grid_size is None:
+        return "Invalid grid size.", current_grid_size, [], None
+    grid_matrix = [[0] * grid_size for _ in range(grid_size)]  # 0 = empty, 1 = filled
     lat, lon = stored_center['lat'], stored_center['lng']
     polygon_points = rotate_and_map_points(lat, lon, wind_dir, grid_size)
+    if polygon_points is None:
+        return "Invalid grid size.", current_grid_size, [],
 
     grid_size_text = f"Move the map to position the {grid_size}m x {grid_size}m area over the desired region."
     affected_region = dl.Polygon(positions=polygon_points, color="red", fillOpacity=0.2, id="affected-region")
     grid_overlay = generate_grid_overlay(polygon_points, grid_size)
 
-    return grid_size_text, grid_size, [affected_region, grid_overlay]
+    current_grid_size = grid_size
+
+    return grid_size_text, grid_size, [affected_region, grid_overlay] , grid_matrix
+
+@app.callback(
+    Output("selected-area", "children", allow_duplicate=True),
+    [Input("save-grid-btn", "n_clicks")],
+    [State("stored-polygon-coordinates", "data"),
+     State("stored-grid-size", "data")],
+    prevent_initial_call=True
+)
+def save_grid_as_geojson(n_clicks, polygon_points, grid_size):
+    if not polygon_points:
+        return "No grid to save."
+
+    # Generate GeoJSON features for the grid cells
+    num_cells = int(grid_size / 3) # One cell every 3 meters
+    lat_min, lon_min = polygon_points[0]
+    lat_max, lon_max = polygon_points[2]
+    cell_size_lat = (lat_max - lat_min) / num_cells
+    cell_size_lon = (lon_max - lon_min) / num_cells
+
+    features = []
+    for row in range(num_cells):
+        for col in range(num_cells):
+            cell = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [lon_min + col * cell_size_lon, lat_min + row * cell_size_lat],
+                        [lon_min + (col + 1) * cell_size_lon, lat_min + row * cell_size_lat],
+                        [lon_min + (col + 1) * cell_size_lon, lat_min + (row + 1) * cell_size_lat],
+                        [lon_min + col * cell_size_lon, lat_min + (row + 1) * cell_size_lat],
+                        [lon_min + col * cell_size_lon, lat_min + row * cell_size_lat]
+                    ]]
+                },
+                "properties": {"name": f"cell-{row}-{col}"}
+            }
+            features.append(cell)
+
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+    # Save to /assets/selected_grid.json
+    with open("assets/selected_grid.json", "w") as f:
+        json.dump(geojson, f)
+
+    return "Grid saved to /assets/selected_grid.json."
 
 
+#####################################################################################
+# Step 2 callback functions
+#####################################################################################
 
-def run_optimization_in_background():
-    global progress, result_archive, measures_labels
+@app.callback(
+    Output("geojson", "hideout"),
+    Input("geojson", "n_clicks"),
+    State("geojson", "clickData"),
+    State("geojson", "hideout"),
+    prevent_initial_call=True
+)
+def toggle_geojson_cell(n_clicks, click_data, hideout):
+    if click_data is None:
+        return hideout
 
-    def progress_callback(current_iteration, total_iterations):
-        progress['value'] = int((current_iteration / total_iterations) * 100)
-    
-    # Run optimization (this function call is blocking, so it's run in a separate thread)
-    result_archive, measures_labels = run_optimization(progress_callback=progress_callback)
+    selected = hideout.get("selected", [])
+    clicked_name = click_data["properties"]["name"]
 
-    # Save result to file using pickle
-    with open('last_optimization_run.pkl', 'wb') as f:
-        pickle.dump({'data': result_archive, 'measures_labels': measures_labels}, f)
+    if clicked_name in selected:
+        selected.remove(clicked_name)  # Deselect if already selected
+    else:
+        selected.append(clicked_name)  # Select otherwise
+
+    # Save the updated GeoJSON file
+    with open("assets/selected_grid.json", "r") as f:
+        geojson = json.load(f)
+
+    for feature in geojson["features"]:
+        feature_name = feature["properties"]["name"]
+        feature["properties"]["selected"] = feature_name in selected
+
+    with open("assets/selected_grid.json", "w") as f:
+        json.dump(geojson, f)
+
+    return {"selected": selected}
 
 
-
-def start_optimization():
-    optimization_thread = threading.Thread(target=run_optimization_in_background)
-    optimization_thread.start()
-
+#####################################################################################
+# Step 3 callback functions
+#####################################################################################
 
 @app.callback(
     [Output('file-upload-feedback', 'children'),
@@ -561,7 +588,6 @@ def load_optimization_file(contents, filename):
         return f"Error processing the file {filename}: {str(e)}", dash.no_update
 
 
-# Callbacks for backend interactions
 @app.callback(
     [Output('optimization-progress', 'value'),
      Output('optimization-view', 'children', allow_duplicate=True),
@@ -576,6 +602,40 @@ def update_optimization_view(n_clicks, n_intervals):
 
     if n_clicks is not None and n_intervals == 0:
         # Start the optimization in a background thread
+
+        # Load the GeoJSON file
+        with open("assets/selected_grid.json", "r") as f:
+            geojson = json.load(f)
+
+        # Extract the selected cells
+        selected_cells = [
+            feature for feature in geojson["features"]
+            if feature["properties"].get("selected", True)
+        ]
+
+        # Get the grid dimensions
+        num_cells = len(geojson["features"])  # Assume square grid
+        print(f'num_cells: {num_cells}')
+        cell_dim = int(num_cells ** 0.5)      # Assume perfect square
+
+        # Initialize the PBM matrix
+        pbm_matrix = np.zeros((cell_dim, cell_dim), dtype=int)  # Default to 1 (white)
+
+        # Update matrix based on selected cells
+        for cell in selected_cells:
+            name = cell["properties"]["name"]
+            print(f'name: {name}')
+            row, col = map(int, name.split("-")[1:])  # Extract row and col from name
+            pbm_matrix[row, col] = 1  # Set selected cells to black (0)
+
+        pbm_matrix = np.fliplr(pbm_matrix) # flip left-right to match the visualization
+        # Save the PBM file
+        pbm_path = "assets/selected_grid.pbm"
+        with open(pbm_path, "wb") as f:
+            f.write(f"P1\n{cell_dim} {cell_dim}\n".encode())  # PBM header
+            np.savetxt(f, pbm_matrix, fmt="%d", delimiter="")
+
+        print(f"PBM file saved to {pbm_path}")
         start_optimization()
         return 0, dash.no_update, False
 
@@ -607,7 +667,26 @@ def update_optimization_view(n_clicks, n_intervals):
 
     return dash.no_update, dash.no_update, True
 
+def run_optimization_in_background():
+    global progress, result_archive, measures_labels
 
+    def progress_callback(current_iteration, total_iterations):
+        progress['value'] = int((current_iteration / total_iterations) * 100)
+    
+    # Run optimization (this function call is blocking, so it's run in a separate thread)
+    result_archive, measures_labels = run_optimization(progress_callback=progress_callback)
+
+    # Save result to file using pickle
+    with open('last_optimization_run.pkl', 'wb') as f:
+        pickle.dump({'data': result_archive, 'measures_labels': measures_labels}, f)
+
+def start_optimization():
+    optimization_thread = threading.Thread(target=run_optimization_in_background)
+    optimization_thread.start()
+
+#####################################################################################
+# Step 4 callback functions
+#####################################################################################
 
 @app.callback(
     Output('compare-view', 'children'),
@@ -622,6 +701,31 @@ def update_compare_view(n_clicks, compare_designs):
     figs = [dcc.Graph(figure=px.imshow(data, title=f'Design {design}')) for design, data in zip(compare_designs, comparison_data)]
     return html.Div(figs)
 
+@app.callback(
+    [
+        Output('measure-x', 'options'),
+        Output('measure-x', 'value'),
+        Output('measure-y', 'options'),
+        Output('measure-y', 'value'),
+        Output('interval-component', 'disabled')  # Disable the interval once data is loaded
+    ],
+    Input('interval-component', 'n_intervals')
+)
+def populate_measure_dropdowns(n_intervals):
+    global result_archive, measures_labels
+    if result_archive is None:
+        # Data not ready yet; keep interval running
+        return [], None, [], None, False  # Not disabled
+    else:
+        # Create dropdown options with separate 'label' and 'value'
+        options = [{'label': label, 'value': idx} for idx, label in enumerate(measures_labels)]
+        
+        # Set default values to the first two measures, if available
+        default_x = 0
+        default_y = 1
+        
+        # Disable the interval since data is now available
+        return options, default_x, options, default_y, True
 
 @app.callback(
     Output('height-maps-grid', 'children'),
@@ -744,187 +848,6 @@ def update_height_maps_grid(measure_x, measure_y, n_clicks):
     
     return html.Div(grid_children, style=grid_style)
 
-@app.callback(
-    Output("selected-area", "children", allow_duplicate=True),
-    [Input("save-grid-btn", "n_clicks")],
-    [State("stored-polygon-coordinates", "data"),
-     State("stored-grid-size", "data")],
-    prevent_initial_call=True
-)
-def save_grid_as_geojson(n_clicks, polygon_points, grid_size):
-    if not polygon_points:
-        return "No grid to save."
-
-    # Generate GeoJSON features for the grid cells
-    num_cells = int(grid_size / 10)
-    lat_min, lon_min = polygon_points[0]
-    lat_max, lon_max = polygon_points[2]
-    cell_size_lat = (lat_max - lat_min) / num_cells
-    cell_size_lon = (lon_max - lon_min) / num_cells
-
-    features = []
-    for row in range(num_cells):
-        for col in range(num_cells):
-            cell = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": [[
-                        [lon_min + col * cell_size_lon, lat_min + row * cell_size_lat],
-                        [lon_min + (col + 1) * cell_size_lon, lat_min + row * cell_size_lat],
-                        [lon_min + (col + 1) * cell_size_lon, lat_min + (row + 1) * cell_size_lat],
-                        [lon_min + col * cell_size_lon, lat_min + (row + 1) * cell_size_lat],
-                        [lon_min + col * cell_size_lon, lat_min + row * cell_size_lat]
-                    ]]
-                },
-                "properties": {"name": f"cell-{row}-{col}"}
-            }
-            features.append(cell)
-
-    geojson = {
-        "type": "FeatureCollection",
-        "features": features
-    }
-
-    # Save to /assets/selected_grid.json
-    with open("assets/selected_grid.json", "w") as f:
-        json.dump(geojson, f)
-
-    return "Grid saved to /assets/selected_grid.json."
-
-
-@app.callback(
-    [
-        Output('measure-x', 'options'),
-        Output('measure-x', 'value'),
-        Output('measure-y', 'options'),
-        Output('measure-y', 'value'),
-        Output('interval-component', 'disabled')  # Disable the interval once data is loaded
-    ],
-    Input('interval-component', 'n_intervals')
-)
-def populate_measure_dropdowns(n_intervals):
-    global result_archive, measures_labels
-    if result_archive is None:
-        # Data not ready yet; keep interval running
-        return [], None, [], None, False  # Not disabled
-    else:
-        # Create dropdown options with separate 'label' and 'value'
-        options = [{'label': label, 'value': idx} for idx, label in enumerate(measures_labels)]
-        
-        # Set default values to the first two measures, if available
-        default_x = 0
-        default_y = 1
-        
-        # Disable the interval since data is now available
-        return options, default_x, options, default_y, True
-
-
-
-@app.callback(
-    [Output("geojson", "hideout"), Output("grid-matrix", "data")],
-    Input("geojson", "n_clicks"),
-    State("geojson", "clickData"),
-    State("geojson", "hideout"),
-    State("grid-matrix", "data"),
-    prevent_initial_call=True
-)
-def toggle_geojson_cell(n_clicks, click_data, hideout, grid_matrix):
-    if click_data is None:
-        return hideout
-
-    selected = hideout.get("selected", [])
-    clicked_name = click_data["properties"]["name"]
-
-    clicked_id = click_data["properties"]["id"]
-    nrows = len(grid_matrix[0])
-    ncols = len(grid_matrix)
-    row_id = clicked_id // ncols
-    col_id = nrows - 1 - (clicked_id % nrows)
-    grid_matrix[col_id][row_id] = 1 - grid_matrix[col_id][row_id]  # Toggle the cell value
-
-    if clicked_name in selected:
-        selected.remove(clicked_name)  # Deselect if already selected
-    else:
-        selected.append(clicked_name)  # Select otherwise
-
-    
-    return {"selected": selected}, grid_matrix
-
-
-def generate_grid_overlay(polygon_points, grid_size=100):
-    """Generate a grid overlay within the rectangle bounds with steps of 10 meters."""
-    step_fraction = 3 / grid_size  # Fractional step size based on grid size
-    num_steps = int(grid_size / 3)
-
-    grid_lines = []
-    for i in range(1, num_steps):
-        # Horizontal lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[1][0] - polygon_points[0][0]) * step_fraction
-        start_lon = polygon_points[0][1] + i * (polygon_points[1][1] - polygon_points[0][1]) * step_fraction
-        end_lat = polygon_points[3][0] + i * (polygon_points[2][0] - polygon_points[3][0]) * step_fraction
-        end_lon = polygon_points[3][1] + i * (polygon_points[2][1] - polygon_points[3][1]) * step_fraction
-
-        grid_lines.append(dl.Polyline(positions=[
-            [start_lat, start_lon],
-            [end_lat, end_lon]
-        ], color="blue", weight=0.5))
-
-        # Vertical lines
-        start_lat = polygon_points[0][0] + i * (polygon_points[3][0] - polygon_points[0][0]) * step_fraction
-        start_lon = polygon_points[0][1] + i * (polygon_points[3][1] - polygon_points[0][1]) * step_fraction
-        end_lat = polygon_points[1][0] + i * (polygon_points[2][0] - polygon_points[1][0]) * step_fraction
-        end_lon = polygon_points[1][1] + i * (polygon_points[2][1] - polygon_points[1][1]) * step_fraction
-
-        grid_lines.append(dl.Polyline(positions=[
-            [start_lat, start_lon],
-            [end_lat, end_lon]
-        ], color="blue", weight=0.5))
-
-    return dl.LayerGroup(grid_lines)
-
-def generate_affected_region(bounds):
-    lat_start, lon_start = bounds[0]
-    lat_end, lon_end = bounds[1]
-
-    # Mock affected region as 50% larger
-    lat_buffer = (lat_end - lat_start) * 0.5
-    lon_buffer = (lon_end - lon_start) * 0.5
-
-    affected_bounds = [
-        [lat_start - lat_buffer, lon_start - lon_buffer],
-        [lat_start - lat_buffer, lon_end + lon_buffer],
-        [lat_end + lat_buffer, lon_end + lon_buffer],
-        [lat_end + lat_buffer, lon_start - lon_buffer]
-    ]
-
-    return dl.Rectangle(bounds=affected_bounds, color="red", fillOpacity=0.2)
-
-@app.callback(
-    Input("save-pbm-btn", "n_clicks"),  # Triggered by the Save as PBM button
-    State("geojson", "hideout"),
-    State("grid-matrix", "data"),
-    prevent_initial_call=True
-)
-def save_grid_as_pbm(n_clicks, hideout, grid_matrix):
-    if not grid_matrix:
-        return "No grid to save."
-
-    # Generate the PBM content
-    # Invert the matrix for PBM format
-    grid_matrix = grid_matrix[::-1]
-    # flip the matrix
-    grid_matrix = np.flip(grid_matrix, axis=1)
-    num_rows = len(grid_matrix)
-    num_cols = len(grid_matrix[0])
-    pbm_header = f"P1\n{num_cols} {num_rows}\n"  # PBM format header
-    pbm_data = "\n".join(" ".join(str(cell) for cell in row) for row in grid_matrix)  # Invert for PBM: 0=white, 1=black
-    pbm_content = pbm_header + pbm_data + "\n"
-    
-    # Save to /assets/selected_grid.pbm
-    file_path = "assets/selected_grid.pbm"
-    with open(file_path, "w") as f:
-        f.write(pbm_content)
 
 # Run the app
 if __name__ == '__main__':

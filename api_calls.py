@@ -42,6 +42,13 @@ def run_optimization(progress_callback=None, visualize_genome_selection=False):
 
     genome_config["substrate"] = set_substrate(genome_config)
     genome_config["alg"]["substrate_length"] = genome_config["substrate"].shape[0]
+    # Set number of cells in the phenotype
+    genome_config["solution"]["num_grid_cells"] = int(genome_config["substrate"].shape[0])
+
+    print(genome_config["substrate"].shape)
+    print(genome_config["alg"]["substrate_length"])
+    print(genome_config["solution"]["num_grid_cells"])
+
     genome_template = CPPNGenome(genome_config)
 
     selected_features = labels = genome_config["alg"]["features"]

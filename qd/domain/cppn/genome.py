@@ -86,6 +86,7 @@ class CPPNGenome(Genome):
         """
         if self.genes is None:
             return None, None, None
+        # print(f'num grid cells {CPPNGenome.config.get("solution").get("num_grid_cells")}')
         x_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
         y_coord = np.arange(0, CPPNGenome.config.get("solution").get("num_grid_cells"), 1)
         x_coord, y_coord = np.meshgrid(x_coord, y_coord)
