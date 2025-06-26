@@ -1,0 +1,17 @@
+/* General styling for the app */
+body {
+    font-family: sans-serif;
+}
+
+/* Style for the solution grid in Step 4 */
+#solution-grid-container {
+    display: grid;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+/* Make leaflet map fill its container */
+.leaflet-container {
+    height: 100%;
+}
