@@ -4,16 +4,22 @@ window.dashExtensions = Object.assign({}, window.dashExtensions, {
             const {
                 selected
             } = context.hideout;
-            if (selected.includes(feature.properties.name)) {
+            if (selected.includes(feature.properties.id)) {
                 return {
-                    fillColor: 'red',
-                    color: 'grey'
-                }
-            }
-            return {
-                fillColor: 'grey',
-                color: 'grey'
+                    color: '#ff7800',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.5
+                };
+            } else {
+                return {
+                    color: '#3388ff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.1
+                };
             }
         }
+
     }
 });
