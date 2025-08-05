@@ -1,8 +1,12 @@
+#
+# pages/step4_explore.py (Final Corrected Version)
+#
 from dash import dcc, html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
 from backend.translation import T
-from backend.analysis import get_solution_grid
+from backend.config import ENCODING_CONFIG
 import plotly.express as px
+import numpy as np
 
 LANG = 'DE'
 
@@ -33,20 +37,16 @@ def layout():
     Output('y-axis-dropdown', 'options'),
     Output('x-axis-dropdown', 'value'),
     Output('y-axis-dropdown', 'value'),
-    Input('session-store', 'data'),
+    Input('results-store', 'data'),
 )
-def populate_dropdowns(session_data):
-    if not session_data or 'measures_map' not in session_data:
+def populate_dropdowns(results_data):
+    if not results_data or 'labels' not in results_data:
         return [], [], None, None
     
-    options = [{'label': v, 'value': k} for k, v in session_data['measures_map'].items()]
-    
-    # Set default values
-    val1 = options[0]['value'] if options else None
-    val2 = options[1]['value'] if len(options) > 1 else None
-    
+    options = [{'label': label, 'value': i} for i, label in enumerate(results_data['labels'])]
+    val1 = 0 if len(options) > 0 else None
+    val2 = 1 if len(options) > 1 else None
     return options, options, val1, val2
-
 
 @callback(
     Output('solution-grid-container', 'children'),
@@ -55,31 +55,41 @@ def populate_dropdowns(session_data):
     Input('y-axis-dropdown', 'value'),
     State('results-store', 'data'),
 )
-def update_solution_grid(x_axis, y_axis, results_data):
-    if not all([x_axis, y_axis, results_data]):
-        return dbc.Alert("Optimierungsergebnisse nicht gefunden. Bitte führen Sie Schritt 3 aus.", color="warning"), {}
+def update_solution_grid(x_axis_idx, y_axis_idx, results_data):
+    if not all([isinstance(x_axis_idx, int), isinstance(y_axis_idx, int), results_data]):
+        return dbc.Alert("Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.", color="warning"), {}
 
-    grid_resolution = 10
-    grid = get_solution_grid(results_data, x_axis, y_axis, grid_resolution)
+    # The data structure is now a clean list of dictionaries.
+    list_of_elites = results_data['elites_data']
+    grid_dims = results_data['archive_dims']
+    grid_resolution = grid_dims[x_axis_idx]
     
+    vis_grid = np.full((grid_resolution, grid_resolution), None, dtype=object)
+    
+    for elite_dict in list_of_elites:
+        # Access the grid indices directly from the dictionary key. This is now guaranteed to work.
+        ix = elite_dict['grid_indices'][x_axis_idx]
+        iy = elite_dict['grid_indices'][y_axis_idx]
+        
+        if vis_grid[iy, ix] is None or elite_dict['objective'] > vis_grid[iy, ix]['objective']:
+            vis_grid[iy, ix] = elite_dict
+
     grid_children = []
+    heightmap_res = ENCODING_CONFIG['xy_length']
+    
     for row in range(grid_resolution):
         for col in range(grid_resolution):
-            cell = grid[row, col]
-            if cell and cell['best_solution_idx'] != -1:
-                idx = cell['best_solution_idx']
-                heightmap = results_data['heightmaps'][idx]
+            elite_data = vis_grid[row, col]
+            if elite_data is not None:
+                heightmap = np.array(elite_data['heightmap']).reshape((heightmap_res, heightmap_res))
                 
-                fig = px.imshow(heightmap, color_continuous_scale='viridis')
+                fig = px.imshow(heightmap, color_continuous_scale='viridis', origin='lower', zmin=0, zmax=ENCODING_CONFIG['z_length'])
                 fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
                 fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
                 
-                grid_children.append(
-                    dbc.Card(dbc.CardBody(dcc.Graph(figure=fig, style={'height': '80px', 'width': '80px'})),
-                             style={'padding': '5px'})
-                )
+                grid_children.append(dcc.Graph(figure=fig, style={'height': '80px', 'width': '80px'}))
             else:
-                grid_children.append(html.Div(style={'backgroundColor': '#f8f9fa', 'border': '1px solid #dee2e6'}))
+                grid_children.append(html.Div(style={'backgroundColor': '#f8f9fa', 'border': '1px solid #dee2e-6', 'width': '80px', 'height': '80px'}))
 
     grid_style = {
         'display': 'grid',

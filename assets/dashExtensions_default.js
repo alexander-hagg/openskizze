@@ -10,14 +10,14 @@ window.dashExtensions = Object.assign({}, window.dashExtensions, {
                     weight: 3,
                     opacity: 1,
                     fillOpacity: 0.5
-                }; // Orange for selected
+                };
             } else {
                 return {
                     color: '#3388ff',
                     weight: 2,
                     opacity: 1,
                     fillOpacity: 0.1
-                }; // Blue for available
+                };
             }
         }
 
