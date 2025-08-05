@@ -1,5 +1,5 @@
 #
-# pages/step1_scope.py (Final Corrected Version with Centralized Callback)
+# pages/step1_scope.py (Final Corrected Version with EditControl for Drawing)
 #
 import dash
 from dash import dcc, html, Input, Output, State, callback, no_update
@@ -8,19 +8,19 @@ import dash_leaflet as dl
 from dash_extensions.javascript import assign
 from backend.translation import T
 from backend.data_io import fetch_flurstuecke_data
-from shapely.geometry import shape, mapping
+from shapely.geometry import shape, mapping, Polygon, MultiPolygon
 from shapely.ops import unary_union
 
 LANG = 'DE'
 
-# Client-side styling for parcel selection (unchanged)
+# Client-side styling for the selectable parcel layer
 style_handle = assign("""
 function(feature, context){
     const { selected } = context.hideout;
     if (selected.includes(feature.properties.id)) {
-        return {color: '#ff7800', weight: 3, opacity: 1, fillOpacity: 0.5};
+        return {color: '#ff7800', weight: 3, opacity: 1, fillOpacity: 0.5}; // Orange for selected
     } else {
-        return {color: '#3388ff', weight: 2, opacity: 1, fillOpacity: 0.1};
+        return {color: '#3388ff', weight: 2, opacity: 1, fillOpacity: 0.1}; // Blue for available
     }
 }
 """)
@@ -31,6 +31,7 @@ def layout():
         html.P(T[LANG]['STEP1_DATA_SOURCE_INFO'], className="text-muted mb-3"),
         dcc.Store(id='loaded-parcels-store'),
         dcc.Store(id='selected-parcels-store', data=[]),
+        dcc.Store(id='active-polygon-store'),
 
         dbc.Row([
             dbc.Col([
@@ -39,24 +40,40 @@ def layout():
                     children=[
                         dl.TileLayer(),
                         dl.GeoJSON(id='parcels-layer', options=dict(style=style_handle), hideout=dict(selected=[]), hoverStyle={'fillOpacity': 0.5, 'weight': 3}),
-                        dl.FeatureGroup([dl.EditControl(id='edit-control', draw=True, edit=True)])
+                        dl.GeoJSON(id='active-polygon-layer', options=dict(style={'color': 'green', 'fillOpacity': 0.6, 'weight': 3})),
+                        
+                        # FIX: Replaced the non-existent DrawControl with a properly configured EditControl.
+                        # We enable drawing tools but disable the editing tools to match the requirement.
+                        dl.FeatureGroup([
+                            dl.EditControl(id='edit-control',
+                                           draw={
+                                               'polygon': True, 'rectangle': True, 'circle': False,
+                                               'marker': False, 'circlemarker': False, 'polyline': False
+                                           },
+                                           edit={'edit': False, 'remove': False} # Disable editing vertices
+                                          )
+                        ])
                     ], id='map-step1', style={'width': '100%', 'height': '60vh'}
                 )
             ], md=7),
             
             dbc.Col([
-                dbc.Tabs([
-                    dbc.Tab(label="Flurstücke auswählen", children=[
-                        dbc.Card(dbc.CardBody([
-                            html.P("1. Flurstücke laden."),
-                            dbc.Button("Flurstücke für aktuellen Kartenausschnitt laden", id="load-parcels-btn", className="w-100 mb-3"),
-                            html.P("2. Flurstücke durch Klicken auswählen/abwählen."),
-                            html.P("3. Die Auswahl erscheint als editierbares Polygon auf der Karte.", className="small fst-italic")
-                        ]))
-                    ]),
-                    dbc.Tab(label="Manuell zeichnen", children=[
-                        dbc.Card(dbc.CardBody([html.P("Benutzen Sie die Zeichenwerkzeuge auf der rechten Seite der Karte, um den Geltungsbereich manuell zu definieren.")]))
-                    ]),
+                html.Div([
+                    html.H5("Werkzeuge"),
+                    dbc.Label("1. Flurstücke laden und auswählen/abwählen", className="fw-bold"),
+                    dbc.Button("Flurstücke für aktuellen Kartenausschnitt laden", id="load-parcels-btn", className="w-100 mb-3"),
+                    
+                    dbc.Label("2. Manuelle Anpassung per Zeichnen", className="fw-bold"),
+                    dbc.RadioItems(
+                        options=[
+                            {'label': 'Fläche hinzufügen', 'value': 'add'},
+                            {'label': 'Fläche entfernen', 'value': 'subtract'},
+                        ],
+                        value='add',
+                        id='edit-mode-toggle',
+                        inline=True,
+                    ),
+                    html.P("Nutzen Sie die Werkzeuge links auf der Karte, um die grüne Auswahl anzupassen.", className="small fst-italic"),
                 ]),
                 html.Hr(),
                 html.H5(T[LANG]['STEP1_WIND_HEADER']),
@@ -68,7 +85,7 @@ def layout():
         dbc.Button(T[LANG]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4")
     ], fluid=True)
 
-# Callbacks for loading and displaying the base parcel layer
+# Callbacks for loading and displaying the blue selectable parcel layer
 @callback(Output('loaded-parcels-store', 'data'), Input('load-parcels-btn', 'n_clicks'), State('map-step1', 'bounds'), prevent_initial_call=True)
 def load_parcels_data(n_clicks, bounds):
     if not n_clicks or not bounds: return no_update
@@ -79,60 +96,73 @@ def load_parcels_data(n_clicks, bounds):
 def display_parcels(geojson_data):
     return geojson_data
 
-# This is the single, authoritative callback that manages all user interactions for this step.
+# Authoritative callback to manage the active green polygon.
 @callback(
     Output('session-store', 'data'),
-    Output('edit-control', 'geojson'),
+    Output('active-polygon-layer', 'data'),
     Output('selected-parcels-store', 'data'),
     Output('parcels-layer', 'hideout'),
+    # FIX: Listen to 'geojson' from the EditControl. This property updates when a drawing is finished.
     Input('parcels-layer', 'clickData'),
     Input('edit-control', 'geojson'),
     Input('wind-direction-slider', 'value'),
     State('selected-parcels-store', 'data'),
     State('loaded-parcels-store', 'data'),
     State('session-store', 'data'),
+    State('edit-mode-toggle', 'value'),
     prevent_initial_call=True
 )
-def handle_all_interactions(click_data, edited_geojson, wind_direction, selected_ids, all_parcels_data, session_data):
+def handle_all_interactions(click_data, drawn_geojson, wind_direction, selected_ids, 
+                            all_parcels_data, session_data, edit_mode):
     session_data = session_data or {}
     ctx = dash.callback_context
     triggered_id = ctx.triggered_id
 
-    # Default to the current state
+    last_active_geojson = session_data.get('site_polygon')
+    base_geom = shape(last_active_geojson['features'][0]['geometry']) if last_active_geojson and last_active_geojson.get('features') else Polygon()
+
     new_selected_ids = selected_ids
     hideout = {'selected': selected_ids}
-    final_geojson = edited_geojson
+    final_geom = base_geom
 
     if triggered_id == 'parcels-layer':
-        if click_data is None:
-            return no_update
+        if click_data is None: return no_update
         
-        # Logic to select/deselect parcels
         parcel_id = click_data['properties']['id']
-        new_selected_ids = selected_ids[:]  # Create a copy to ensure Dash detects the change
+        new_selected_ids = selected_ids[:]
         if parcel_id in new_selected_ids:
             new_selected_ids.remove(parcel_id)
         else:
             new_selected_ids.append(parcel_id)
         
-        # Update the visual styling of the parcel layer
         hideout = {'selected': new_selected_ids}
 
-        # Logic to merge selected parcels and push to the editable layer
         if all_parcels_data and new_selected_ids:
             selected_features = [f for f in all_parcels_data['features'] if f['properties']['id'] in new_selected_ids]
-            if selected_features:
-                geometries = [shape(f['geometry']) for f in selected_features]
-                merged_geometry = unary_union(geometries)
-                final_geojson = {'type': 'FeatureCollection', 'features': [{'type': 'Feature', 'geometry': mapping(merged_geometry), 'properties': {}}]}
-            else:
-                final_geojson = {'type': 'FeatureCollection', 'features': []}
+            geometries = [shape(f['geometry']) for f in selected_features]
+            final_geom = unary_union(geometries)
         else:
-            final_geojson = {'type': 'FeatureCollection', 'features': []}
+            final_geom = Polygon()
+            
+    elif triggered_id == 'edit-control':
+        if drawn_geojson and drawn_geojson['features']:
+            newly_drawn_geom = shape(drawn_geojson['features'][-1]['geometry'])
+            
+            if edit_mode == 'add':
+                final_geom = base_geom.union(newly_drawn_geom)
+            else: # subtract
+                final_geom = base_geom.difference(newly_drawn_geom)
+            
+            new_selected_ids = []
+            hideout = {'selected': []}
     
-    # If the trigger was a manual edit, `edited_geojson` is the new truth. We just need to save it.
-    # If the trigger was the wind slider, the `final_geojson` remains unchanged from its state.
-    
+    if final_geom.is_empty:
+        final_geojson = None
+    else:
+        if isinstance(final_geom, Polygon):
+            final_geom = MultiPolygon([final_geom])
+        final_geojson = {'type': 'FeatureCollection', 'features': [{'type': 'Feature', 'geometry': mapping(final_geom), 'properties': {}}]}
+
     session_data['site_polygon'] = final_geojson
     session_data['wind_direction'] = wind_direction
 
