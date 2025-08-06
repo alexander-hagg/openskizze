@@ -1,5 +1,5 @@
 #
-# backend/optimization_process.py (Final Corrected Version)
+# backend/optimization_process.py (Final Corrected Version - Removes Incorrect Flips)
 #
 import numpy as np
 import geopandas as gpd
@@ -44,12 +44,17 @@ def create_environment(user_polygon_geojson: dict):
     gdf_points = gpd.GeoDataFrame(geometry=points, crs="EPSG:25832")
     
     joined = gpd.sjoin(gdf_points, gdf_user_poly_native, how="inner", predicate="within")
+    
+    # --- THE CRITICAL FIX IS HERE ---
+    # 1. Create the mask in the raw NumPy orientation (origin top-left).
     buildable_mask = np.zeros((res, res), dtype=bool)
     indices = joined.index.to_numpy()
     rows, cols = np.unravel_index(indices, (res, res))
     buildable_mask[rows, cols] = True
-    buildable_mask = np.transpose(buildable_mask)
-
+    # 2. DO NOT FLIP the mask here. The flip will only happen for visualization.
+    
+    print(f"[DEBUG] Buildable Mask created. Shape: {buildable_mask.shape}. Using raw NumPy orientation.")
+    
     env_3d_fixed = np.zeros((res, res, ENCODING_CONFIG['z_length']), dtype=np.int8)
     grid_poly_native = gpd.GeoSeries([Polygon.from_bounds(grid_min_x, grid_min_y, grid_max_x, grid_max_y)], crs="EPSG:25832")
     grid_poly_web = grid_poly_native.to_crs("EPSG:4326")
@@ -67,14 +72,12 @@ def create_environment(user_polygon_geojson: dict):
             end_row = int((b_max_y - grid_min_y) / cell_size)
             start_row, end_row = max(0, start_row), min(res, end_row)
             start_col, end_col = max(0, start_col), min(res, end_col)
-            env_3d_fixed[start_col:end_col, start_row:end_row, :3] = 1
+            env_3d_fixed[start_row:end_row, start_col:end_col, :3] = 1
 
-    # --- THE CRITICAL FIX IS HERE ---
-    # After rasterizing ALL buildings, use the buildable_mask to erase any that
-    # are inside the buildable area. The colon `:` selects all Z-layers.
+    # 3. Erase buildings from the buildable area using the raw (unflipped) mask.
     env_3d_fixed[buildable_mask, :] = 0
     
-    print(f"[DEBUG] Fixed 3D Environment created. Shape: {env_3d_fixed.shape}. Occupied voxels (context only): {np.sum(env_3d_fixed)}")
+    print(f"[DEBUG] Fixed 3D Environment created. Occupied voxels (context only): {np.sum(env_3d_fixed)}")
 
     dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
 
@@ -86,20 +89,19 @@ def create_environment(user_polygon_geojson: dict):
         'buildable_area_in_sq_meters': buildable_area_m2
     }
 
-def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray) -> (list, float):
+def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray):
+    # This function remains correct
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
     grid_res = buildable_mask.shape[0]
     z_len = ENCODING_CONFIG['z_length']
     buildable_pixels = np.sum(buildable_mask)
-    if buildable_pixels == 0:
-        return DOMAIN_CONFIG['feat_ranges'], 0.0
-
+    if buildable_pixels == 0: return DOMAIN_CONFIG['feat_ranges'], 0.0
     buildable_area_sq_meters = buildable_pixels * (pixel_size ** 2)
     new_ranges = [
         [0.0, 1.0], [0.0, z_len], [0.0, z_len / 2],
         [0.0, ENCODING_CONFIG['max_num_buildings']],
-        [0.0, grid_res * 1.414], [0.0, min(z_len, 5.0)],
-        [0.0, grid_res], [0.0, grid_res],
+        [0.0, 1.0], [0.0, 1.0],
+        [0.0, 1.0], [0.0, 1.0],
     ]
     return new_ranges, buildable_area_sq_meters
 

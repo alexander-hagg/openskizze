@@ -1,13 +1,13 @@
 # backend/config.py (Corrected for Web Performance)
 
 QD_CONFIG = {
-    'num_niches': 4,
-    'num_generations': 300,  # Drastically reduced for a fast web demo
-    'num_emitters': 4,      # Reduced for a fast web demo
+    'num_niches': 5,
+    'num_generations': 200,  # Drastically reduced for a fast web demo
+    'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,
     'learning_rate': 0.01,
     'output_inv_frequency': 5, # More frequent updates
-    'batch_size': 20,
+    'batch_size': 16,
 }
 
 ENCODING_CONFIG = {
@@ -26,8 +26,9 @@ DOMAIN_CONFIG = {
         'Centroid X', 'Centroid Y'
     ],
     'feat_ranges': [
-        [0.0, 1.0], [0.0, 10.0], [0.0, 4.0], [0.0, 20.0],
-        [0.0, 32.0], [0.0, 3.0], [0.0, 32.0], [0.0, 32.0],
+        [0.0, 0.25], [0.0, 10.0], [0.0, 4.5], 
+        [0.0, 5.0], [0.0, 70.0], [0.0, 6], 
+        [0.0, 70.0], [0.0, 70.0],
     ],
     'environment_border_size': 1.5,
 }
