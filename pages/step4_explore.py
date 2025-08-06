@@ -1,5 +1,5 @@
 #
-# pages/step4_explore.py (Final Corrected Version)
+# pages/step4_explore.py (Final Corrected Version - Loads from File)
 #
 from dash import dcc, html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
@@ -7,6 +7,8 @@ from backend.translation import T
 from backend.config import ENCODING_CONFIG
 import plotly.express as px
 import numpy as np
+import pickle
+import os
 
 LANG = 'DE'
 
@@ -59,23 +61,29 @@ def update_solution_grid(x_axis_idx, y_axis_idx, results_data):
     if not all([isinstance(x_axis_idx, int), isinstance(y_axis_idx, int), results_data]):
         return dbc.Alert("Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.", color="warning"), {}
 
-    # The data structure is now a clean list of dictionaries.
-    list_of_elites = results_data['elites_data']
+    # --- THE CRITICAL FIX IS HERE ---
+    # 1. Get the path to the full results file from the store.
+    results_path = results_data.get('full_results_path')
+    if not results_path or not os.path.exists(results_path):
+        return dbc.Alert("Fehler: Große Ergebnisdatei nicht gefunden.", color="danger"), {}
+
+    # 2. Load the large list of elites from the server-side file.
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+
     grid_dims = results_data['archive_dims']
     grid_resolution = grid_dims[x_axis_idx]
     
     vis_grid = np.full((grid_resolution, grid_resolution), None, dtype=object)
     
     for elite_dict in list_of_elites:
-        # Access the grid indices directly from the dictionary key. This is now guaranteed to work.
         ix = elite_dict['grid_indices'][x_axis_idx]
         iy = elite_dict['grid_indices'][y_axis_idx]
-        
         if vis_grid[iy, ix] is None or elite_dict['objective'] > vis_grid[iy, ix]['objective']:
             vis_grid[iy, ix] = elite_dict
 
     grid_children = []
-    heightmap_res = ENCODING_CONFIG['xy_length']
+    heightmap_res = int(np.sqrt(len(list_of_elites[0]['heightmap']))) # Infer resolution
     
     for row in range(grid_resolution):
         for col in range(grid_resolution):
@@ -89,7 +97,7 @@ def update_solution_grid(x_axis_idx, y_axis_idx, results_data):
                 
                 grid_children.append(dcc.Graph(figure=fig, style={'height': '80px', 'width': '80px'}))
             else:
-                grid_children.append(html.Div(style={'backgroundColor': '#f8f9fa', 'border': '1px solid #dee2e-6', 'width': '80px', 'height': '80px'}))
+                grid_children.append(html.Div(style={'backgroundColor': '#f8f9fa', 'border': '1px solid #dee2e6', 'width': '80px', 'height': '80px'}))
 
     grid_style = {
         'display': 'grid',

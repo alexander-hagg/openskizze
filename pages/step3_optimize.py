@@ -1,5 +1,5 @@
 #
-# pages/step3_optimize.py (Final Corrected Version - Using archive.index_of)
+# pages/step3_optimize.py (Final Corrected Version)
 #
 from dash import dcc, html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
@@ -9,10 +9,16 @@ import plotly.express as px
 import pandas as pd
 from dash import DiskcacheManager
 import diskcache
+import pickle
+import uuid
+import os
 
 cache = diskcache.Cache("./cache")
 background_callback_manager = DiskcacheManager(cache)
 LANG = 'DE'
+
+TEMP_RESULTS_DIR = "temp_results"
+os.makedirs(TEMP_RESULTS_DIR, exist_ok=True)
 
 def layout():
     return dbc.Container([
@@ -47,10 +53,8 @@ def layout():
     ],
 )
 def run_optimization(set_progress, n_clicks, session_data):
-    if not session_data or not session_data.get('site_polygon'):
+    if not n_clicks or not session_data or not session_data.get('site_polygon'):
         return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning")
-    if not n_clicks:
-        return None, dbc.Alert("Führen Sie die Optimierung aus.", color="warning")
 
     def progress_callback(progress, text):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
@@ -64,7 +68,8 @@ def run_optimization(set_progress, n_clicks, session_data):
         
         if archive and not archive.empty:
             # --- THE CRITICAL FIX IS HERE ---
-            # 1. Extract the raw data arrays from the archive.
+            # The `elite` object from the archive behaves like a dictionary.
+            # We must access its data using the correct keys.
             objectives = archive.data('objective')
             measures = archive.data('measures')
             heightmaps = archive.data('heightmaps')
@@ -73,27 +78,33 @@ def run_optimization(set_progress, n_clicks, session_data):
             grid_indices = archive.index_of(measures)
             grid_indices = archive.int_to_grid_index(grid_indices)
             # 3. Assemble a clean, serializable list of dictionaries.
-            list_of_elites = []
+            full_list_of_elites = []
             for i in range(len(objectives)):
-                list_of_elites.append({
+                full_list_of_elites.append({
                     "objective": objectives[i],
                     "measures": measures[i].tolist(),
                     "grid_indices": grid_indices[i].tolist(),  # Convert numpy array to list
                     "heightmap": heightmaps[i].tolist()
                 })
 
-            results_data_to_store = {
-                'elites_data': list_of_elites,
+            # Save the large data to a server-side file.
+            session_id = str(uuid.uuid4())
+            full_results_path = os.path.join(TEMP_RESULTS_DIR, f"{session_id}.pkl")
+            with open(full_results_path, 'wb') as f:
+                pickle.dump(full_list_of_elites, f)
+
+            # Create the small summary for the dcc.Store.
+            results_summary_to_store = {
+                'full_results_path': full_results_path,
                 'archive_dims': archive.dims,
                 'labels': labels,
-                'buildable_mask': env_config['buildable_mask']
             }
-            
-            # For the plot, create a DataFrame from the clean list.
-            df_for_plot = pd.DataFrame(list_of_elites)
+
+            # Create a clean DataFrame for the plot from the list of dicts.
+            df_for_plot = pd.DataFrame(full_list_of_elites)
             measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
             df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()
-
+            
             fig = px.parallel_coordinates(
                 df_for_plot, dimensions=['objective'] + labels, color="objective",
                 labels={dim: dim.replace(" ", "<br>") for dim in ['objective'] + labels},
@@ -101,7 +112,7 @@ def run_optimization(set_progress, n_clicks, session_data):
             )
             graph = dcc.Graph(figure=fig)
             
-            return results_data_to_store, graph
+            return results_summary_to_store, graph
         
     except Exception as e:
         import traceback

@@ -29,7 +29,6 @@ class ParametricEncoding:
                 x_start, x_end = max(0, x_c - w // 2), min(self.config['xy_length'], x_c + w // 2)
                 y_start, y_end = max(0, y_c - l // 2), min(self.config['xy_length'], y_c + l // 2)
                 heightmap[y_start:y_end, x_start:x_end] = h
-                print(f"Building {i+1}: w={w}, l={l}, h={h}, x_c={x_c}, y_c={y_c} -> Heightmap updated.")
         
         masked_heightmap = heightmap * buildable_mask
         # --- DEBUG LOG ---

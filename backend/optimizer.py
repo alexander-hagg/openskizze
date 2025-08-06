@@ -42,6 +42,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     for gen in range(1, qd_config['num_generations'] + 1):
         try:
             genomes = scheduler.ask()
+
             # --- DEBUG LOG ---
             if gen == 1: print(f"[DEBUG] Gen 1: Asked for {len(genomes)} genomes. Shape of first genome: {genomes[0].shape}")
 

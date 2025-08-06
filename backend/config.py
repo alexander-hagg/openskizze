@@ -1,26 +1,24 @@
-# backend/config.py
+# backend/config.py (Corrected for Web Performance)
 
-# Configuration for the Quality-Diversity optimization algorithm
 QD_CONFIG = {
-    'num_niches': 5,
-    'num_generations': 200, # Increased for a more thorough search
-    'num_emitters': 25,
-    'sigma': 0.3,
+    'num_niches': 4,
+    'num_generations': 300,  # Drastically reduced for a fast web demo
+    'num_emitters': 4,      # Reduced for a fast web demo
+    'sigma': 0.1,
     'learning_rate': 0.01,
-    'output_inv_frequency': 10,
-    'batch_size': 32,
+    'output_inv_frequency': 5, # More frequent updates
+    'batch_size': 20,
 }
 
-# Configuration for the parametric encoding
 ENCODING_CONFIG = {
-    'max_num_buildings': 5, 
-    'xy_length': 64,
-    'z_length': 3,
+    'max_num_buildings': 5,
+    'xy_length': 32, # This can be dynamically updated
+    'z_length': 10,
 }
 
-# Configuration for the domain and evaluation
 DOMAIN_CONFIG = {
-    'wind_direction': 180, # Default wind direction (South)
+    'wind_direction': 180,
+    'pixel_size_in_meters': 3,
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
     'labels': [
         'Building Coverage', 'Avg Building Height', 'Height Variability',
