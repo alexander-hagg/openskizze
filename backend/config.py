@@ -1,4 +1,4 @@
-# backend/config.py (Corrected for Web Performance)
+from backend.translation import T
 
 QD_CONFIG = {
     'num_niches': 5,
@@ -13,18 +13,14 @@ QD_CONFIG = {
 ENCODING_CONFIG = {
     'max_num_buildings': 5,
     'xy_length': 32, # This can be dynamically updated
-    'z_length': 10,
+    'z_length': 3,
 }
 
 DOMAIN_CONFIG = {
     'wind_direction': 180,
     'pixel_size_in_meters': 3,
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
-    'labels': [
-        'Building Coverage', 'Avg Building Height', 'Height Variability',
-        'Num of Buildings', 'Avg Spacing', 'Floor Space Ratio',
-        'Centroid X', 'Centroid Y'
-    ],
+    'labels': [T['DE'][f'MEASURE_{i}'] for i in range(8)],
     'feat_ranges': [
         [0.0, 0.25], [0.0, 10.0], [0.0, 4.5], 
         [0.0, 5.0], [0.0, 70.0], [0.0, 6], 

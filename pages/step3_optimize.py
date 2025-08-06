@@ -56,6 +56,10 @@ def run_optimization(set_progress, n_clicks, session_data):
     if not n_clicks or not session_data or not session_data.get('site_polygon'):
         return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning")
 
+    # --- PASS THE SELECTED FEATURES TO THE BACKEND ---
+    # Default to all features if none were selected in step 2 for some reason
+    selected_features = session_data.get('selected_features', list(range(8)))
+
     def progress_callback(progress, text):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
 
@@ -63,6 +67,7 @@ def run_optimization(set_progress, n_clicks, session_data):
         archive, labels, env_config = start_optimization(
             session_data['site_polygon'],
             session_data['wind_direction'],
+            selected_features,
             progress_callback=progress_callback
         )
         
