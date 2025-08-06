@@ -1,7 +1,6 @@
 import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output
-
 from backend.translation import T
 
 # Initialize the Dash app
@@ -11,8 +10,8 @@ server = app.server
 
 # Define the main layout
 app.layout = html.Div([
-    dcc.Store(id='session-store', storage_type='session'), # Stores all user data between steps
-    dcc.Store(id='results-store', storage_type='session'), # Stores the large optimization results
+    dcc.Store(id='session-store', storage_type='session'),
+    dcc.Store(id='results-store', storage_type='session'),
 
     dbc.NavbarSimple(
         brand=T['DE']['APP_TITLE'],
@@ -24,7 +23,7 @@ app.layout = html.Div([
     html.Div(id='page-content', className="container mt-4")
 ])
 
-# Register page layouts (will be imported here)
+# Register page layouts
 from pages import step1_scope, step2_constraints, step3_optimize, step4_explore, step5_compare
 
 # Callback to control page navigation
@@ -41,5 +40,5 @@ def display_page(pathname):
         return step4_explore.layout()
     elif pathname == '/step5':
         return step5_compare.layout()
-    else: # Default to step 1
+    else:
         return step1_scope.layout()
