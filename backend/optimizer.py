@@ -24,9 +24,6 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     bounds = np.array([[-5.0, 5.0]] * solution_dim)
     x0 = np.zeros(solution_dim)
     
-    # --- DEBUG LOG ---
-    print(f"[DEBUG] Emitter setup -> x0 shape: {x0.shape}, bounds shape: {bounds.shape}")
-    
     emitters = [
         GaussianEmitter(
             archive, x0=x0, sigma=qd_config['sigma'],
@@ -50,6 +47,11 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
             
             objectives = results[:, 0]
             features = results[:, 1:len(env_config['labels']) + 1]
+            
+            # print all objective values for debugging
+            # print(f"[DEBUG] Gen 1: Objective values: {objectives}")
+            
+            
             heightmaps = results[:, len(env_config['labels']) + 1:]
             
             # --- DEBUG LOG ---
@@ -62,7 +64,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
                 stats = archive.stats
                 print(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
             
-            if progress_callback: progress_callback(100*gen/qd_config['num_generations'], f'Es wird {qd_config['num_generations']} Generationen optimiert.')
+            if progress_callback: progress_callback(100*gen/qd_config["num_generations"], f'Es wird {qd_config["num_generations"]} Generationen optimiert.')
         
         except Exception as e:
             print(f"!!!!!! ERROR during optimization loop at generation {gen} !!!!!!")

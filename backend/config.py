@@ -1,7 +1,7 @@
 from backend.translation import T
 
 QD_CONFIG = {
-    'num_niches': 5,
+    'num_niches': 4,
     'num_generations': 200,  # Drastically reduced for a fast web demo
     'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,

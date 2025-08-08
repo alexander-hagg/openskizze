@@ -64,10 +64,10 @@ def layout():
             dbc.Col([
                 html.Div([
                     html.H5("Werkzeuge"),
-                    dbc.Label("1. Flurstücke laden und auswählen/abwählen", className="fw-bold"),
+                    dbc.Label("1. Flurstücke von OpenData Portal NRW laden und auswählen/abwählen", className="fw-bold"),
                     dbc.Button("Flurstücke für aktuellen Kartenausschnitt laden", id="load-parcels-btn", className="w-100 mb-3"),
                     
-                    dbc.Label("2. Manuelle Anpassung per Zeichnen", className="fw-bold"),
+                    dbc.Label("2. Manuelle Anpassung von Flurstücken", className="fw-bold"),
                     dbc.RadioItems(
                         options=[
                             {'label': 'Fläche hinzufügen', 'value': 'add'},
