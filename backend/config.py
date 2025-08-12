@@ -26,5 +26,5 @@ DOMAIN_CONFIG = {
         [0.0, 5.0], [0.0, 70.0], [0.0, 6], 
         [0.0, 70.0], [0.0, 70.0],
     ],
-    'environment_border_size': 1.5,
+    'environment_border_size': 1.2,
 }

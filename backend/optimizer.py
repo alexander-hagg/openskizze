@@ -62,7 +62,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
                 stats = archive.stats
                 print(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
             
-            if progress_callback: progress_callback(100*gen/qd_config['num_generations'], f'Es wird {qd_config['num_generations']} Generationen optimiert.')
+            if progress_callback: progress_callback(100*gen/qd_config["num_generations"], f'Es wird {qd_config["num_generations"]} Generationen optimiert.')
         
         except Exception as e:
             print(f"!!!!!! ERROR during optimization loop at generation {gen} !!!!!!")

@@ -41,7 +41,7 @@ def create_debug_plots(env_config: dict, sample_genome: np.ndarray, encoding_obj
     existing_buildings_2d = (np.sum(env_3d_fixed, axis=2) > 0).astype(int)
     plt.figure(figsize=(8, 8))
     plt.imshow(zone_map, cmap=cmap, origin='lower', vmin=1, vmax=3)
-    plt.imshow(np.ma.masked_where(np.flipud(existing_buildings_2d) == 0, np.flipud(existing_buildings_2d)), 
+    plt.imshow(np.ma.masked_where(existing_buildings_2d == 0, existing_buildings_2d), 
                cmap='Greys', origin='lower', alpha=0.7)
     plt.title("2. Existing Buildings in Context")
     plt.savefig(os.path.join(output_dir, "2_existing_buildings.png"))
