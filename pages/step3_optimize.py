@@ -56,8 +56,6 @@ def run_optimization(set_progress, n_clicks, session_data):
     if not n_clicks or not session_data or not session_data.get('site_polygon'):
         return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning")
 
-    # --- PASS THE SELECTED FEATURES TO THE BACKEND ---
-    # Default to all features if none were selected in step 2 for some reason
     selected_features = session_data.get('selected_features', list(range(8)))
 
     def progress_callback(progress, text):
@@ -72,40 +70,37 @@ def run_optimization(set_progress, n_clicks, session_data):
         )
         
         if archive and not archive.empty:
-            # --- THE CRITICAL FIX IS HERE ---
-            # The `elite` object from the archive behaves like a dictionary.
-            # We must access its data using the correct keys.
             objectives = archive.data('objective')
             measures = archive.data('measures')
             heightmaps = archive.data('heightmaps')
             
-            # 2. Use the documented `index_of` method to get the grid indices for all elites.
             grid_indices = archive.index_of(measures)
             grid_indices = archive.int_to_grid_index(grid_indices)
-            # 3. Assemble a clean, serializable list of dictionaries.
+            
             full_list_of_elites = []
             for i in range(len(objectives)):
                 full_list_of_elites.append({
                     "objective": objectives[i],
                     "measures": measures[i].tolist(),
-                    "grid_indices": grid_indices[i].tolist(),  # Convert numpy array to list
-                    "heightmap": heightmaps[i].tolist()
+                    "grid_indices": grid_indices[i].tolist(),
+                    "heightmap": heightmaps[i].flatten().tolist()
                 })
 
-            # Save the large data to a server-side file.
             session_id = str(uuid.uuid4())
             full_results_path = os.path.join(TEMP_RESULTS_DIR, f"{session_id}.pkl")
             with open(full_results_path, 'wb') as f:
                 pickle.dump(full_list_of_elites, f)
 
-            # Create the small summary for the dcc.Store.
+            from backend.config import ENCODING_CONFIG
             results_summary_to_store = {
                 'full_results_path': full_results_path,
                 'archive_dims': archive.dims,
                 'labels': labels,
+                'grid_geojson': env_config['grid_geojson'],
+                'xy_length': ENCODING_CONFIG['xy_length'],
+                'selected_features_indices': selected_features,
             }
 
-            # Create a clean DataFrame for the plot from the list of dicts.
             df_for_plot = pd.DataFrame(full_list_of_elites)
             measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
             df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()

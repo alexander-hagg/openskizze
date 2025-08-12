@@ -3,8 +3,19 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output
 from backend.translation import T
 
-# Initialize the Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], suppress_callback_exceptions=True)
+# --- THE FIX IS HERE ---
+# Add external scripts for chroma.js (for map coloring)
+external_scripts = [
+    "https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"
+]
+
+# Initialize the Dash app with the external scripts
+app = dash.Dash(
+    __name__, 
+    external_stylesheets=[dbc.themes.BOOTSTRAP], 
+    suppress_callback_exceptions=True,
+    external_scripts=external_scripts
+)
 app.title = T['DE']['APP_TITLE']
 server = app.server
 
@@ -20,7 +31,7 @@ app.layout = html.Div([
         fluid=True,
     ),
     dcc.Location(id='url', refresh=False),
-    html.Div(id='page-content', className="container mt-4")
+    html.Div(id='page-content', className="container-fluid mt-4") # Use container-fluid for better grid layout
 ])
 
 # Register page layouts

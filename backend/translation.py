@@ -31,7 +31,6 @@ T = {
         # Step 3
         'STEP3_TITLE': "Schritt 3: Entwurfsvarianten generieren",
         'STEP3_START_BUTTON': "Optimierung starten",
-        # --- THE MISSING KEY IS ADDED HERE ---
         'STEP3_RESULTS_HEADER': "Ergebnis der Optimierung",
 
         # Step 4
@@ -43,6 +42,17 @@ T = {
         # Step 5
         'STEP5_TITLE': "Schritt 5: Varianten vergleichen und Anforderungen exportieren",
         'STEP5_EXPORT_BUTTON': "Planungsanforderungen für Wettbewerb exportieren",
+        'STEP5_EXPORT_FILENAME': "planungsanforderungen.txt",
+        'STEP5_FILTER_HEADER': "Designs filtern",
+        'STEP5_ANALYSIS_HEADER': "Analyse der Entwurfstypen (Cluster)",
+        'STEP5_RUN_BUTTON': "Analyse starten / neu filtern",
+        'STEP5_CLUSTER_CARD_TITLE': "Cluster {id} - Entwurfstyp (Größe: {size})",
+        'STEP5_CLUSTER_CARD_TEXT': "Dieser Entwurfstyp ist robust, da er in {size} Varianten gefunden wurde.",
+        'STEP5_BEST_SOLUTION_HEADER': "Beste Lösung (Höchste Porosität)",
+        'STEP5_CENTRAL_SOLUTION_HEADER': "Zentralste Lösung (Repräsentativste)",
+        'STEP5_NO_CLUSTERS_FOUND': "Keine Cluster gefunden. Versuchen Sie, die Filter anzupassen oder die DBSCAN-Parameter zu ändern.",
+        'STEP5_NO_SELECTION': "Zum Starten bitte auf 'Analyse starten' klicken.",
+        'STEP5_SELECT_LABEL': "Wählen Sie Designs aus der Analyse unten aus, um sie im Detail zu vergleichen (Zukünftige Funktion)."
     }
 }
 # Add English translations if needed

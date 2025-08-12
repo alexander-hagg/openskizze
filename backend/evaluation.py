@@ -62,9 +62,7 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
             h = int(heightmap_2d_solution[r, c])
             if h > 0: design_3d[r, c, :h] = 1
             
-    # combined_env_3d = np.maximum(env_config['env_3d_fixed'], design_3d)
-    combined_env_3d = design_3d
-    print(f"[DEBUG] IGNORING EXISTING BUILDINGS: TOFIX")
+    combined_env_3d = np.maximum(env_config['env_3d_fixed'], design_3d)
     fitness = compute_fitness(combined_env_3d, env_config['wind_direction'])
     
     # --- DYNAMIC FEATURE SELECTION ---

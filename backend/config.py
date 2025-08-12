@@ -2,7 +2,7 @@ from backend.translation import T
 
 QD_CONFIG = {
     'num_niches': 4,
-    'num_generations': 200,  # Drastically reduced for a fast web demo
+    'num_generations': 10000,  # Drastically reduced for a fast web demo
     'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,
     'learning_rate': 0.01,
