@@ -2,7 +2,7 @@
 
 T = {
     'DE': {
-        'APP_TITLE': "OpenSKIZZE - Interaktiver Städtebau Explorer",
+        'APP_TITLE': "OpenSKIZZE - Interaktiver Explorer für klimaangepasste Stadtplanung",
         'NEXT_STEP': "Nächster Schritt",
         'PREV_STEP': "Vorheriger Schritt",
 

@@ -36,7 +36,7 @@ def layout():
             html.Div(id='feature-filter-controls'),
             dbc.Row([
                 dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
-                dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=1, max=20, step=0.5, value=5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=1, max=5, step=0.1, value=1.5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
             ], className="align-items-center mt-2"),
             dbc.Row([
                  dbc.Col(dbc.Label("DBSCAN min_samples (Min. Clustergröße):"), width='auto'),

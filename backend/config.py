@@ -2,7 +2,7 @@ from backend.translation import T
 
 QD_CONFIG = {
     'num_niches': 4,
-    'num_generations': 10000,  # Drastically reduced for a fast web demo
+    'num_generations': 1000,  # Drastically reduced for a fast web demo
     'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,
     'learning_rate': 0.01,
@@ -22,9 +22,9 @@ DOMAIN_CONFIG = {
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
     'labels': [T['DE'][f'MEASURE_{i}'] for i in range(8)],
     'feat_ranges': [
-        [0.0, 0.25], [0.0, 10.0], [0.0, 4.5], 
-        [0.0, 5.0], [0.0, 70.0], [0.0, 6], 
-        [0.0, 70.0], [0.0, 70.0],
+        [0.0, 0.15], [0.0, 9.0], [0.0, 6.0], 
+        [0.0, 5.0], [0.0, 60.0], [0.0, 0.3], 
+        [0.0, 60.0], [0.0, 60.0],
     ],
     'environment_border_size': 1.2,
 }
