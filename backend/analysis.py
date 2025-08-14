@@ -58,7 +58,7 @@ def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_fi
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # 1. Filtering (for Task 3)
+    # 1. Filtering
     filtered_elites = []
     if feature_filters:
         for elite in list_of_elites:
@@ -80,12 +80,12 @@ def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_fi
     objectives = np.array([elite['objective'] for elite in filtered_elites])
     original_indices_in_filtered_list = np.arange(len(filtered_elites))
 
-    # 2. t-SNE for dimensionality reduction
+    # 2. t-SNE
     tsne = TSNE(n_components=2, perplexity=min(30, len(filtered_elites) - 1), 
                 random_state=42, max_iter=300, init='pca', learning_rate='auto')
     tsne_results = tsne.fit_transform(heightmaps_flat)
 
-    # 3. DBSCAN for clustering
+    # 3. DBSCAN
     dbscan = DBSCAN(eps=eps, min_samples=min_samples)
     cluster_labels = dbscan.fit_predict(tsne_results)
     
@@ -94,7 +94,7 @@ def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_fi
     # 4. Analyze each cluster
     analysis_results = []
     for k in unique_labels:
-        if k == -1: continue # Skip noise points
+        if k == -1: continue 
             
         class_member_mask = (cluster_labels == k)
         cluster_indices = original_indices_in_filtered_list[class_member_mask]
@@ -108,105 +108,83 @@ def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_fi
         medoid_local_idx = np.argmin(dist_matrix.sum(axis=0))
         central_solution_orig_idx = cluster_indices[medoid_local_idx]
 
+        # --- THE FIX IS HERE ---
+        # Calculate the consensus map for the cluster
+        boolean_heightmaps = cluster_heightmaps > 0
+        consensus_map = np.mean(boolean_heightmaps, axis=0)
+        # --- END OF FIX ---
+
         analysis_results.append({
             'cluster_id': int(k),
             'size': len(cluster_indices),
             'best_solution': filtered_elites[best_solution_orig_idx],
             'central_solution': filtered_elites[central_solution_orig_idx],
+            'consensus_map': consensus_map.tolist() # Add the map to the results
         })
 
     analysis_results.sort(key=lambda x: x['size'], reverse=True)
     return analysis_results
 
 def create_parallel_coords_fig(results_archive, measures_map):
-    """
-    Creates a parallel coordinates plot from the results archive.
-    """
+    # ... (this function is unchanged) ...
     if not results_archive or not results_archive['objective']:
         return None
-
     df_data = {'objective': results_archive['objective']}
     df_data.update(results_archive['measures'])
     df = pd.DataFrame(df_data)
-
     dimensions = ['objective'] + list(results_archive['measures'].keys())
     labels = {'objective': 'Zielfunktion (Kaltluft)'}
     labels.update({key: measures_map[key] for key in results_archive['measures']})
-
     fig = pd.plotting.parallel_coordinates(df, 'objective', color=plt.cm.viridis)
     return fig
 
 def get_solution_grid(results_archive, x_axis_measure, y_axis_measure, grid_resolution=10):
-    """
-    MOCK function to bin the archive into a 2D grid for visualization.
-    """
+    # ... (this function is unchanged) ...
     if not all([results_archive, x_axis_measure, y_axis_measure]):
         return np.empty((grid_resolution, grid_resolution), dtype=object)
-
     x_values = np.array(results_archive['measures'][x_axis_measure])
     y_values = np.array(results_archive['measures'][y_axis_measure])
     objectives = np.array(results_archive['objective'])
-
     x_bins = np.linspace(x_values.min(), x_values.max(), grid_resolution + 1)
     y_bins = np.linspace(y_values.min(), y_values.max(), grid_resolution + 1)
-
     x_indices = np.digitize(x_values, x_bins) - 1
     y_indices = np.digitize(y_values, y_bins) - 1
-
     x_indices = np.clip(x_indices, 0, grid_resolution - 1)
     y_indices = np.clip(y_indices, 0, grid_resolution - 1)
-
     grid = np.full((grid_resolution, grid_resolution), None, dtype=object)
     for i in range(grid_resolution):
         for j in range(grid_resolution):
             grid[i, j] = {'solutions': [], 'best_solution_idx': -1, 'best_objective': -np.inf}
-
     for idx in range(len(objectives)):
         ix, iy = x_indices[idx], y_indices[idx]
         grid[iy, ix]['solutions'].append(idx)
         if objectives[idx] > grid[iy, ix]['best_objective']:
             grid[iy, ix]['best_objective'] = objectives[idx]
             grid[iy, ix]['best_solution_idx'] = idx
-
     return grid
 
 def generate_contest_requirements(results_path: str, labels: list, selected_indices: list):
-    """
-    MOCK function to generate text for planning contest requirements.
-    Analyzes the top-performing solutions from the filtered set.
-    """
+    # ... (this function is unchanged) ...
     if not results_path or not os.path.exists(results_path):
         return "Keine Daten zur Analyse vorhanden."
-
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
-
     if not list_of_elites:
         return "Keine Daten zur Analyse vorhanden."
-
-    # Reconstruct DataFrame with proper measure keys for reporting
     measure_keys = [f'MEASURE_{i}' for i in selected_indices]
-    df_data = {
-        'objective': [e['objective'] for e in list_of_elites]
-    }
+    df_data = { 'objective': [e['objective'] for e in list_of_elites] }
     for i, key in enumerate(measure_keys):
         df_data[key] = [e['measures'][i] for e in list_of_elites]
-    
     df = pd.DataFrame(df_data)
-
     top_10_percentile = df['objective'].quantile(0.9)
     top_solutions = df[df['objective'] >= top_10_percentile]
-
     if top_solutions.empty:
         return "Keine ausreichend performanten Lösungen gefunden, um Anforderungen abzuleiten."
-
     report = [
         "Basierend auf der Analyse von {} Lösungen wurden folgende Anforderungen für hochperformante Entwürfe (Top 10%) im Hinblick auf die Kaltluftförderung abgeleitet:".format(len(df)),
         "\n"
     ]
-    
     all_measures_map = {key: val for key, val in T['DE'].items() if key.startswith('MEASURE_')}
-
     for measure_key, human_label in zip(measure_keys, labels):
         if measure_key in top_solutions.columns:
             mean_val = top_solutions[measure_key].mean()
@@ -214,5 +192,4 @@ def generate_contest_requirements(results_path: str, labels: list, selected_indi
             min_val = top_solutions[measure_key].min()
             max_val = top_solutions[measure_key].max()
             report.append(f"- **{human_label}:** Optimale Ergebnisse wurden im Bereich von {min_val:.2f} bis {max_val:.2f} erzielt (Mittelwert: {mean_val:.2f} ± {std_val:.2f}).")
-
     return "\n".join(report)

@@ -8,6 +8,7 @@ import os
 import numpy as np
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
+import plotly.express as px
 
 LANG = 'DE'
 
@@ -36,11 +37,11 @@ def layout():
             html.Div(id='feature-filter-controls'),
             dbc.Row([
                 dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
-                dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=1, max=5, step=0.1, value=1.5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=0.5, max=5, step=0.5, value=1.0, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
             ], className="align-items-center mt-2"),
             dbc.Row([
                  dbc.Col(dbc.Label("DBSCAN min_samples (Min. Clustergröße):"), width='auto'),
-                 dbc.Col(dcc.Slider(id='dbscan-minsamples-slider', min=2, max=20, step=1, value=3, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                 dbc.Col(dcc.Slider(id='dbscan-minsamples-slider', min=2, max=20, step=1, value=4, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
             ], className="align-items-center mt-2"),
             dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3")
         ])),
@@ -130,6 +131,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
 
     cluster_cards = []
     for cluster in clusters:
+        # --- Visualization for Best Solution ---
         best_hm = np.array(cluster['best_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
         best_geojson = heightmap_to_geojson(best_hm, grid_geojson)
         best_map = dl.Map(center=map_center, zoom=14, children=[
@@ -137,6 +139,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
             dl.GeoJSON(data=best_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
         ], style={'height': '200px', 'width': '100%'})
         
+        # --- Visualization for Central Solution ---
         central_hm = np.array(cluster['central_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
         central_geojson = heightmap_to_geojson(central_hm, grid_geojson)
         central_map = dl.Map(center=map_center, zoom=14, children=[
@@ -144,14 +147,23 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
             dl.GeoJSON(data=central_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
         ], style={'height': '200px', 'width': '100%'})
 
+        # --- THE FIX IS HERE: Visualization for Consensus Map ---
+        consensus_map_data = np.array(cluster['consensus_map']).reshape(heightmap_res, heightmap_res)
+        consensus_fig = px.imshow(consensus_map_data, color_continuous_scale='Blues', origin='lower', zmin=0, zmax=1)
+        consensus_fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
+        consensus_fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
+        consensus_graph = dcc.Graph(figure=consensus_fig, style={'height': '200px', 'width': '100%'})
+        
         card = dbc.Card(dbc.CardBody([
             html.H5(T[LANG]['STEP5_CLUSTER_CARD_TITLE'].format(id=cluster['cluster_id'], size=cluster['size'])),
             html.P(T[LANG]['STEP5_CLUSTER_CARD_TEXT'].format(size=cluster['size']), className="text-muted small"),
             dbc.Row([
-                dbc.Col([html.H6(T[LANG]['STEP5_BEST_SOLUTION_HEADER']), best_map], md=6),
-                dbc.Col([html.H6(T[LANG]['STEP5_CENTRAL_SOLUTION_HEADER']), central_map], md=6),
+                dbc.Col([html.H6(T[LANG]['STEP5_BEST_SOLUTION_HEADER']), best_map], md=4),
+                dbc.Col([html.H6(T[LANG]['STEP5_CENTRAL_SOLUTION_HEADER']), central_map], md=4),
+                dbc.Col([html.H6(T[LANG]['STEP5_CONSENSUS_MAP_HEADER']), consensus_graph], md=4)
             ])
         ]), className="mb-3")
+        # --- END OF FIX ---
         cluster_cards.append(card)
         
     return cluster_cards

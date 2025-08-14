@@ -2,7 +2,7 @@
 
 T = {
     'DE': {
-        'APP_TITLE': "OpenSKIZZE - Interaktiver Explorer für klimaangepasste Stadtplanung",
+        'APP_TITLE': "OpenSKIZZE - Interaktiver Städtebau Explorer",
         'NEXT_STEP': "Nächster Schritt",
         'PREV_STEP': "Vorheriger Schritt",
 
@@ -50,6 +50,7 @@ T = {
         'STEP5_CLUSTER_CARD_TEXT': "Dieser Entwurfstyp ist robust, da er in {size} Varianten gefunden wurde.",
         'STEP5_BEST_SOLUTION_HEADER': "Beste Lösung (Höchste Porosität)",
         'STEP5_CENTRAL_SOLUTION_HEADER': "Zentralste Lösung (Repräsentativste)",
+        'STEP5_CONSENSUS_MAP_HEADER': "Konsens-Karte (Bebauungswahrscheinlichkeit)",
         'STEP5_NO_CLUSTERS_FOUND': "Keine Cluster gefunden. Versuchen Sie, die Filter anzupassen oder die DBSCAN-Parameter zu ändern.",
         'STEP5_NO_SELECTION': "Zum Starten bitte auf 'Analyse starten' klicken.",
         'STEP5_SELECT_LABEL': "Wählen Sie Designs aus der Analyse unten aus, um sie im Detail zu vergleichen (Zukünftige Funktion)."
