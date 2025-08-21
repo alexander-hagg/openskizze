@@ -113,7 +113,7 @@ def update_solution_map_grid(x_axis_idx, y_axis_idx, results_data):
             
             if elite_data is not None:
                 heightmap = np.array(elite_data['heightmap']).reshape((heightmap_res, heightmap_res))
-                design_geojson = heightmap_to_geojson(heightmap, grid_geojson)
+                design_geojson = heightmap_to_geojson(np.flipud(heightmap), grid_geojson)
                 
                 map_component = dl.Map(
                     center=map_center, zoom=14,

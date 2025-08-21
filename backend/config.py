@@ -1,17 +1,17 @@
 from backend.translation import T
 
 QD_CONFIG = {
-    'num_niches': 4,
+    'num_niches': 5,
     'num_generations': 100,  # Drastically reduced for a fast web demo
     'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,
     'learning_rate': 0.01,
-    'output_inv_frequency': 5, # More frequent updates
+    'output_inv_frequency': 100,
     'batch_size': 16,
 }
 
 ENCODING_CONFIG = {
-    'max_num_buildings': 5,
+    'max_num_buildings': 10,
     'xy_length': 32, # This can be dynamically updated
     'z_length': 3,
 }

@@ -1,6 +1,3 @@
-#
-# backend/analysis.py
-#
 import numpy as np
 import pandas as pd
 from backend.translation import T 
@@ -9,6 +6,7 @@ from shapely.geometry import box, mapping
 import geopandas as gpd
 from sklearn.manifold import TSNE
 from sklearn.cluster import DBSCAN
+from sklearn_extra.cluster import KMedoids # <-- New Import
 from sklearn.metrics import pairwise_distances
 import pickle
 import os
@@ -48,9 +46,11 @@ def heightmap_to_geojson(heightmap_2d: np.ndarray, grid_geojson: dict):
         
     return {'type': 'FeatureCollection', 'features': features}
 
-def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_filters=None):
+def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None, feature_filters=None):
     """
-    Loads solutions, optionally filters them, and then clusters them based on their phenotype.
+    Loads solutions, filters them, and clusters them using the selected algorithm.
+    - algorithm: 'dbscan' or 'kmedoids'
+    - params: dict of parameters for the chosen algorithm
     """
     if not results_path or not os.path.exists(results_path):
         return []
@@ -73,28 +73,44 @@ def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_fi
     else:
         filtered_elites = list_of_elites
     
-    if len(filtered_elites) < min_samples:
+    if not filtered_elites:
         return []
 
     heightmaps_flat = np.array([elite['heightmap'] for elite in filtered_elites])
     objectives = np.array([elite['objective'] for elite in filtered_elites])
     original_indices_in_filtered_list = np.arange(len(filtered_elites))
 
-    # 2. t-SNE
+    # 2. t-SNE (used by both for consistency in the 2D space)
+    if len(filtered_elites) < 2: return [] # t-SNE requires at least 2 samples
     tsne = TSNE(n_components=2, perplexity=min(30, len(filtered_elites) - 1), 
-                random_state=42, max_iter=300, init='pca', learning_rate='auto')
+                random_state=42, n_iter=300, init='pca', learning_rate='auto')
     tsne_results = tsne.fit_transform(heightmaps_flat)
 
-    # 3. DBSCAN
-    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-    cluster_labels = dbscan.fit_predict(tsne_results)
+    # 3. Clustering
+    cluster_labels = None
+    central_solution_indices = {} # For K-Medoids, this is pre-calculated
+
+    if algorithm == 'dbscan':
+        min_samples = params.get('min_samples', 4)
+        if len(filtered_elites) < min_samples: return []
+        dbscan = DBSCAN(eps=params.get('eps', 0.5), min_samples=min_samples)
+        cluster_labels = dbscan.fit_predict(tsne_results)
+
+    elif algorithm == 'kmedoids':
+        n_clusters = params.get('n_clusters', 3)
+        if len(filtered_elites) < n_clusters: return []
+        kmedoids = KMedoids(n_clusters=n_clusters, random_state=42)
+        cluster_labels = kmedoids.fit_predict(tsne_results)
+        # Store the medoid indices, which are the most central points
+        for i, medoid_idx in enumerate(kmedoids.medoid_indices_):
+            central_solution_indices[i] = medoid_idx
     
     unique_labels = set(cluster_labels)
     
     # 4. Analyze each cluster
     analysis_results = []
     for k in unique_labels:
-        if k == -1: continue 
+        if k == -1: continue # Skip noise points from DBSCAN
             
         class_member_mask = (cluster_labels == k)
         cluster_indices = original_indices_in_filtered_list[class_member_mask]
@@ -104,22 +120,24 @@ def cluster_and_analyze_solutions(results_path, eps=5, min_samples=3, feature_fi
         best_solution_orig_idx = cluster_indices[best_solution_local_idx]
         
         cluster_heightmaps = heightmaps_flat[cluster_indices]
-        dist_matrix = pairwise_distances(cluster_heightmaps)
-        medoid_local_idx = np.argmin(dist_matrix.sum(axis=0))
-        central_solution_orig_idx = cluster_indices[medoid_local_idx]
 
-        # --- THE FIX IS HERE ---
-        # Calculate the consensus map for the cluster
+        # For K-Medoids, the central solution is the medoid. For DBSCAN, we calculate it.
+        if algorithm == 'kmedoids':
+            central_solution_orig_idx = central_solution_indices[k]
+        else: # dbscan
+            dist_matrix = pairwise_distances(cluster_heightmaps)
+            medoid_local_idx = np.argmin(dist_matrix.sum(axis=0))
+            central_solution_orig_idx = cluster_indices[medoid_local_idx]
+
         boolean_heightmaps = cluster_heightmaps > 0
         consensus_map = np.mean(boolean_heightmaps, axis=0)
-        # --- END OF FIX ---
 
         analysis_results.append({
             'cluster_id': int(k),
             'size': len(cluster_indices),
             'best_solution': filtered_elites[best_solution_orig_idx],
             'central_solution': filtered_elites[central_solution_orig_idx],
-            'consensus_map': consensus_map.tolist() # Add the map to the results
+            'consensus_map': consensus_map.tolist()
         })
 
     analysis_results.sort(key=lambda x: x['size'], reverse=True)

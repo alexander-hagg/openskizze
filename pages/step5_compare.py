@@ -35,14 +35,39 @@ def layout():
             html.H4(T[LANG]['STEP5_FILTER_HEADER']),
             html.P("Filtern Sie die Lösungen nach ihren Merkmalen und passen Sie die Clustering-Parameter an, um Entwurfstypen zu identifizieren.", className="text-muted"),
             html.Div(id='feature-filter-controls'),
-            dbc.Row([
-                dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
-                dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=0.5, max=5, step=0.5, value=1.0, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
-            ], className="align-items-center mt-2"),
-            dbc.Row([
-                 dbc.Col(dbc.Label("DBSCAN min_samples (Min. Clustergröße):"), width='auto'),
-                 dbc.Col(dcc.Slider(id='dbscan-minsamples-slider', min=2, max=20, step=1, value=4, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
-            ], className="align-items-center mt-2"),
+            
+            dbc.Label(T[LANG]['STEP5_ALGORITHM_LABEL']),
+            dbc.RadioItems(
+                id='algorithm-selector',
+                options=[
+                    {'label': 'DBSCAN (Dichte-basiert)', 'value': 'dbscan'},
+                    {'label': 'K-Medoids (Partionierend)', 'value': 'kmedoids'},
+                ],
+                value='dbscan',
+                inline=True,
+                className="mb-3"
+            ),
+            
+            # --- Sliders for DBSCAN ---
+            html.Div(id='dbscan-params-div', children=[
+                dbc.Row([
+                    dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
+                    dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=0.1, max=5, step=0.1, value=0.5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                ], className="align-items-center mt-2"),
+                dbc.Row([
+                     dbc.Col(dbc.Label("DBSCAN min_samples (Min. Clustergröße):"), width='auto'),
+                     dbc.Col(dcc.Slider(id='dbscan-minsamples-slider', min=2, max=20, step=1, value=4, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                ], className="align-items-center mt-2"),
+            ]),
+
+            # --- Slider for K-Medoids ---
+            html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
+                dbc.Row([
+                    dbc.Col(dbc.Label(T[LANG]['STEP5_KMEDOIDS_K_LABEL']), width='auto'),
+                    dbc.Col(dcc.Slider(id='kmedoids-k-slider', min=2, max=15, step=1, value=3, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                ], className="align-items-center mt-2"),
+            ]),
+
             dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3")
         ])),
         
@@ -61,6 +86,19 @@ def layout():
         ], className="mt-4")
     ], fluid=True)
 
+
+@callback(
+    Output('dbscan-params-div', 'style'),
+    Output('kmedoids-params-div', 'style'),
+    Input('algorithm-selector', 'value')
+)
+def toggle_parameter_sliders(selected_algorithm):
+    if selected_algorithm == 'dbscan':
+        return {'display': 'block'}, {'display': 'none'}
+    elif selected_algorithm == 'kmedoids':
+        return {'display': 'none'}, {'display': 'block'}
+    return {'display': 'none'}, {'display': 'none'}
+
 @callback(
     Output('feature-filter-controls', 'children'),
     Input('results-store', 'data')
@@ -68,23 +106,17 @@ def layout():
 def create_filter_controls(results_data):
     if not results_data or not results_data.get('full_results_path'):
         return dbc.Alert("Bitte zuerst in Schritt 3 eine Optimierung durchführen.", color="warning")
-
     results_path = results_data.get('full_results_path')
     if not os.path.exists(results_path): return no_update
-    
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
-    
     labels = results_data.get('labels', [])
     if not labels: return no_update
-    
     measures_data = np.array([elite['measures'] for elite in list_of_elites])
-    
     sliders = []
     for i, label in enumerate(labels):
         min_val, max_val = measures_data[:, i].min(), measures_data[:, i].max()
-        if min_val == max_val: max_val += 1.0 # Ensure slider has a range
-        
+        if min_val == max_val: max_val += 1.0
         slider_div = html.Div([
             dbc.Label(label),
             dcc.RangeSlider(
@@ -96,7 +128,6 @@ def create_filter_controls(results_data):
             )
         ], className="mb-2")
         sliders.append(slider_div)
-        
     return sliders
 
 @callback(
@@ -105,11 +136,14 @@ def create_filter_controls(results_data):
     State('results-store', 'data'),
     State({'type': 'filter-slider', 'index': ALL}, 'value'),
     State({'type': 'filter-slider', 'index': ALL}, 'id'),
+    State('algorithm-selector', 'value'),
     State('dbscan-eps-slider', 'value'),
     State('dbscan-minsamples-slider', 'value'),
+    State('kmedoids-k-slider', 'value'),
     prevent_initial_call=True
 )
-def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, eps, min_samples):
+def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
+                             algorithm, eps, min_samples, k):
     if not n_clicks: return no_update
 
     results_path = results_data.get('full_results_path')
@@ -119,7 +153,13 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
         
     feature_filters = {s_id['index']: s_val for s_id, s_val in zip(slider_ids, slider_values)}
 
-    clusters = cluster_and_analyze_solutions(results_path, eps, min_samples, feature_filters)
+    params = {}
+    if algorithm == 'dbscan':
+        params = {'eps': eps, 'min_samples': min_samples}
+    elif algorithm == 'kmedoids':
+        params = {'n_clusters': k}
+
+    clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters)
 
     if not clusters:
         return dbc.Alert(T[LANG]['STEP5_NO_CLUSTERS_FOUND'], color="warning")
@@ -133,21 +173,22 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
     for cluster in clusters:
         # --- Visualization for Best Solution ---
         best_hm = np.array(cluster['best_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
-        best_geojson = heightmap_to_geojson(best_hm, grid_geojson)
+        best_geojson = heightmap_to_geojson(np.flipud(best_hm), grid_geojson)
         best_map = dl.Map(center=map_center, zoom=14, children=[
             dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
+            # --- THE FIX IS HERE ---
             dl.GeoJSON(data=best_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
         ], style={'height': '200px', 'width': '100%'})
         
         # --- Visualization for Central Solution ---
         central_hm = np.array(cluster['central_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
-        central_geojson = heightmap_to_geojson(central_hm, grid_geojson)
+        central_geojson = heightmap_to_geojson(np.flipud(central_hm), grid_geojson)
         central_map = dl.Map(center=map_center, zoom=14, children=[
             dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
             dl.GeoJSON(data=central_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
         ], style={'height': '200px', 'width': '100%'})
 
-        # --- THE FIX IS HERE: Visualization for Consensus Map ---
+        # --- Visualization for Consensus Map ---
         consensus_map_data = np.array(cluster['consensus_map']).reshape(heightmap_res, heightmap_res)
         consensus_fig = px.imshow(consensus_map_data, color_continuous_scale='Blues', origin='lower', zmin=0, zmax=1)
         consensus_fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
@@ -163,7 +204,6 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
                 dbc.Col([html.H6(T[LANG]['STEP5_CONSENSUS_MAP_HEADER']), consensus_graph], md=4)
             ])
         ]), className="mb-3")
-        # --- END OF FIX ---
         cluster_cards.append(card)
         
     return cluster_cards
@@ -177,14 +217,10 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
 def export_requirements_s5(n_clicks, results_data):
     if not n_clicks or not results_data:
         return None
-    
     results_path = results_data.get('full_results_path')
     labels = results_data.get('labels')
     selected_indices = results_data.get('selected_features_indices')
-
     if not all([results_path, labels, selected_indices is not None]):
          return dict(content="Error: Could not find all necessary data for export.", filename="error.txt")
-
     report_text = generate_contest_requirements(results_path, labels, selected_indices)
-    
     return dict(content=report_text, filename=T[LANG]['STEP5_EXPORT_FILENAME'])
