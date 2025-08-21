@@ -51,7 +51,7 @@ def layout():
             html.Div(id='dbscan-params-div', children=[
                 dbc.Row([
                     dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
-                    dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=0.1, max=5, step=0.1, value=0.5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                    dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=0.1, max=5, step=0.1, value=0.1, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
                 ], className="align-items-center mt-2"),
                 dbc.Row([
                      dbc.Col(dbc.Label("DBSCAN min_samples (Min. Clustergröße):"), width='auto'),
