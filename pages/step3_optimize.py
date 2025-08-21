@@ -1,5 +1,5 @@
 #
-# pages/step3_optimize.py (Final Corrected Version)
+# pages/step3_optimize.py
 #
 from dash import dcc, html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
@@ -12,6 +12,9 @@ import diskcache
 import pickle
 import uuid
 import os
+# --- New imports for the fix ---
+from backend.encoding import ParametricEncoding
+from backend.config import ENCODING_CONFIG
 
 cache = diskcache.Cache("./cache")
 background_callback_manager = DiskcacheManager(cache)
@@ -70,20 +73,31 @@ def run_optimization(set_progress, n_clicks, session_data):
         )
         
         if archive and not archive.empty:
+            # --- THE CRITICAL FIX IS HERE ---
+            # 1. Instantiate an encoder object to regenerate heightmaps from the genomes.
+            encoding_obj = ParametricEncoding(ENCODING_CONFIG)
+            
+            # 2. Retrieve all necessary data from the archive, including the compact
+            #    'solution' (genome) instead of the non-existent 'heightmaps'.
             objectives = archive.data('objective')
             measures = archive.data('measures')
-            heightmaps = archive.data('heightmaps')
+            solutions = archive.data('solution') # The compact genomes
             
             grid_indices = archive.index_of(measures)
             grid_indices = archive.int_to_grid_index(grid_indices)
             
             full_list_of_elites = []
             for i in range(len(objectives)):
+                # 3. For each elite solution, regenerate its full heightmap. This is fast
+                #    and memory-efficient as it's done only for the final best solutions.
+                genome = solutions[i]
+                heightmap = encoding_obj.express(env_config['buildable_mask'], genome)
+
                 full_list_of_elites.append({
                     "objective": objectives[i],
                     "measures": measures[i].tolist(),
                     "grid_indices": grid_indices[i].tolist(),
-                    "heightmap": heightmaps[i].flatten().tolist()
+                    "heightmap": heightmap.flatten().tolist() # Store the regenerated map
                 })
 
             session_id = str(uuid.uuid4())
@@ -91,7 +105,6 @@ def run_optimization(set_progress, n_clicks, session_data):
             with open(full_results_path, 'wb') as f:
                 pickle.dump(full_list_of_elites, f)
 
-            from backend.config import ENCODING_CONFIG
             results_summary_to_store = {
                 'full_results_path': full_results_path,
                 'archive_dims': archive.dims,

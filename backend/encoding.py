@@ -15,23 +15,47 @@ class ParametricEncoding:
         return self.config['max_num_buildings'] * 6
 
     def express(self, buildable_mask: npt.NDArray, genome: npt.NDArray) -> npt.NDArray:
-        genome = norm2unif(genome)
+        # --- THE PERFORMANCE OPTIMIZATION IS HERE ---
+
+        # 1. Reshape the flat genome into a matrix where each row is a building's genes.
+        #    Also convert all gene values from a normal to a uniform distribution at once.
+        genes = norm2unif(genome).reshape(self.config['max_num_buildings'], -1)
+        
+        # 2. Vectorized Calculation: Calculate properties for ALL buildings simultaneously.
+        #    Instead of looping, we operate on entire columns (e.g., genes[:, 0] is the
+        #    width gene for all buildings). This is executed by NumPy's fast C code.
+        
+        # Check which buildings are active using the 6th gene.
+        is_active = genes[:, 5] > 0.0
+        if not np.any(is_active):
+            return np.zeros_like(buildable_mask)
+
+        # Filter to only active buildings before calculating properties
+        active_genes = genes[is_active]
+
+        w = (active_genes[:, 0] * (self.config['xy_length'] / 2)).astype(int)
+        l = (active_genes[:, 1] * (self.config['xy_length'] / 2)).astype(int)
+        h = (active_genes[:, 2] * self.config['z_length']).astype(int) + 1
+        x_c = (active_genes[:, 3] * self.config['xy_length']).astype(int)
+        y_c = (active_genes[:, 4] * self.config['xy_length']).astype(int)
+        
+        # Calculate start/end coordinates for all buildings, clipping to bounds
+        x_start = np.clip(x_c - w // 2, 0, self.config['xy_length'])
+        x_end = np.clip(x_c + w // 2, 0, self.config['xy_length'])
+        y_start = np.clip(y_c - l // 2, 0, self.config['xy_length'])
+        y_end = np.clip(y_c + l // 2, 0, self.config['xy_length'])
+        
+        # 3. Efficient Drawing: Now that all calculations are done, create the heightmap.
+        #    This loop is now much faster because it only performs simple assignments.
+        #    Building overlaps are handled correctly (last building drawn wins).
         heightmap = np.zeros((self.config['xy_length'], self.config['xy_length']))
+        for i in range(len(active_genes)):
+            heightmap[y_start[i]:y_end[i], x_start[i]:x_end[i]] = h[i]
         
-        for i in range(self.config['max_num_buildings']):
-            genes = genome[i*6 : (i+1)*6]
-            if genes[5] > 0.0:
-                w = int(genes[0] * (self.config['xy_length'] / 2))
-                l = int(genes[1] * (self.config['xy_length'] / 2))
-                h = int(genes[2] * self.config['z_length']) + 1
-                x_c = int(genes[3] * self.config['xy_length'])
-                y_c = int(genes[4] * self.config['xy_length'])
-                x_start, x_end = max(0, x_c - w // 2), min(self.config['xy_length'], x_c + w // 2)
-                y_start, y_end = max(0, y_c - l // 2), min(self.config['xy_length'], y_c + l // 2)
-                heightmap[y_start:y_end, x_start:x_end] = h
-        
+        # 4. Final Masking: This is a fast, element-wise operation.
         masked_heightmap = heightmap * buildable_mask
-        # --- DEBUG LOG ---
+        
         if masked_heightmap.shape != (self.config['xy_length'], self.config['xy_length']):
             print(f"  [DEBUG-ERROR] Heightmap shape is {masked_heightmap.shape}, expected {(self.config['xy_length'], self.config['xy_length'])}")
+        
         return masked_heightmap

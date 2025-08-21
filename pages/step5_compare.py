@@ -48,7 +48,6 @@ def layout():
                 className="mb-3"
             ),
             
-            # --- Sliders for DBSCAN ---
             html.Div(id='dbscan-params-div', children=[
                 dbc.Row([
                     dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
@@ -60,7 +59,6 @@ def layout():
                 ], className="align-items-center mt-2"),
             ]),
 
-            # --- Slider for K-Medoids ---
             html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
                 dbc.Row([
                     dbc.Col(dbc.Label(T[LANG]['STEP5_KMEDOIDS_K_LABEL']), width='auto'),
@@ -106,28 +104,70 @@ def toggle_parameter_sliders(selected_algorithm):
 def create_filter_controls(results_data):
     if not results_data or not results_data.get('full_results_path'):
         return dbc.Alert("Bitte zuerst in Schritt 3 eine Optimierung durchführen.", color="warning")
+
     results_path = results_data.get('full_results_path')
     if not os.path.exists(results_path): return no_update
+    
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
+    
     labels = results_data.get('labels', [])
+    selected_feature_indices = results_data.get('selected_features_indices', [])
     if not labels: return no_update
+    
     measures_data = np.array([elite['measures'] for elite in list_of_elites])
+    
     sliders = []
+    # This is the original index from the config, not the index in the 'labels' list
+    num_buildings_original_index = 3
+
     for i, label in enumerate(labels):
+        # The actual index of the feature we are currently processing
+        current_feature_original_index = selected_feature_indices[i]
+        
         min_val, max_val = measures_data[:, i].min(), measures_data[:, i].max()
-        if min_val == max_val: max_val += 1.0
-        slider_div = html.Div([
-            dbc.Label(label),
-            dcc.RangeSlider(
-                id={'type': 'filter-slider', 'index': i},
-                min=min_val, max=max_val, value=[min_val, max_val],
-                tooltip={"placement": "bottom", "always_visible": True},
-                marks=None,
-                step=(max_val - min_val) / 100 if (max_val - min_val) > 0 else 0.1
-            )
-        ], className="mb-2")
+        
+        # --- THE FIX IS HERE ---
+        # Handle the "Number of Buildings" slider to be integer-only
+        if current_feature_original_index == num_buildings_original_index:
+            min_v = int(np.floor(min_val))
+            max_v = int(np.ceil(max_val))
+            if min_v == max_v: max_v += 1
+            
+            slider_div = html.Div([
+                dbc.Label(label),
+                dcc.RangeSlider(
+                    id={'type': 'filter-slider', 'index': i},
+                    min=min_v,
+                    max=max_v,
+                    step=1,  # Enforce integer steps
+                    value=[min_v, max_v],
+                    tooltip={"placement": "bottom", "always_visible": True},
+                    marks=None,
+                )
+            ], className="mb-2")
+        
+        # Handle all other sliders to have two decimal places
+        else:
+            min_v = round(min_val, 2)
+            max_v = round(max_val, 2)
+            if min_v == max_v: max_v += 0.01
+
+            slider_div = html.Div([
+                dbc.Label(label),
+                dcc.RangeSlider(
+                    id={'type': 'filter-slider', 'index': i},
+                    min=min_v,
+                    max=max_v,
+                    step=0.01,  # Enforce 2 decimal places
+                    value=[min_v, max_v],
+                    tooltip={"placement": "bottom", "always_visible": True},
+                    marks=None,
+                )
+            ], className="mb-2")
+        # --- END OF FIX ---
         sliders.append(slider_div)
+        
     return sliders
 
 @callback(
@@ -171,16 +211,13 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
 
     cluster_cards = []
     for cluster in clusters:
-        # --- Visualization for Best Solution ---
         best_hm = np.array(cluster['best_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
         best_geojson = heightmap_to_geojson(np.flipud(best_hm), grid_geojson)
         best_map = dl.Map(center=map_center, zoom=14, children=[
             dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
-            # --- THE FIX IS HERE ---
             dl.GeoJSON(data=best_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
         ], style={'height': '200px', 'width': '100%'})
         
-        # --- Visualization for Central Solution ---
         central_hm = np.array(cluster['central_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
         central_geojson = heightmap_to_geojson(np.flipud(central_hm), grid_geojson)
         central_map = dl.Map(center=map_center, zoom=14, children=[
@@ -188,7 +225,6 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
             dl.GeoJSON(data=central_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
         ], style={'height': '200px', 'width': '100%'})
 
-        # --- Visualization for Consensus Map ---
         consensus_map_data = np.array(cluster['consensus_map']).reshape(heightmap_res, heightmap_res)
         consensus_fig = px.imshow(consensus_map_data, color_continuous_scale='Blues', origin='lower', zmin=0, zmax=1)
         consensus_fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)

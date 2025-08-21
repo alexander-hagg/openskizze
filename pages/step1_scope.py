@@ -1,8 +1,8 @@
 #
-# pages/step1_scope.py (Final Corrected Version with Unified Workflow and Correct Wind Arrow)
+# pages/step1_scope.py
 #
 import dash
-from dash import dcc, html, Input, Output, State, callback, no_update
+from dash import dcc, html, Input, Output, State, callback, no_update, clientside_callback
 import dash_bootstrap_components as dbc
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
@@ -26,18 +26,28 @@ function(feature, context){
 }
 """)
 
-def layout():
-    arrow_pattern = dict(
-        offset='100%', repeat='0',
-        arrowHead=dict(polygon=False, pathOptions=dict(stroke=True, color='black', weight=4))
-    )
+def create_compass_component():
+    """Creates the HTML structure for the interactive compass."""
+    return html.Div(id='compass-container', className='compass-container', children=[
+        html.Div(className='compass-rose', children=[
+            html.Span('N', className='compass-label compass-label-n'),
+            html.Span('E', className='compass-label compass-label-e'),
+            html.Span('S', className='compass-label compass-label-s'),
+            html.Span('W', className='compass-label compass-label-w'),
+        ]),
+        html.Div(id='compass-needle-container', className='compass-needle-container', children=[
+            html.Div(className='compass-needle', id='compass-needle')
+        ]),
+        html.Div(className='compass-pivot')
+    ])
 
+def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP1_TITLE']),
         html.P(T[LANG]['STEP1_DATA_SOURCE_INFO'], className="text-muted mb-3"),
         dcc.Store(id='loaded-parcels-store'),
         dcc.Store(id='selected-parcels-store', data=[]),
-        dcc.Store(id='active-polygon-store'), # Retained for potential future use, but not primary state
+        dcc.Store(id='active-polygon-store'),
 
         dbc.Row([
             dbc.Col([
@@ -51,12 +61,8 @@ def layout():
                             dl.EditControl(id='edit-control', draw={
                                 'polygon': True, 'rectangle': True, 'circle': False,
                                 'marker': False, 'circlemarker': False, 'polyline': False
-                            }, edit={'edit': False, 'remove': True}) # Allow deleting drawn shapes
+                            }, edit={'edit': False, 'remove': True})
                         ]),
-                        dl.PolylineDecorator(
-                            children=[dl.Polyline(id='wind-arrow-line', positions=[])],
-                            patterns=[arrow_pattern]
-                        )
                     ], id='map-step1', style={'width': '100%', 'height': '60vh'}
                 )
             ], md=7),
@@ -79,7 +85,12 @@ def layout():
                 ]),
                 html.Hr(),
                 html.H5(T[LANG]['STEP1_WIND_HEADER']),
-                dbc.Label(T[LANG]['STEP1_WIND_SLIDER_LABEL']),
+                html.Div(T[LANG]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
+                
+                # --- NEW COMPASS COMPONENT ---
+                create_compass_component(),
+
+                # --- SLIDER IS NOW THE CONTROLLER, DRIVEN BY THE COMPASS ---
                 dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
             ], md=5)
         ]),
@@ -87,29 +98,96 @@ def layout():
         dbc.Button(T[LANG]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4")
     ], fluid=True)
 
-# Callback to update the wind arrow's line, with the corrected angle calculation
-@callback(
-    Output('wind-arrow-line', 'positions'),
-    Input('wind-direction-slider', 'value'),
-    Input('map-step1', 'center')
+
+# --- INTERACTIVE COMPASS CLIENTSIDE CALLBACKS ---
+
+clientside_callback(
+    """
+    function(slider_value) {
+        // This callback syncs the slider's value TO the compass needle's rotation.
+        const needle = document.getElementById('compass-needle');
+        if (needle) {
+            needle.style.transform = `rotate(${slider_value}deg)`;
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('compass-needle-container', 'data-dummy-output'), # Dummy output
+    Input('wind-direction-slider', 'value')
 )
-def update_wind_arrow_line(direction_deg, center):
-    if isinstance(center, list): center = {'lat': center[0], 'lng': center[1]}
-    start_lat, start_lng = center['lat'], center['lng']
-    length_in_meters = 200
-    EARTH_RADIUS_M = 6378137.0
-    
-    # --- Corrected angle calculation ---
-    # A "North wind" (0°) comes FROM the North, so the arrow should point South (180°).
-    angle_math_deg = (450 - direction_deg + 180) % 360
-    angle_math_rad = math.radians(angle_math_deg)
-    
-    delta_lat_rad = (length_in_meters * math.sin(angle_math_rad)) / EARTH_RADIUS_M
-    delta_lon_rad = (length_in_meters * math.cos(angle_math_rad)) / (EARTH_RADIUS_M * math.cos(math.radians(start_lat)))
-    end_lat = start_lat + math.degrees(delta_lat_rad)
-    end_lng = start_lng + math.degrees(delta_lon_rad)
-    
-    return [[start_lat, start_lng], [end_lat, end_lng]]
+
+clientside_callback(
+    """
+    function(_, slider_id) {
+        // This callback handles the drag logic FOR the compass, updating the slider.
+        const container = document.getElementById('compass-container');
+        if (!container) return;
+
+        let isDragging = false;
+
+        const updateAngle = (e) => {
+            e.preventDefault();
+            const rect = container.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const deltaX = clientX - centerX;
+            const deltaY = clientY - centerY;
+
+            // Calculate angle in degrees. Add 90 because 0 degrees in atan2 is East.
+            let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI) + 90;
+            if (angle < 0) {
+                angle += 360; // Normalize to 0-360
+            }
+            
+            // Find the slider and update its value.
+            // This is a bit of a hack to communicate with Dash components.
+            const slider = document.getElementById(slider_id);
+            if(slider){
+                // We need to find the hidden input element that holds the value
+                const input = slider.querySelector('input[type="hidden"]');
+                if(input){
+                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                    nativeInputValueSetter.call(input, Math.round(angle));
+                    const event = new Event('input', { bubbles: true });
+                    input.dispatchEvent(event);
+                }
+            }
+        };
+
+        const startDrag = (e) => {
+            isDragging = true;
+            updateAngle(e);
+        };
+
+        const doDrag = (e) => {
+            if (isDragging) {
+                updateAngle(e);
+            }
+        };
+
+        const stopDrag = () => {
+            isDragging = false;
+        };
+        
+        // Attach event listeners
+        container.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', doDrag);
+        document.addEventListener('mouseup', stopDrag);
+        container.addEventListener('touchstart', startDrag, { passive: false });
+        document.addEventListener('touchmove', doDrag, { passive: false });
+        document.addEventListener('touchend', stopDrag);
+        
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output('compass-container', 'data-dummy-output'),
+    Input('compass-container', 'n_clicks'),
+    State('wind-direction-slider', 'id')
+)
 
 # Callbacks for loading and displaying the blue selectable parcel layer
 @callback(Output('loaded-parcels-store', 'data'), Input('load-parcels-btn', 'n_clicks'), State('map-step1', 'bounds'), prevent_initial_call=True)

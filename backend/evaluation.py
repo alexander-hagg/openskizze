@@ -24,8 +24,6 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
     
     building_heights = heightmap[occupied]
     if not building_heights.any():
-        # --- FIX for Magic Number ---
-        # Return a zero vector with the length of the total number of possible features.
         return np.zeros(len(DOMAIN_CONFIG['labels']))
         
     avg_height = np.mean(building_heights)
