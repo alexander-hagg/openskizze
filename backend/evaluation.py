@@ -62,13 +62,16 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
             
     combined_env_3d = np.maximum(env_config['env_3d_fixed'], design_3d)
     fitness = compute_fitness(combined_env_3d, env_config['wind_direction'])
-    
+
+    # Calculate buildable area in square meters from buildable mask
+    buildable_area_in_sq_meters = np.sum(env_config['buildable_mask']) * (DOMAIN_CONFIG['pixel_size_in_meters'] ** 2)
+
     # --- DYNAMIC FEATURE SELECTION ---
     # 1. Calculate all 8 possible features.
     all_features = calculate_all_features(
         heightmap_2d_solution,
         env_config['buildable_mask'],
-        env_config['buildable_area_in_sq_meters']
+        buildable_area_in_sq_meters
     )
     # 2. Filter the features based on the indices provided in the env_config.
     selected_features = all_features[env_config['selected_features']]

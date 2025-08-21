@@ -60,6 +60,8 @@ def run_optimization(set_progress, n_clicks, session_data):
         return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning")
 
     selected_features = session_data.get('selected_features', list(range(8)))
+    user_feature_ranges = session_data.get('feature_ranges', {})
+
 
     def progress_callback(progress, text):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
@@ -69,6 +71,7 @@ def run_optimization(set_progress, n_clicks, session_data):
             session_data['site_polygon'],
             session_data['wind_direction'],
             selected_features,
+            user_feature_ranges,
             progress_callback=progress_callback
         )
         
