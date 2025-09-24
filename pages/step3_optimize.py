@@ -16,6 +16,9 @@ import os
 from backend.encoding import ParametricEncoding
 from backend.config import ENCODING_CONFIG
 
+import cProfile # Import the profiler
+import pstats   # Import for saving stats
+
 cache = diskcache.Cache("./cache")
 background_callback_manager = DiskcacheManager(cache)
 LANG = 'DE'
@@ -67,6 +70,9 @@ def run_optimization(set_progress, n_clicks, session_data):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
 
     try:
+        # profiler = cProfile.Profile()
+        # profiler.enable()
+    
         archive, labels, env_config = start_optimization(
             session_data['site_polygon'],
             session_data['wind_direction'],
@@ -76,7 +82,6 @@ def run_optimization(set_progress, n_clicks, session_data):
         )
         
         if archive and not archive.empty:
-            # --- THE CRITICAL FIX IS HERE ---
             # 1. Instantiate an encoder object to regenerate heightmaps from the genomes.
             encoding_obj = ParametricEncoding(ENCODING_CONFIG)
             
@@ -127,7 +132,12 @@ def run_optimization(set_progress, n_clicks, session_data):
                 title="Erkundung des Lösungsraums"
             )
             graph = dcc.Graph(figure=fig)
+
+            # profiler.disable()
+            # stats = pstats.Stats(profiler).sort_stats('cumtime')
+            # stats.dump_stats('optimization_profile.prof') # Save the results to a file
             
+
             return results_summary_to_store, graph
         
     except Exception as e:

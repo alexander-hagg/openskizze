@@ -11,10 +11,6 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     solution_dim = encoding_obj.get_dimension()
     print(f"[DEBUG] Starting QD setup. Solution dimension: {solution_dim}")
     
-    # --- THE CRITICAL FIX IS HERE (Part 1) ---
-    # Remove the `extra_fields` parameter. The archive will no longer store the
-    # bulky heightmaps for every single evaluated solution. It will only store
-    # the essential, small "genome" (solution), objective, and measures.
     archive = GridArchive(
         solution_dim=solution_dim,
         dims=[qd_config['num_niches']] * len(env_config['labels']),
@@ -51,9 +47,6 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
             if gen == 1:
                 print(f"[DEBUG] Gen 1: Results received. Objectives shape: {objectives.shape}, Features shape: {features.shape}")
 
-            # --- THE CRITICAL FIX IS HERE (Part 2) ---
-            # Remove the `heightmaps` kwarg. We no longer pass this large data
-            # to the scheduler, preventing the memory allocation error.
             scheduler.tell(objectives, features)
             
             if gen % qd_config['output_inv_frequency'] == 0:
