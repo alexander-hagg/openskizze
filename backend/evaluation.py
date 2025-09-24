@@ -54,11 +54,23 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
 
 def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndarray:
     heightmap_2d_solution = encoding_obj.express(env_config['buildable_mask'], genome)
-    design_3d = np.zeros_like(env_config['env_3d_fixed'])
-    for r in range(heightmap_2d_solution.shape[0]):
-        for c in range(heightmap_2d_solution.shape[1]):
-            h = int(heightmap_2d_solution[r, c])
-            if h > 0: design_3d[r, c, :h] = 1
+    
+    # design_3d = np.zeros_like(env_config['env_3d_fixed'])
+    # for r in range(heightmap_2d_solution.shape[0]):
+    #     for c in range(heightmap_2d_solution.shape[1]):
+    #         h = int(heightmap_2d_solution[r, c])
+    #         if h > 0: design_3d[r, c, :h] = 1
+
+    # --- OPTIMIZED 3D MESH GENERATION ---
+    # Create an array of z-axis indices: [0, 1, 2, ..., max_height-1]
+    max_height = env_config['env_3d_fixed'].shape[2]
+    z_indices = np.arange(max_height)
+
+    # Use NumPy broadcasting to compare the height at each (r, c) with the z_indices.
+    # This creates a 3D boolean mask directly, which is 100-1000x faster than a loop.
+    # We cast to a smaller integer type like int8 to save memory.
+    design_3d = (z_indices < heightmap_2d_solution.astype(int)[:, :, np.newaxis]).astype(np.int8)
+    
             
     combined_env_3d = np.maximum(env_config['env_3d_fixed'], design_3d)
     fitness = compute_fitness(combined_env_3d, env_config['wind_direction'])
@@ -79,5 +91,7 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
     return np.concatenate(([fitness], selected_features, heightmap_2d_solution.flatten()))
 
 def eval_batch(genomes: list, encoding_obj, env_config: dict, pool) -> np.ndarray:
+    # results = [eval_solution(g, encoding_obj, env_config) for g in genomes]
     results = pool.starmap(eval_solution, [(g, encoding_obj, env_config) for g in genomes])
+
     return np.array(results)
