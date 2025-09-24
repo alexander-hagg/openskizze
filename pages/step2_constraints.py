@@ -15,6 +15,11 @@ def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP2_TITLE']),
         dbc.Row([
+            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/', color="secondary")),
+            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
+        ], className="mt-4"),
+
+        dbc.Row([
             dbc.Col([
                 html.H5(T[LANG]['STEP2_OBJECTIVES_HEADER']),
                 dbc.Label(T[LANG]['STEP2_MEASURES_LABEL']),
@@ -30,16 +35,12 @@ def layout():
                 dbc.Alert(T[LANG]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
                 
                 # --- NEW: Container for the dynamic range sliders ---
-                html.H5("Zielbereiche für Merkmale festlegen"),
-                html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
-                dcc.Loading(html.Div(id='feature-range-sliders-container'))
+                # html.H5("Zielbereiche für Merkmale festlegen"),
+                # html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
+                # dcc.Loading(html.Div(id='feature-range-sliders-container'))
 
             ], md=6),
-        ]),
-        dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
-        ], className="mt-4")
+        ])
     ], fluid=True)
 
 # --- NEW: Callback to dynamically generate the sliders based on the checklist ---

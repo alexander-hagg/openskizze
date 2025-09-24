@@ -29,6 +29,11 @@ os.makedirs(TEMP_RESULTS_DIR, exist_ok=True)
 def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP3_TITLE']),
+        dbc.Row([
+            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step2', color="secondary")),
+            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step4', color="primary"), className="text-end")
+        ], className="mt-4"),
+
         dbc.Button(T[LANG]['STEP3_START_BUTTON'], id='start-optimization-btn', color="success", size="lg", className="mb-3"),
         html.Div(id="progress-container", children=[
             dbc.Progress(id="progress-bar", label="0%", style={'height': '30px'}),
@@ -36,11 +41,7 @@ def layout():
         ], style={'visibility': 'hidden'}),
         html.Hr(),
         html.H4(T[LANG]['STEP3_RESULTS_HEADER']),
-        dcc.Loading(id="loading-results", children=html.Div(id='results-output-div')),
-        dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step2', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step4', color="primary"), className="text-end")
-        ], className="mt-4")
+        dcc.Loading(id="loading-results", children=html.Div(id='results-output-div'))
     ], fluid=True)
 
 @callback(

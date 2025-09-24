@@ -30,6 +30,10 @@ function(feature, context){
 def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP5_TITLE']),
+        dbc.Row([
+            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step4', color="secondary")),
+        ], className="mt-4"),
+
         
         dbc.Card(dbc.CardBody([
             html.H4(T[LANG]['STEP5_FILTER_HEADER']),
@@ -62,7 +66,7 @@ def layout():
             html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
                 dbc.Row([
                     dbc.Col(dbc.Label(T[LANG]['STEP5_KMEDOIDS_K_LABEL']), width='auto'),
-                    dbc.Col(dcc.Slider(id='kmedoids-k-slider', min=2, max=15, step=1, value=3, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                    dbc.Col(dcc.Slider(id='kmedoids-k-slider', min=2, max=50, step=1, value=30, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
                 ], className="align-items-center mt-2"),
             ]),
 
@@ -77,11 +81,8 @@ def layout():
         ])),
         
         dbc.Button(T[LANG]['STEP5_EXPORT_BUTTON'], id="export-reqs-btn-s5", color="info", className="mt-3"),
-        dcc.Download(id="download-requirements-s5"),
+        dcc.Download(id="download-requirements-s5")
         
-        dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step4', color="secondary")),
-        ], className="mt-4")
     ], fluid=True)
 
 

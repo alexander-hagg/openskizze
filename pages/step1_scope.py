@@ -44,6 +44,7 @@ def create_compass_component():
 def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP1_TITLE']),
+        dbc.Button(T[LANG]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4"),
         html.P(T[LANG]['STEP1_DATA_SOURCE_INFO'], className="text-muted mb-3"),
         dcc.Store(id='loaded-parcels-store'),
         dcc.Store(id='selected-parcels-store', data=[]),
@@ -93,9 +94,8 @@ def layout():
                 # --- SLIDER IS NOW THE CONTROLLER, DRIVEN BY THE COMPASS ---
                 dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
             ], md=5)
-        ]),
+        ])
         
-        dbc.Button(T[LANG]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4")
     ], fluid=True)
 
 

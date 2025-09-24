@@ -13,10 +13,10 @@ T = {
         'STEP1_DATA_SOURCE_INFO': "Kartengrundlage: OpenStreetMap. Zukünftig: Anbindung an Geodatenportal NRW.",
 
         # Step 2
-        'STEP2_TITLE': "Schritt 2: Optimierungsziele und Leistungsmerkmale festlegen",
-        'STEP2_OBJECTIVES_HEADER': "Leistungsmerkmale (Measures)",
+        'STEP2_TITLE': "Schritt 2: Leistungsmerkmale und Optimierungsziele festlegen",
+        'STEP2_OBJECTIVES_HEADER': "Leistungsmerkmale",
         'STEP2_MEASURES_LABEL': "Wählen Sie die Merkmale zur Generierung diverser Lösungen:",
-        'STEP2_OBJECTIVE_INFO_LABEL': "Zielfunktion (Objective)",
+        'STEP2_OBJECTIVE_INFO_LABEL': "Zielfunktion Optimierung",
         'STEP2_OBJECTIVE_INFO_TEXT': "Optimierung der Kaltluft-Porosität, basierend auf der in Schritt 1 gewählten Windrichtung.",
         
         'MEASURE_0': 'Bebaute Fläche',

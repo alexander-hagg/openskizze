@@ -33,6 +33,11 @@ function(feature, context){
 def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP4_TITLE']),
+        dbc.Row([
+            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step3', color="secondary")),
+            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step5', color="primary"), className="text-end")
+        ], className="mt-4"),
+
         dbc.Card(dbc.CardBody([
             dbc.Row([
                 dbc.Col(dbc.Label(T[LANG]['STEP4_X_AXIS_LABEL'])),
@@ -45,11 +50,7 @@ def layout():
         ])),
         html.Hr(),
         html.H4(T[LANG]['STEP4_GRID_HEADER']),
-        dcc.Loading(html.Div(id='solution-map-grid-container')),
-        dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step3', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step5', color="primary"), className="text-end")
-        ], className="mt-4")
+        dcc.Loading(html.Div(id='solution-map-grid-container'))
     ], fluid=True)
 
 @callback(
