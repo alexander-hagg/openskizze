@@ -1,7 +1,7 @@
 from dash import dcc, html, Input, Output, State, callback, no_update, ALL
 import dash_bootstrap_components as dbc
 from backend.translation import T
-from backend.analysis import generate_contest_requirements, cluster_and_analyze_solutions, heightmap_to_geojson
+from backend.analysis import generate_contest_requirements, cluster_and_analyze_solutions, generate_pdf_report, heightmap_to_geojson
 from backend.config import ENCODING_CONFIG
 import pickle
 import os
@@ -32,6 +32,7 @@ def layout():
         html.H2(T[LANG]['STEP5_TITLE']),
         dbc.Row([
             dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step4', color="secondary")),
+            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step6', color="primary"), className="text-end")
         ], className="mt-4"),
 
         
@@ -44,10 +45,11 @@ def layout():
             dbc.RadioItems(
                 id='algorithm-selector',
                 options=[
-                    {'label': 'DBSCAN (Dichte-basiert)', 'value': 'dbscan'},
                     {'label': 'K-Medoids (Partionierend)', 'value': 'kmedoids'},
+                    {'label': 'HDBSCAN (Automatisch)', 'value': 'hdbscan'},
+                    {'label': 'DBSCAN (Dichte-basiert)', 'value': 'dbscan'},
                 ],
-                value='dbscan',
+                value='kmedoids',
                 inline=True,
                 className="mb-3"
             ),
@@ -70,7 +72,19 @@ def layout():
                 ], className="align-items-center mt-2"),
             ]),
 
-            dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3")
+            html.Div(id='hdbscan-params-div', style={'display': 'none'}, children=[
+                dbc.Row([
+                    dbc.Col(dbc.Label(T[LANG]['STEP5_HDBSCAN_MINCLUSTER']), width='auto'),
+                    dbc.Col(dcc.Slider(id='hdbscan-minsamples-slider', min=2, max=20, step=1, value=5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                ], className="align-items-center mt-2"),
+            ]),
+
+
+            dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
+
+            # Add a "Compare" button and a store for selections
+            dcc.Store(id='comparison-store', data=[]),
+            dbc.Button("Ausgewählte Designs vergleichen", id="compare-btn", href="/step6", color="success", className="mt-3", style={'display': 'none'}),
         ])),
         
         html.Hr(),
@@ -80,23 +94,27 @@ def layout():
              dbc.Alert(T[LANG]['STEP5_NO_SELECTION'], color="light")
         ])),
         
-        dbc.Button(T[LANG]['STEP5_EXPORT_BUTTON'], id="export-reqs-btn-s5", color="info", className="mt-3"),
+        dbc.Button("PDF-Bericht exportieren", id="export-reqs-btn-s5", color="info", className="mt-3"),
         dcc.Download(id="download-requirements-s5")
+
         
     ], fluid=True)
 
 
 @callback(
+    Output('hdbscan-params-div', 'style'),
     Output('dbscan-params-div', 'style'),
     Output('kmedoids-params-div', 'style'),
     Input('algorithm-selector', 'value')
 )
 def toggle_parameter_sliders(selected_algorithm):
     if selected_algorithm == 'dbscan':
-        return {'display': 'block'}, {'display': 'none'}
+        return {'display': 'none'}, {'display': 'block'}, {'display': 'none'}
     elif selected_algorithm == 'kmedoids':
-        return {'display': 'none'}, {'display': 'block'}
-    return {'display': 'none'}, {'display': 'none'}
+        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+    elif selected_algorithm == 'hdbscan':
+        return {'display': 'block'}, {'display': 'none'}, {'display': 'none'}
+    return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
 
 @callback(
     Output('feature-filter-controls', 'children'),
@@ -233,6 +251,11 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         consensus_graph = dcc.Graph(figure=consensus_fig, style={'height': '200px', 'width': '100%'})
         
         card = dbc.Card(dbc.CardBody([
+            dbc.Checkbox(
+                id={'type': 'compare-checkbox', 'index': cluster['central_solution']['id']}, # Assuming solutions have a unique ID
+                label=f"Zum Vergleich auswählen",
+                value=False
+            ),
             html.H5(T[LANG]['STEP5_CLUSTER_CARD_TITLE'].format(id=cluster['cluster_id'], size=cluster['size'])),
             html.P(T[LANG]['STEP5_CLUSTER_CARD_TEXT'].format(size=cluster['size']), className="text-muted small"),
             dbc.Row([
@@ -244,6 +267,47 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         cluster_cards.append(card)
         
     return cluster_cards
+
+@callback(
+    Output("download-requirements-s5", "data", allow_duplicate=True),
+    Input("export-reqs-btn-s5", "n_clicks"),
+    State("results-store", "data"),
+    prevent_initial_call=True,
+)
+def export_pdf_report(n_clicks, results_data):
+    if not n_clicks or not results_data:
+        return None
+        
+    results_path = results_data.get('full_results_path')
+    labels = results_data.get('labels')
+    selected_indices = results_data.get('selected_features_indices')
+    grid_geojson = results_data.get('grid_geojson') # Needed for the map
+
+    if not all([results_path, labels, selected_indices is not None, grid_geojson]):
+         error_content = "Error: Could not find all necessary data for export."
+         return dict(content=error_content, filename="error.txt")
+
+    # Call the backend function to generate the PDF content
+    pdf_content = generate_pdf_report(results_path, labels, selected_indices, grid_geojson)
+    
+    if pdf_content:
+        return dict(content=pdf_content, filename="OpenSKIZZE_Anforderungen.pdf")
+    else:
+        error_content = "Error: Failed to generate PDF report."
+        return dict(content=error_content, filename="error.txt")
+
+@callback(
+    Output('comparison-store', 'data'),
+    Output('compare-btn', 'style'),
+    Input({'type': 'compare-checkbox', 'index': ALL}, 'value'),
+    State({'type': 'compare-checkbox', 'index': ALL}, 'id'),
+)
+def update_comparison_list(checkbox_values, checkbox_ids):
+    selected_ids = [
+        cid['index'] for cid, is_checked in zip(checkbox_ids, checkbox_values) if is_checked
+    ]
+    button_style = {'display': 'inline-block'} if selected_ids else {'display': 'none'}
+    return selected_ids, button_style
 
 @callback(
     Output("download-requirements-s5", "data"),

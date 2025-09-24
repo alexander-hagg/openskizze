@@ -2,9 +2,47 @@
 # backend/evaluation.py (Final Corrected Version)
 #
 import numpy as np
-from scipy.ndimage import label, center_of_mass, rotate
+from scipy.ndimage import label, center_of_mass, rotate, binary_erosion
 import multiprocessing
 from backend.config import DOMAIN_CONFIG, ENCODING_CONFIG
+
+def check_constraints(heightmap: np.ndarray, constraints: dict):
+    """
+    Checks for constraint violations and modifies the heightmap.
+    Returns the (potentially modified) heightmap and a boolean indicating if a penalty should be applied.
+    """
+    is_violated = False
+    
+    # 1. Max Height Constraint
+    max_height_voxels = constraints.get('max_height')
+    if max_height_voxels is not None:
+        # Clip the heightmap to enforce the max height. This is a "repair" action.
+        heightmap = np.clip(heightmap, 0, max_height_voxels)
+    
+    # 2. Min Distance Constraint
+    min_distance_meters = constraints.get('min_distance')
+    if min_distance_meters is not None and min_distance_meters > 0:
+        pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+        min_dist_pixels = min_distance_meters / pixel_size
+        
+        # We check if any two buildings are too close.
+        labeled_buildings, num_buildings = label(heightmap > 0)
+        
+        if num_buildings > 1:
+            # Erode each building by half the minimum distance. If any two eroded zones touch or overlap,
+            # it means the original buildings were closer than the minimum distance.
+            # The structure makes the erosion isotropic.
+            erosion_radius = int(np.ceil(min_dist_pixels / 2))
+            if erosion_radius > 0:
+                eroded_map = binary_erosion(heightmap > 0, iterations=erosion_radius)
+                
+                # Check if any building has been completely eroded away, which implies it was too small
+                # or too close to another.
+                labeled_eroded, num_eroded = label(eroded_map)
+                if num_eroded < num_buildings:
+                    is_violated = True
+            
+    return heightmap, is_violated
 
 def compute_fitness(heightmap_3d: np.ndarray, wind_direction: int) -> float:
     rotation_angle = (wind_direction + 90) % 360
@@ -54,21 +92,25 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
 
 def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndarray:
     heightmap_2d_solution = encoding_obj.express(env_config['buildable_mask'], genome)
-    
-    # design_3d = np.zeros_like(env_config['env_3d_fixed'])
-    # for r in range(heightmap_2d_solution.shape[0]):
-    #     for c in range(heightmap_2d_solution.shape[1]):
-    #         h = int(heightmap_2d_solution[r, c])
-    #         if h > 0: design_3d[r, c, :h] = 1
 
+    # --- NEW: Enforce Hard Constraints ---
+    constraints = env_config.get('hard_constraints', {})
+    heightmap_2d_solution, is_violated = check_constraints(heightmap_2d_solution, constraints)
+
+    if is_violated:
+        # If constraints are violated, return a very poor fitness score (-1)
+        # and dummy values for the rest. This solution will be discarded.
+        num_features = len(env_config['selected_features'])
+        dummy_features = np.zeros(num_features)
+        dummy_heightmap = heightmap_2d_solution.flatten()
+        return np.concatenate(([-1.0], dummy_features, dummy_heightmap))
+    
     # --- OPTIMIZED 3D MESH GENERATION ---
     # Create an array of z-axis indices: [0, 1, 2, ..., max_height-1]
     max_height = env_config['env_3d_fixed'].shape[2]
     z_indices = np.arange(max_height)
 
     # Use NumPy broadcasting to compare the height at each (r, c) with the z_indices.
-    # This creates a 3D boolean mask directly, which is 100-1000x faster than a loop.
-    # We cast to a smaller integer type like int8 to save memory.
     design_3d = (z_indices < heightmap_2d_solution.astype(int)[:, :, np.newaxis]).astype(np.int8)
     
             

@@ -8,6 +8,8 @@ from sklearn.manifold import TSNE
 from sklearn.cluster import DBSCAN
 from sklearn_extra.cluster import KMedoids # <-- New Import
 from sklearn.metrics import pairwise_distances
+import hdbscan # <-- New Import
+from fpdf import FPDF # <-- New Import
 import pickle
 import os
 
@@ -105,6 +107,13 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
         for i, medoid_idx in enumerate(kmedoids.medoid_indices_):
             central_solution_indices[i] = medoid_idx
     
+    elif algorithm == 'hdbscan':
+        min_cluster_size = params.get('min_cluster_size', 5)
+        if len(filtered_elites) < min_cluster_size: return []
+        
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, gen_min_span_tree=True)
+        cluster_labels = clusterer.fit_predict(tsne_results)
+
     unique_labels = set(cluster_labels)
     
     # 4. Analyze each cluster
@@ -211,3 +220,80 @@ def generate_contest_requirements(results_path: str, labels: list, selected_indi
             max_val = top_solutions[measure_key].max()
             report.append(f"- **{human_label}:** Optimale Ergebnisse wurden im Bereich von {min_val:.2f} bis {max_val:.2f} erzielt (Mittelwert: {mean_val:.2f} ± {std_val:.2f}).")
     return "\n".join(report)
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, 'OpenSKIZZE - Planungsanforderungen', 0, 1, 'C')
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Seite {self.page_no()}', 0, 0, 'C')
+
+def generate_pdf_report(results_path: str, labels: list, selected_indices: list, grid_geojson: dict):
+    # 1. Load data
+    if not os.path.exists(results_path): return None
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+    if not list_of_elites: return None
+
+    df = pd.DataFrame(list_of_elites)
+    measures_df = pd.DataFrame(df['measures'].tolist(), columns=labels)
+    df = pd.concat([df.drop('measures', axis=1), measures_df], axis=1)
+
+    # 2. Isolate top 20% of solutions
+    top_20_percentile = df['objective'].quantile(0.8)
+    top_solutions = df[df['objective'] >= top_20_percentile]
+
+    pdf = PDF()
+    pdf.add_page()
+    pdf.set_font('Arial', '', 12)
+
+    # 3. Add Summary
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, "1. Zusammenfassung", 0, 1)
+    pdf.set_font('Arial', '', 12)
+    pdf.multi_cell(0, 5, f"Dieser Bericht leitet Planungsanforderungen aus der Analyse von {len(df)} "
+                       f"generierten Entwurfsvarianten ab. Die folgenden quantitativen und qualitativen "
+                       f"Richtlinien basieren auf den {len(top_solutions)} leistungsstärksten Lösungen (Top 20%) "
+                       f"hinsichtlich der Kaltluftförderung.")
+    pdf.ln(10)
+
+    # 4. Add Quantitative Requirements (Metric Ranges)
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, "2. Quantitative Anforderungen", 0, 1)
+    pdf.set_font('Arial', '', 12)
+    for label in labels:
+        p25 = top_solutions[label].quantile(0.25)
+        p75 = top_solutions[label].quantile(0.75)
+        pdf.multi_cell(0, 5, f"- **{label}:** Hochperformante Entwürfe weisen typischerweise Werte im Bereich von **{p25:.2f} bis {p75:.2f}** auf.")
+    pdf.ln(10)
+    
+    # 5. Add Spatial Patterns (Consensus Map)
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, "3. Räumliche Leitlinien", 0, 1)
+    pdf.set_font('Arial', '', 12)
+    pdf.multi_cell(0, 5, "Die Konsens-Karte zeigt die Bebauungswahrscheinlichkeit für die Top-Lösungen. "
+                       "Dunkle Bereiche deuten auf Zonen hin, in denen eine Bebauung in den besten "
+                       "Entwürfen häufig vorkommt.")
+    
+    # Create and save consensus map plot
+    heightmaps = np.array([np.array(hm) for hm in top_solutions['heightmap']])
+    boolean_hms = heightmaps > 0
+    consensus_map = np.mean(boolean_hms, axis=0)
+    
+    fig, ax = plt.subplots()
+    im = ax.imshow(consensus_map, cmap='Blues', origin='lower')
+    plt.colorbar(im, ax=ax, label="Bebauungswahrscheinlichkeit")
+    ax.set_title("Konsens-Karte der Top 20% Lösungen")
+    plot_path = os.path.join("temp_results", "consensus.png")
+    fig.savefig(plot_path)
+    plt.close(fig)
+    
+    pdf.image(plot_path, x=None, y=None, w=150)
+    pdf.ln(10)
+
+    # 6. Return PDF content
+    return pdf.output(dest='S').encode('latin1')

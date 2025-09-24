@@ -4,7 +4,7 @@
 from dash import dcc, html, Input, Output, State, callback, no_update, ALL
 import dash_bootstrap_components as dbc
 from backend.translation import T
-from backend.config import DOMAIN_CONFIG
+from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG
 import numpy as np
 
 LANG = 'DE'
@@ -75,12 +75,12 @@ def layout():
                 html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
                 dcc.Loading(html.Div(id='feature-range-sliders-container')),
                 # --- NEW: Hard Constraints Section ---
-                html.H5("Harte Randbedingungen (Zukünftige Funktion)", className="mt-4"),
+                html.H5("Harte Randbedingungen", className="mt-4"),
                 dbc.Card(dbc.CardBody([
-                    dbc.Label("Maximale Bauhöhe (m):"),
-                    dbc.Input(type="number", placeholder="z.B. 22", disabled=True),
+                    dbc.Label("Maximale Bauhöhe (in Geschossen, ca. 3m pro Geschoss):"),
+                    dbc.Input(id='max-height-constraint', type="number", placeholder="z.B. 7 (= 21m)", min=1, step=1, value=ENCODING_CONFIG['z_length']),
                     dbc.Label("Minimaler Gebäudeabstand (m):", className="mt-2"),
-                    dbc.Input(type="number", placeholder="z.B. 6", disabled=True),
+                    dbc.Input(id='min-distance-constraint', type="number", placeholder="z.B. 6", min=0, step=1, value=6),
                 ]), color="light")
             ], md=6),
         ])
@@ -166,25 +166,30 @@ def create_range_sliders(selected_indices):
     Output('session-store', 'data', allow_duplicate=True),
     Input('measures-checklist', 'value'),
     Input({'type': 'feature-range-slider', 'index': ALL}, 'value'),
+    Input('max-height-constraint', 'value'), # New Input
+    Input('min-distance-constraint', 'value'), # New Input
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
 def update_session_with_features_and_ranges(
-    selected_indices, slider_values, slider_ids, session_data
+    selected_indices, slider_values, max_height, min_distance, 
+    slider_ids, session_data
 ):
     session_data = session_data or {}
     
-    # Save the list of selected feature indices
+    # Save feature selections and ranges (unchanged)
     session_data['selected_features'] = selected_indices
-    
-    # Create and save the dictionary of user-defined ranges
-    feature_ranges = {
+    session_data['feature_ranges'] = {
         str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
     }
-    session_data['feature_ranges'] = feature_ranges
+
+    # --- NEW: Save hard constraints ---
+    session_data['hard_constraints'] = {
+        'max_height': max_height,
+        'min_distance': min_distance
+    }
     
-    print(f"[INFO] User selected features: {selected_indices}")
-    print(f"[INFO] User-defined ranges: {feature_ranges}")
+    print(f"[INFO] User defined hard constraints: {session_data['hard_constraints']}")
     
     return session_data

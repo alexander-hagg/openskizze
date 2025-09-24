@@ -87,14 +87,14 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
 
     selected_features = session_data.get('selected_features', list(range(8)))
     user_feature_ranges = session_data.get('feature_ranges', {})
-
+    hard_constraints = session_data.get('hard_constraints', {})
 
     def progress_callback(progress, text, archive=None):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
         if archive and not archive.empty:
             # Save a snapshot of the archive for the live plot
             live_update_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl")
-            df = archive.as_pandas()
+            df = archive.data(return_type='pandas')
             df.to_pickle(live_update_path)
 
     try:
@@ -106,6 +106,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
             session_data['wind_direction'],
             selected_features,
             user_feature_ranges,
+            hard_constraints,
             progress_callback=progress_callback
         )
         
@@ -124,12 +125,11 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
             
             full_list_of_elites = []
             for i in range(len(objectives)):
-                # 3. For each elite solution, regenerate its full heightmap. This is fast
-                #    and memory-efficient as it's done only for the final best solutions.
                 genome = solutions[i]
                 heightmap = encoding_obj.express(env_config['buildable_mask'], genome)
 
                 full_list_of_elites.append({
+                    "id": i,
                     "objective": objectives[i],
                     "measures": measures[i].tolist(),
                     "grid_indices": grid_indices[i].tolist(),

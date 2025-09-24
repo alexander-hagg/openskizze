@@ -37,23 +37,20 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     for gen in range(1, qd_config['num_generations'] + 1):
         try:
             genomes = scheduler.ask()
-            if gen == 1: print(f"[DEBUG] Gen 1: Asked for {len(genomes)} genomes. Shape of first genome: {genomes[0].shape}")
-
-            results = eval_batch(genomes, encoding_obj, env_config, pool)
-            
+            results = eval_batch(genomes, encoding_obj, env_config, pool)            
             objectives = results[:, 0]
-            features = results[:, 1:len(env_config['labels']) + 1]
-            
-            if gen == 1:
-                print(f"[DEBUG] Gen 1: Results received. Objectives shape: {objectives.shape}, Features shape: {features.shape}")
-
+            features = results[:, 1:len(env_config['labels']) + 1]            
             scheduler.tell(objectives, features)
             
             if gen % qd_config['output_inv_frequency'] == 0:
                 stats = archive.stats
                 print(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
-            
-            if progress_callback: progress_callback(100*gen/qd_config["num_generations"], f'Es wird {qd_config["num_generations"]} Generationen optimiert.')
+                if progress_callback:
+                    # Pass the archive object itself for live updates
+                    progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', archive)
+
+            elif progress_callback and qd_config['output_inv_frequency'] > qd_config['num_generations']:
+                progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', None)
         
         except Exception as e:
             print(f"!!!!!! ERROR during optimization loop at generation {gen} !!!!!!")

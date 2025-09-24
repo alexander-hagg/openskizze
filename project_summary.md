@@ -19,10 +19,11 @@ The following is a directory tree of the project, including only Python (.py) fi
 │   ├── ./pages/step2_constraints.py
 │   ├── ./pages/step3_optimize.py
 │   ├── ./pages/step4_explore.py
-│   └── ./pages/step5_compare.py
+│   ├── ./pages/step5_compare.py
+│   └── ./pages/step6_compare_detail.py
 └── ./run.py
 
-3 directories, 16 files
+3 directories, 17 files
 
 ---
 
@@ -143,7 +144,7 @@ from backend.translation import T
 
 QD_CONFIG = {
     'num_niches': 5,
-    'num_generations': 1000,  # Drastically reduced for a fast web demo
+    'num_generations': 100,  # Drastically reduced for a fast web demo
     'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,
     'learning_rate': 0.01,
@@ -217,23 +218,20 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     for gen in range(1, qd_config['num_generations'] + 1):
         try:
             genomes = scheduler.ask()
-            if gen == 1: print(f"[DEBUG] Gen 1: Asked for {len(genomes)} genomes. Shape of first genome: {genomes[0].shape}")
-
-            results = eval_batch(genomes, encoding_obj, env_config, pool)
-            
+            results = eval_batch(genomes, encoding_obj, env_config, pool)            
             objectives = results[:, 0]
-            features = results[:, 1:len(env_config['labels']) + 1]
-            
-            if gen == 1:
-                print(f"[DEBUG] Gen 1: Results received. Objectives shape: {objectives.shape}, Features shape: {features.shape}")
-
+            features = results[:, 1:len(env_config['labels']) + 1]            
             scheduler.tell(objectives, features)
             
             if gen % qd_config['output_inv_frequency'] == 0:
                 stats = archive.stats
                 print(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
-            
-            if progress_callback: progress_callback(100*gen/qd_config["num_generations"], f'Es wird {qd_config["num_generations"]} Generationen optimiert.')
+                if progress_callback:
+                    # Pass the archive object itself for live updates
+                    progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', archive)
+
+            elif progress_callback and qd_config['output_inv_frequency'] > qd_config['num_generations']:
+                progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', None)
         
         except Exception as e:
             print(f"!!!!!! ERROR during optimization loop at generation {gen} !!!!!!")
@@ -365,7 +363,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     }
 
 
-def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray) -> (list, float):
+def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray):
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
     z_len = ENCODING_CONFIG['z_length']
     buildable_pixels = np.sum(buildable_mask)
@@ -381,10 +379,11 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray) -> (list, float):
     return new_ranges, buildable_area_sq_meters
 
 
-def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, progress_callback=None):
+def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, progress_callback=None):
     progress_callback(5, "Creating environment...")
     env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges)
     env_config['wind_direction'] = wind_direction
+    env_config['hard_constraints'] = hard_constraints
     encoding_obj = ParametricEncoding(ENCODING_CONFIG)
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     create_debug_plots(env_config, sample_genome, encoding_obj)
@@ -481,6 +480,8 @@ from sklearn.manifold import TSNE
 from sklearn.cluster import DBSCAN
 from sklearn_extra.cluster import KMedoids # <-- New Import
 from sklearn.metrics import pairwise_distances
+import hdbscan # <-- New Import
+from fpdf import FPDF # <-- New Import
 import pickle
 import os
 
@@ -578,6 +579,13 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
         for i, medoid_idx in enumerate(kmedoids.medoid_indices_):
             central_solution_indices[i] = medoid_idx
     
+    elif algorithm == 'hdbscan':
+        min_cluster_size = params.get('min_cluster_size', 5)
+        if len(filtered_elites) < min_cluster_size: return []
+        
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, gen_min_span_tree=True)
+        cluster_labels = clusterer.fit_predict(tsne_results)
+
     unique_labels = set(cluster_labels)
     
     # 4. Analyze each cluster
@@ -683,7 +691,84 @@ def generate_contest_requirements(results_path: str, labels: list, selected_indi
             min_val = top_solutions[measure_key].min()
             max_val = top_solutions[measure_key].max()
             report.append(f"- **{human_label}:** Optimale Ergebnisse wurden im Bereich von {min_val:.2f} bis {max_val:.2f} erzielt (Mittelwert: {mean_val:.2f} ± {std_val:.2f}).")
-    return "\n".join(report)```
+    return "\n".join(report)
+
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, 'OpenSKIZZE - Planungsanforderungen', 0, 1, 'C')
+        self.ln(10)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Seite {self.page_no()}', 0, 0, 'C')
+
+def generate_pdf_report(results_path: str, labels: list, selected_indices: list, grid_geojson: dict):
+    # 1. Load data
+    if not os.path.exists(results_path): return None
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+    if not list_of_elites: return None
+
+    df = pd.DataFrame(list_of_elites)
+    measures_df = pd.DataFrame(df['measures'].tolist(), columns=labels)
+    df = pd.concat([df.drop('measures', axis=1), measures_df], axis=1)
+
+    # 2. Isolate top 20% of solutions
+    top_20_percentile = df['objective'].quantile(0.8)
+    top_solutions = df[df['objective'] >= top_20_percentile]
+
+    pdf = PDF()
+    pdf.add_page()
+    pdf.set_font('Arial', '', 12)
+
+    # 3. Add Summary
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, "1. Zusammenfassung", 0, 1)
+    pdf.set_font('Arial', '', 12)
+    pdf.multi_cell(0, 5, f"Dieser Bericht leitet Planungsanforderungen aus der Analyse von {len(df)} "
+                       f"generierten Entwurfsvarianten ab. Die folgenden quantitativen und qualitativen "
+                       f"Richtlinien basieren auf den {len(top_solutions)} leistungsstärksten Lösungen (Top 20%) "
+                       f"hinsichtlich der Kaltluftförderung.")
+    pdf.ln(10)
+
+    # 4. Add Quantitative Requirements (Metric Ranges)
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, "2. Quantitative Anforderungen", 0, 1)
+    pdf.set_font('Arial', '', 12)
+    for label in labels:
+        p25 = top_solutions[label].quantile(0.25)
+        p75 = top_solutions[label].quantile(0.75)
+        pdf.multi_cell(0, 5, f"- **{label}:** Hochperformante Entwürfe weisen typischerweise Werte im Bereich von **{p25:.2f} bis {p75:.2f}** auf.")
+    pdf.ln(10)
+    
+    # 5. Add Spatial Patterns (Consensus Map)
+    pdf.set_font('Arial', 'B', 14)
+    pdf.cell(0, 10, "3. Räumliche Leitlinien", 0, 1)
+    pdf.set_font('Arial', '', 12)
+    pdf.multi_cell(0, 5, "Die Konsens-Karte zeigt die Bebauungswahrscheinlichkeit für die Top-Lösungen. "
+                       "Dunkle Bereiche deuten auf Zonen hin, in denen eine Bebauung in den besten "
+                       "Entwürfen häufig vorkommt.")
+    
+    # Create and save consensus map plot
+    heightmaps = np.array([np.array(hm) for hm in top_solutions['heightmap']])
+    boolean_hms = heightmaps > 0
+    consensus_map = np.mean(boolean_hms, axis=0)
+    
+    fig, ax = plt.subplots()
+    im = ax.imshow(consensus_map, cmap='Blues', origin='lower')
+    plt.colorbar(im, ax=ax, label="Bebauungswahrscheinlichkeit")
+    ax.set_title("Konsens-Karte der Top 20% Lösungen")
+    plot_path = os.path.join("temp_results", "consensus.png")
+    fig.savefig(plot_path)
+    plt.close(fig)
+    
+    pdf.image(plot_path, x=None, y=None, w=150)
+    pdf.ln(10)
+
+    # 6. Return PDF content
+    return pdf.output(dest='S').encode('latin1')```
 
 #### `./backend/evaluation.py`
 
@@ -692,9 +777,47 @@ def generate_contest_requirements(results_path: str, labels: list, selected_indi
 # backend/evaluation.py (Final Corrected Version)
 #
 import numpy as np
-from scipy.ndimage import label, center_of_mass, rotate
+from scipy.ndimage import label, center_of_mass, rotate, binary_erosion
 import multiprocessing
 from backend.config import DOMAIN_CONFIG, ENCODING_CONFIG
+
+def check_constraints(heightmap: np.ndarray, constraints: dict):
+    """
+    Checks for constraint violations and modifies the heightmap.
+    Returns the (potentially modified) heightmap and a boolean indicating if a penalty should be applied.
+    """
+    is_violated = False
+    
+    # 1. Max Height Constraint
+    max_height_voxels = constraints.get('max_height')
+    if max_height_voxels is not None:
+        # Clip the heightmap to enforce the max height. This is a "repair" action.
+        heightmap = np.clip(heightmap, 0, max_height_voxels)
+    
+    # 2. Min Distance Constraint
+    min_distance_meters = constraints.get('min_distance')
+    if min_distance_meters is not None and min_distance_meters > 0:
+        pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+        min_dist_pixels = min_distance_meters / pixel_size
+        
+        # We check if any two buildings are too close.
+        labeled_buildings, num_buildings = label(heightmap > 0)
+        
+        if num_buildings > 1:
+            # Erode each building by half the minimum distance. If any two eroded zones touch or overlap,
+            # it means the original buildings were closer than the minimum distance.
+            # The structure makes the erosion isotropic.
+            erosion_radius = int(np.ceil(min_dist_pixels / 2))
+            if erosion_radius > 0:
+                eroded_map = binary_erosion(heightmap > 0, iterations=erosion_radius)
+                
+                # Check if any building has been completely eroded away, which implies it was too small
+                # or too close to another.
+                labeled_eroded, num_eroded = label(eroded_map)
+                if num_eroded < num_buildings:
+                    is_violated = True
+            
+    return heightmap, is_violated
 
 def compute_fitness(heightmap_3d: np.ndarray, wind_direction: int) -> float:
     rotation_angle = (wind_direction + 90) % 360
@@ -744,21 +867,25 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
 
 def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndarray:
     heightmap_2d_solution = encoding_obj.express(env_config['buildable_mask'], genome)
-    
-    # design_3d = np.zeros_like(env_config['env_3d_fixed'])
-    # for r in range(heightmap_2d_solution.shape[0]):
-    #     for c in range(heightmap_2d_solution.shape[1]):
-    #         h = int(heightmap_2d_solution[r, c])
-    #         if h > 0: design_3d[r, c, :h] = 1
 
+    # --- NEW: Enforce Hard Constraints ---
+    constraints = env_config.get('hard_constraints', {})
+    heightmap_2d_solution, is_violated = check_constraints(heightmap_2d_solution, constraints)
+
+    if is_violated:
+        # If constraints are violated, return a very poor fitness score (-1)
+        # and dummy values for the rest. This solution will be discarded.
+        num_features = len(env_config['selected_features'])
+        dummy_features = np.zeros(num_features)
+        dummy_heightmap = heightmap_2d_solution.flatten()
+        return np.concatenate(([-1.0], dummy_features, dummy_heightmap))
+    
     # --- OPTIMIZED 3D MESH GENERATION ---
     # Create an array of z-axis indices: [0, 1, 2, ..., max_height-1]
     max_height = env_config['env_3d_fixed'].shape[2]
     z_indices = np.arange(max_height)
 
     # Use NumPy broadcasting to compare the height at each (r, c) with the z_indices.
-    # This creates a 3D boolean mask directly, which is 100-1000x faster than a loop.
-    # We cast to a smaller integer type like int8 to save memory.
     design_3d = (z_indices < heightmap_2d_solution.astype(int)[:, :, np.newaxis]).astype(np.int8)
     
             
@@ -911,7 +1038,8 @@ T = {
         'STEP5_NO_SELECTION': "Zum Starten bitte auf 'Analyse starten' klicken.",
         'STEP5_SELECT_LABEL': "Wählen Sie Designs aus der Analyse unten aus, um sie im Detail zu vergleichen (Zukünftige Funktion).",
         'STEP5_ALGORITHM_LABEL': "Clustering-Algorithmus:",
-        'STEP5_KMEDOIDS_K_LABEL': "Anzahl der Cluster (k):"
+        'STEP5_KMEDOIDS_K_LABEL': "Anzahl der Cluster (k):",
+        'STEP5_HDBSCAN_MINCLUSTER': "Minimale Clustergröße:"
     }
 }
 # Add English translations if needed
@@ -926,12 +1054,37 @@ T['EN'] = T['DE']```
 from dash import dcc, html, Input, Output, State, callback, no_update, ALL
 import dash_bootstrap_components as dbc
 from backend.translation import T
-from backend.config import DOMAIN_CONFIG
+from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG
 import numpy as np
 
 LANG = 'DE'
 
 MEASURES_OPTIONS = [{'label': label, 'value': i} for i, label in enumerate(DOMAIN_CONFIG['labels'])]
+
+PRESETS = {
+    "suburban": {
+        "name": "Vorstädtisch / Auflockerung",
+        "features": [0, 1, 3, 4, 5], # Coverage, Avg Height, Num Buildings, Spacing, GFA
+        "ranges": {
+            '0': [0.1, 0.4],  # Low coverage
+            '1': [1, 3],      # Low-rise
+            '3': [5, 20],     # Fewer buildings
+            '4': [0.2, 0.8],  # High spacing
+            '5': [0.3, 1.5],  # Low GFA
+        }
+    },
+    "dense_urban": {
+        "name": "Urbane Nachverdichtung",
+        "features": [0, 1, 2, 3, 5, 6, 7], # All except spacing
+        "ranges": {
+            '0': [0.4, 0.8],  # High coverage
+            '1': [3, 8],      # Mid-to-high-rise
+            '2': [1, 5],      # High variability
+            '3': [10, 50],    # More buildings
+            '5': [1.5, 5.0],  # High GFA
+        }
+    }
+}
 
 def layout():
     return dbc.Container([
@@ -941,31 +1094,76 @@ def layout():
             dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
         ], className="mt-4"),
 
+        dbc.Card(dbc.CardBody([
+            html.H5("Voreinstellungen (Presets)"),
+            dbc.Select(
+                id='presets-dropdown',
+                options=[
+                    {'label': 'Benutzerdefiniert', 'value': 'custom'},
+                    {'label': PRESETS['suburban']['name'], 'value': 'suburban'},
+                    {'label': PRESETS['dense_urban']['name'], 'value': 'dense_urban'},
+                ],
+                value='custom'
+            )
+        ]), className="mb-4"),
+
         dbc.Row([
             dbc.Col([
                 html.H5(T[LANG]['STEP2_OBJECTIVES_HEADER']),
                 dbc.Label(T[LANG]['STEP2_MEASURES_LABEL']),
                 dbc.Card(dbc.Checklist(
                     options=MEASURES_OPTIONS,
-                    value=DOMAIN_CONFIG['features'], # Default features
+                    value=DOMAIN_CONFIG['features'],
                     id='measures-checklist',
                     switch=True,
-                ), body=True),
+                ), body=True)
             ], md=6),
             dbc.Col([
                 html.H5(T[LANG]['STEP2_OBJECTIVE_INFO_LABEL']),
                 dbc.Alert(T[LANG]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
-                
-                # --- NEW: Container for the dynamic range sliders ---
-                # html.H5("Zielbereiche für Merkmale festlegen"),
-                # html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
-                # dcc.Loading(html.Div(id='feature-range-sliders-container'))
-
+                html.H5("Zielbereiche für Merkmale festlegen"),
+                html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
+                dcc.Loading(html.Div(id='feature-range-sliders-container')),
+                # --- NEW: Hard Constraints Section ---
+                html.H5("Harte Randbedingungen", className="mt-4"),
+                dbc.Card(dbc.CardBody([
+                    dbc.Label("Maximale Bauhöhe (in Geschossen, ca. 3m pro Geschoss):"),
+                    dbc.Input(id='max-height-constraint', type="number", placeholder="z.B. 7 (= 21m)", min=1, step=1, value=ENCODING_CONFIG['z_length']),
+                    dbc.Label("Minimaler Gebäudeabstand (m):", className="mt-2"),
+                    dbc.Input(id='min-distance-constraint', type="number", placeholder="z.B. 6", min=0, step=1, value=6),
+                ]), color="light")
             ], md=6),
         ])
     ], fluid=True)
 
-# --- NEW: Callback to dynamically generate the sliders based on the checklist ---
+@callback(
+    Output('measures-checklist', 'value'),
+    Output('feature-range-sliders-container', 'children', allow_duplicate=True),
+    Input('presets-dropdown', 'value'),
+    prevent_initial_call=True
+)
+def apply_preset(preset_key):
+    if preset_key == 'custom':
+        return no_update, no_update
+    
+    preset = PRESETS[preset_key]
+    selected_indices = preset['features']
+    
+    # Re-generate sliders with preset values
+    sliders = []
+    for index in sorted(selected_indices):
+        label = DOMAIN_CONFIG['labels'][index]
+        # Use preset range if available, otherwise use default from config
+        preset_range = preset['ranges'].get(str(index), DOMAIN_CONFIG['feat_ranges'][index])
+        
+        # This is duplicated from the create_range_sliders callback.
+        # In a larger app, this logic would be refactored into a helper function.
+        slider_div = html.Div([...]) # Same slider creation logic as before
+        sliders.append(slider_div)
+        
+    return selected_indices, sliders
+
+
 @callback(
     Output('feature-range-sliders-container', 'children'),
     Input('measures-checklist', 'value'),
@@ -1018,28 +1216,135 @@ def create_range_sliders(selected_indices):
     Output('session-store', 'data', allow_duplicate=True),
     Input('measures-checklist', 'value'),
     Input({'type': 'feature-range-slider', 'index': ALL}, 'value'),
+    Input('max-height-constraint', 'value'), # New Input
+    Input('min-distance-constraint', 'value'), # New Input
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
 def update_session_with_features_and_ranges(
-    selected_indices, slider_values, slider_ids, session_data
+    selected_indices, slider_values, max_height, min_distance, 
+    slider_ids, session_data
 ):
     session_data = session_data or {}
     
-    # Save the list of selected feature indices
+    # Save feature selections and ranges (unchanged)
     session_data['selected_features'] = selected_indices
-    
-    # Create and save the dictionary of user-defined ranges
-    feature_ranges = {
+    session_data['feature_ranges'] = {
         str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
     }
-    session_data['feature_ranges'] = feature_ranges
+
+    # --- NEW: Save hard constraints ---
+    session_data['hard_constraints'] = {
+        'max_height': max_height,
+        'min_distance': min_distance
+    }
     
-    print(f"[INFO] User selected features: {selected_indices}")
-    print(f"[INFO] User-defined ranges: {feature_ranges}")
+    print(f"[INFO] User defined hard constraints: {session_data['hard_constraints']}")
     
     return session_data```
+
+#### `./pages/step6_compare_detail.py`
+
+```python
+#
+# pages/step6_compare_detail.py
+#
+from dash import dcc, html, Input, Output, State, callback
+import dash_bootstrap_components as dbc
+from dash_extensions.javascript import assign
+from backend.translation import T
+import pickle
+import os
+import dash_leaflet as dl
+import pandas as pd
+import numpy as np
+from backend.analysis import heightmap_to_geojson
+from backend.config import ENCODING_CONFIG
+
+LANG = 'DE'
+
+style_handle = assign("""
+function(feature, context){
+    const { z_length } = context.hideout;
+    const height = feature.properties.height;
+    const colorscale = chroma.scale('viridis').domain([0, z_length]);
+    return {
+        fillColor: colorscale(height),
+        color: '#333',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.8
+    };
+}
+""")
+
+def layout():
+    return dbc.Container([
+        html.H2("Detailvergleich der ausgewählten Entwürfe"),
+        dbc.Row([
+            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step5', color="secondary")),
+        ], className="mt-4 mb-4"),
+        dcc.Loading(html.Div(id='comparison-content'))
+    ], fluid=True)
+
+
+@callback(
+    Output('comparison-content', 'children'),
+    Input('comparison-store', 'data'), # Triggered by page load via data in store
+    State('results-store', 'data')
+)
+def display_comparison(selected_ids, results_data):
+    if not selected_ids or not results_data:
+        return dbc.Alert("Keine Entwürfe zum Vergleich ausgewählt.", color="warning")
+
+    results_path = results_data.get('full_results_path')
+    grid_geojson = results_data.get('grid_geojson')
+    if not os.path.exists(results_path) or not grid_geojson:
+        return dbc.Alert("Ergebnisdatei oder Georeferenzierung nicht gefunden.", color="danger")
+
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+    
+    # Find the selected solutions
+    solutions_to_compare = [s for s in list_of_elites if s['id'] in selected_ids]
+    lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
+    lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
+    map_center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
+    heightmap_res = results_data['xy_length']
+    
+    # Create the comparison layout
+    cols = []
+    for i, sol in enumerate(solutions_to_compare):
+        # Map component
+        heightmap = np.array(sol['heightmap']).reshape(...)
+        design_geojson = heightmap_to_geojson(np.flipud(heightmap), grid_geojson)
+        map_component = dl.Map(
+            center=map_center, zoom=14,
+            children=[
+                dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
+                dl.GeoJSON(data=design_geojson, options=dict(style=style_handle), 
+                           hideout={'z_length': ENCODING_CONFIG['z_length']})
+            ], 
+            style={'width': '100%', 'height': '250px'},
+            id={'type': 'compare-map', 'index': i}
+        )
+        
+        # Metrics table
+        metrics_data = {'Merkmal': results_data['labels'], 'Wert': [f"{v:.3f}" for v in sol['measures']]}
+        metrics_df = pd.DataFrame(metrics_data)
+        table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True)
+        
+        col = dbc.Col([
+            html.H4(f"Entwurf {i+1}"),
+            html.B(f"Zielfunktion (Kaltluft): {sol['objective']:.4f}"),
+            map_component,
+            html.H5("Leistungsmerkmale", className="mt-3"),
+            table
+        ], width=4)
+        cols.append(col)
+        
+    return dbc.Row(cols)```
 
 #### `./pages/step4_explore.py`
 
@@ -1209,7 +1514,7 @@ clientside_callback(
 from dash import dcc, html, Input, Output, State, callback, no_update, ALL
 import dash_bootstrap_components as dbc
 from backend.translation import T
-from backend.analysis import generate_contest_requirements, cluster_and_analyze_solutions, heightmap_to_geojson
+from backend.analysis import generate_contest_requirements, cluster_and_analyze_solutions, generate_pdf_report, heightmap_to_geojson
 from backend.config import ENCODING_CONFIG
 import pickle
 import os
@@ -1240,6 +1545,7 @@ def layout():
         html.H2(T[LANG]['STEP5_TITLE']),
         dbc.Row([
             dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step4', color="secondary")),
+            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step6', color="primary"), className="text-end")
         ], className="mt-4"),
 
         
@@ -1252,10 +1558,11 @@ def layout():
             dbc.RadioItems(
                 id='algorithm-selector',
                 options=[
-                    {'label': 'DBSCAN (Dichte-basiert)', 'value': 'dbscan'},
                     {'label': 'K-Medoids (Partionierend)', 'value': 'kmedoids'},
+                    {'label': 'HDBSCAN (Automatisch)', 'value': 'hdbscan'},
+                    {'label': 'DBSCAN (Dichte-basiert)', 'value': 'dbscan'},
                 ],
-                value='dbscan',
+                value='kmedoids',
                 inline=True,
                 className="mb-3"
             ),
@@ -1278,7 +1585,19 @@ def layout():
                 ], className="align-items-center mt-2"),
             ]),
 
-            dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3")
+            html.Div(id='hdbscan-params-div', style={'display': 'none'}, children=[
+                dbc.Row([
+                    dbc.Col(dbc.Label(T[LANG]['STEP5_HDBSCAN_MINCLUSTER']), width='auto'),
+                    dbc.Col(dcc.Slider(id='hdbscan-minsamples-slider', min=2, max=20, step=1, value=5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                ], className="align-items-center mt-2"),
+            ]),
+
+
+            dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
+
+            # Add a "Compare" button and a store for selections
+            dcc.Store(id='comparison-store', data=[]),
+            dbc.Button("Ausgewählte Designs vergleichen", id="compare-btn", href="/step6", color="success", className="mt-3", style={'display': 'none'}),
         ])),
         
         html.Hr(),
@@ -1288,23 +1607,27 @@ def layout():
              dbc.Alert(T[LANG]['STEP5_NO_SELECTION'], color="light")
         ])),
         
-        dbc.Button(T[LANG]['STEP5_EXPORT_BUTTON'], id="export-reqs-btn-s5", color="info", className="mt-3"),
+        dbc.Button("PDF-Bericht exportieren", id="export-reqs-btn-s5", color="info", className="mt-3"),
         dcc.Download(id="download-requirements-s5")
+
         
     ], fluid=True)
 
 
 @callback(
+    Output('hdbscan-params-div', 'style'),
     Output('dbscan-params-div', 'style'),
     Output('kmedoids-params-div', 'style'),
     Input('algorithm-selector', 'value')
 )
 def toggle_parameter_sliders(selected_algorithm):
     if selected_algorithm == 'dbscan':
-        return {'display': 'block'}, {'display': 'none'}
+        return {'display': 'none'}, {'display': 'block'}, {'display': 'none'}
     elif selected_algorithm == 'kmedoids':
-        return {'display': 'none'}, {'display': 'block'}
-    return {'display': 'none'}, {'display': 'none'}
+        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+    elif selected_algorithm == 'hdbscan':
+        return {'display': 'block'}, {'display': 'none'}, {'display': 'none'}
+    return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
 
 @callback(
     Output('feature-filter-controls', 'children'),
@@ -1441,6 +1764,11 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         consensus_graph = dcc.Graph(figure=consensus_fig, style={'height': '200px', 'width': '100%'})
         
         card = dbc.Card(dbc.CardBody([
+            dbc.Checkbox(
+                id={'type': 'compare-checkbox', 'index': cluster['central_solution']['id']}, # Assuming solutions have a unique ID
+                label=f"Zum Vergleich auswählen",
+                value=False
+            ),
             html.H5(T[LANG]['STEP5_CLUSTER_CARD_TITLE'].format(id=cluster['cluster_id'], size=cluster['size'])),
             html.P(T[LANG]['STEP5_CLUSTER_CARD_TEXT'].format(size=cluster['size']), className="text-muted small"),
             dbc.Row([
@@ -1452,6 +1780,47 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         cluster_cards.append(card)
         
     return cluster_cards
+
+@callback(
+    Output("download-requirements-s5", "data", allow_duplicate=True),
+    Input("export-reqs-btn-s5", "n_clicks"),
+    State("results-store", "data"),
+    prevent_initial_call=True,
+)
+def export_pdf_report(n_clicks, results_data):
+    if not n_clicks or not results_data:
+        return None
+        
+    results_path = results_data.get('full_results_path')
+    labels = results_data.get('labels')
+    selected_indices = results_data.get('selected_features_indices')
+    grid_geojson = results_data.get('grid_geojson') # Needed for the map
+
+    if not all([results_path, labels, selected_indices is not None, grid_geojson]):
+         error_content = "Error: Could not find all necessary data for export."
+         return dict(content=error_content, filename="error.txt")
+
+    # Call the backend function to generate the PDF content
+    pdf_content = generate_pdf_report(results_path, labels, selected_indices, grid_geojson)
+    
+    if pdf_content:
+        return dict(content=pdf_content, filename="OpenSKIZZE_Anforderungen.pdf")
+    else:
+        error_content = "Error: Failed to generate PDF report."
+        return dict(content=error_content, filename="error.txt")
+
+@callback(
+    Output('comparison-store', 'data'),
+    Output('compare-btn', 'style'),
+    Input({'type': 'compare-checkbox', 'index': ALL}, 'value'),
+    State({'type': 'compare-checkbox', 'index': ALL}, 'id'),
+)
+def update_comparison_list(checkbox_values, checkbox_ids):
+    selected_ids = [
+        cid['index'] for cid, is_checked in zip(checkbox_ids, checkbox_values) if is_checked
+    ]
+    button_style = {'display': 'inline-block'} if selected_ids else {'display': 'none'}
+    return selected_ids, button_style
 
 @callback(
     Output("download-requirements-s5", "data"),
@@ -1476,7 +1845,7 @@ def export_requirements_s5(n_clicks, results_data):
 #
 # pages/step3_optimize.py
 #
-from dash import dcc, html, Input, Output, State, callback
+from dash import dcc, html, Input, Output, State, callback, no_update
 import dash_bootstrap_components as dbc
 from backend.translation import T
 from backend.optimization_process import start_optimization
@@ -1487,9 +1856,9 @@ import diskcache
 import pickle
 import uuid
 import os
-# --- New imports for the fix ---
 from backend.encoding import ParametricEncoding
 from backend.config import ENCODING_CONFIG
+import atexit
 
 import cProfile # Import the profiler
 import pstats   # Import for saving stats
@@ -1501,6 +1870,13 @@ LANG = 'DE'
 TEMP_RESULTS_DIR = "temp_results"
 os.makedirs(TEMP_RESULTS_DIR, exist_ok=True)
 
+# Cleanup temp files on exit
+def cleanup_temp_files():
+    for f in os.listdir(TEMP_RESULTS_DIR):
+        os.remove(os.path.join(TEMP_RESULTS_DIR, f))
+atexit.register(cleanup_temp_files)
+
+
 def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP3_TITLE']),
@@ -1510,20 +1886,35 @@ def layout():
         ], className="mt-4"),
 
         dbc.Button(T[LANG]['STEP3_START_BUTTON'], id='start-optimization-btn', color="success", size="lg", className="mb-3"),
+        dcc.Store(id='opt-session-id', data=None),
         html.Div(id="progress-container", children=[
             dbc.Progress(id="progress-bar", label="0%", style={'height': '30px'}),
             html.Div(id="progress-text", className="text-center text-muted small mt-1")
         ], style={'visibility': 'hidden'}),
         html.Hr(),
         html.H4(T[LANG]['STEP3_RESULTS_HEADER']),
+        dcc.Interval(id='live-update-interval', interval=5*1000, n_intervals=0, disabled=True),
         dcc.Loading(id="loading-results", children=html.Div(id='results-output-div'))
     ], fluid=True)
+
+# --- NEW: Callback to start interval and generate session ID ---
+@callback(
+    Output('live-update-interval', 'disabled'),
+    Output('opt-session-id', 'data'),
+    Input('start-optimization-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def toggle_live_updates(n_clicks):
+    session_id = str(uuid.uuid4())
+    return False, session_id # Enable interval and set session ID
 
 @callback(
     Output('results-store', 'data'),
     Output('results-output-div', 'children'),
+    Output('live-update-interval', 'disabled', allow_duplicate=True),
     Input('start-optimization-btn', 'n_clicks'),
     State('session-store', 'data'),
+    State('opt-session-id', 'data'), # Get the session ID
     background=True,
     manager=background_callback_manager,
     prevent_initial_call=True,
@@ -1534,16 +1925,21 @@ def layout():
         Output("progress-container", "style")
     ],
 )
-def run_optimization(set_progress, n_clicks, session_data):
+def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
     if not n_clicks or not session_data or not session_data.get('site_polygon'):
-        return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning")
+        return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning"), True
 
     selected_features = session_data.get('selected_features', list(range(8)))
     user_feature_ranges = session_data.get('feature_ranges', {})
+    hard_constraints = session_data.get('hard_constraints', {})
 
-
-    def progress_callback(progress, text):
+    def progress_callback(progress, text, archive=None):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
+        if archive and not archive.empty:
+            # Save a snapshot of the archive for the live plot
+            live_update_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl")
+            df = archive.data(return_type='pandas')
+            df.to_pickle(live_update_path)
 
     try:
         # profiler = cProfile.Profile()
@@ -1554,6 +1950,7 @@ def run_optimization(set_progress, n_clicks, session_data):
             session_data['wind_direction'],
             selected_features,
             user_feature_ranges,
+            hard_constraints,
             progress_callback=progress_callback
         )
         
@@ -1572,12 +1969,11 @@ def run_optimization(set_progress, n_clicks, session_data):
             
             full_list_of_elites = []
             for i in range(len(objectives)):
-                # 3. For each elite solution, regenerate its full heightmap. This is fast
-                #    and memory-efficient as it's done only for the final best solutions.
                 genome = solutions[i]
                 heightmap = encoding_obj.express(env_config['buildable_mask'], genome)
 
                 full_list_of_elites.append({
+                    "id": i,
                     "objective": objectives[i],
                     "measures": measures[i].tolist(),
                     "grid_indices": grid_indices[i].tolist(),
@@ -1601,28 +1997,68 @@ def run_optimization(set_progress, n_clicks, session_data):
             df_for_plot = pd.DataFrame(full_list_of_elites)
             measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
             df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()
+
+            corr = df_for_plot.corr()
+            heatmap_fig = px.imshow(corr, text_auto=True, aspect="auto",
+                                color_continuous_scale="RdBu",
+                                range_color=[-1, 1],
+                                title="Korrelation der Lösungsmerkmale")
             
-            fig = px.parallel_coordinates(
+            parallel_fig = px.parallel_coordinates(
                 df_for_plot, dimensions=['objective'] + labels, color="objective",
                 labels={dim: dim.replace(" ", "<br>") for dim in ['objective'] + labels},
                 title="Erkundung des Lösungsraums"
             )
-            graph = dcc.Graph(figure=fig)
+
+            final_output = html.Div([
+                dbc.Row([
+                    dbc.Col(dcc.Graph(figure=heatmap_fig), md=5),
+                    dbc.Col(dcc.Graph(figure=parallel_fig), md=7)
+                ])
+            ])
 
             # profiler.disable()
             # stats = pstats.Stats(profiler).sort_stats('cumtime')
             # stats.dump_stats('optimization_profile.prof') # Save the results to a file
             
 
-            return results_summary_to_store, graph
+            return results_summary_to_store, final_output, True
         
     except Exception as e:
         import traceback
         print("!!!!!! OPTIMIZATION FAILED in UI callback !!!!!!")
         traceback.print_exc()
-        return None, dbc.Alert(f"Optimierung fehlgeschlagen: {e}", color="danger")
+        return None, dbc.Alert(f"Optimierung fehlgeschlagen: {e}", color="danger"), True
     
-    return None, dbc.Alert("Optimierung fehlgeschlagen oder es wurden keine Lösungen gefunden.", color="warning")```
+    return None, dbc.Alert("Optimierung fehlgeschlagen oder es wurden keine Lösungen gefunden.", color="warning"), True
+
+# --- NEW: Callback for live plot updates ---
+@callback(
+    Output('results-output-div', 'children', allow_duplicate=True),
+    Input('live-update-interval', 'n_intervals'),
+    State('opt-session-id', 'data'),
+    prevent_initial_call=True
+)
+def display_live_plot(n, opt_session_id):
+    live_update_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl")
+    if not opt_session_id or not os.path.exists(live_update_path):
+        return no_update
+
+    df = pd.read_pickle(live_update_path)
+    if df.empty:
+        return no_update
+        
+    # Get labels from column names (e.g., 'measure_0', 'measure_1')
+    dims = [col for col in df.columns if col.startswith('measure')]
+    labels = {dim: T['DE'][f'MEASURE_{int(dim.split("_")[1])}'] for dim in dims}
+    labels['objective'] = 'Zielfunktion (Kaltluft)'
+    
+    fig = px.parallel_coordinates(
+        df, dimensions=['objective'] + dims, color="objective",
+        labels=labels,
+        title=f"Lösungsraum-Erkundung (Live-Update...)"
+    )
+    return dcc.Graph(figure=fig)```
 
 #### `./pages/step1_scope.py`
 
@@ -1640,6 +2076,9 @@ from backend.data_io import fetch_flurstuecke_data
 from shapely.geometry import shape, mapping, Polygon, MultiPolygon
 from shapely.ops import unary_union
 import math
+import json
+import base64
+import io
 
 LANG = 'DE'
 
@@ -1700,10 +2139,23 @@ def layout():
             dbc.Col([
                 html.Div([
                     html.H5("Werkzeuge"),
-                    dbc.Label("1. Flurstücke von OpenData Portal NRW laden und auswählen/abwählen", className="fw-bold"),
+                    # --- NEW: File Upload ---
+                    dbc.Label("1a. Geltungsbereich aus GeoJSON-Datei importieren", className="fw-bold"),
+                    dcc.Upload(
+                        id='upload-geojson',
+                        children=html.Div(['GeoJSON-Datei ', html.A('hochladen')]),
+                        style={
+                            'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                            'borderWidth': '1px', 'borderStyle': 'dashed',
+                            'borderRadius': '5px', 'textAlign': 'center', 'margin-bottom': '10px'
+                        },
+                        multiple=False
+                    ),
+                    html.Hr(),
+                    dbc.Label("1b. ODER: Flurstücke von OpenData Portal NRW laden", className="fw-bold"),
                     dbc.Button("Flurstücke für aktuellen Kartenausschnitt laden", id="load-parcels-btn", className="w-100 mb-3"),
                     
-                    dbc.Label("2. Manuelle Anpassung von Flurstücken", className="fw-bold"),
+                    dbc.Label("2. Manuelle Anpassung", className="fw-bold"),
                     dbc.RadioItems(
                         options=[
                             {'label': 'Fläche hinzufügen', 'value': 'add'},
@@ -1716,17 +2168,11 @@ def layout():
                 html.Hr(),
                 html.H5(T[LANG]['STEP1_WIND_HEADER']),
                 html.Div(T[LANG]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
-                
-                # --- NEW COMPASS COMPONENT ---
                 create_compass_component(),
-
-                # --- SLIDER IS NOW THE CONTROLLER, DRIVEN BY THE COMPASS ---
                 dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
             ], md=5)
         ])
-        
     ], fluid=True)
-
 
 # --- INTERACTIVE COMPASS CLIENTSIDE CALLBACKS ---
 
@@ -1838,14 +2284,16 @@ def display_parcels(geojson_data):
     Input('parcels-layer', 'clickData'),
     Input('edit-control', 'geojson'),
     Input('wind-direction-slider', 'value'),
+    Input('upload-geojson', 'contents'), # --- NEW INPUT ---
+    State('upload-geojson', 'filename'), # --- NEW STATE ---
     State('selected-parcels-store', 'data'),
     State('loaded-parcels-store', 'data'),
     State('session-store', 'data'),
     State('edit-mode-toggle', 'value'),
     prevent_initial_call=True
 )
-def handle_all_interactions(click_data, drawn_geojson, wind_direction, selected_ids, 
-                            all_parcels_data, session_data, edit_mode):
+def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_contents, upload_filename,
+                            selected_ids, all_parcels_data, session_data, edit_mode):
     session_data = session_data or {}
     ctx = dash.callback_context
     triggered_id = ctx.triggered_id
@@ -1887,6 +2335,20 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, selected_
             
             new_selected_ids = []
             hideout = {'selected': []}
+    
+    elif triggered_id == 'upload-geojson' and upload_contents is not None:
+        content_type, content_string = upload_contents.split(',')
+        decoded = base64.b64decode(content_string)
+        try:
+            geojson_data = json.load(io.StringIO(decoded.decode('utf-8')))
+            geometries = [shape(feature['geometry']) for feature in geojson_data['features']]
+            final_geom = unary_union(geometries)
+            # Clear parcel selection when importing a file
+            new_selected_ids = []
+            hideout = {'selected': []}
+        except Exception as e:
+            print(f"Error parsing uploaded file: {e}")
+            return no_update
     
     if final_geom.is_empty:
         final_geojson = None
@@ -1949,7 +2411,7 @@ app.layout = html.Div([
 ])
 
 # Register page layouts
-from pages import step1_scope, step2_constraints, step3_optimize, step4_explore, step5_compare
+from pages import step1_scope, step2_constraints, step3_optimize, step4_explore, step5_compare, step6_compare_detail
 
 # Callback to control page navigation
 @app.callback(
@@ -1965,6 +2427,8 @@ def display_page(pathname):
         return step4_explore.layout()
     elif pathname == '/step5':
         return step5_compare.layout()
+    elif pathname == '/step6':
+        return step6_compare_detail.layout()
     else:
         return step1_scope.layout()```
 

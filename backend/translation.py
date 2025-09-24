@@ -55,7 +55,8 @@ T = {
         'STEP5_NO_SELECTION': "Zum Starten bitte auf 'Analyse starten' klicken.",
         'STEP5_SELECT_LABEL': "Wählen Sie Designs aus der Analyse unten aus, um sie im Detail zu vergleichen (Zukünftige Funktion).",
         'STEP5_ALGORITHM_LABEL': "Clustering-Algorithmus:",
-        'STEP5_KMEDOIDS_K_LABEL': "Anzahl der Cluster (k):"
+        'STEP5_KMEDOIDS_K_LABEL': "Anzahl der Cluster (k):",
+        'STEP5_HDBSCAN_MINCLUSTER': "Minimale Clustergröße:"
     }
 }
 # Add English translations if needed

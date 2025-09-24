@@ -111,7 +111,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     }
 
 
-def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray) -> (list, float):
+def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray):
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
     z_len = ENCODING_CONFIG['z_length']
     buildable_pixels = np.sum(buildable_mask)
@@ -127,10 +127,11 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray) -> (list, float):
     return new_ranges, buildable_area_sq_meters
 
 
-def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, progress_callback=None):
+def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, progress_callback=None):
     progress_callback(5, "Creating environment...")
     env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges)
     env_config['wind_direction'] = wind_direction
+    env_config['hard_constraints'] = hard_constraints
     encoding_obj = ParametricEncoding(ENCODING_CONFIG)
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     create_debug_plots(env_config, sample_genome, encoding_obj)

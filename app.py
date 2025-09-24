@@ -35,7 +35,7 @@ app.layout = html.Div([
 ])
 
 # Register page layouts
-from pages import step1_scope, step2_constraints, step3_optimize, step4_explore, step5_compare
+from pages import step1_scope, step2_constraints, step3_optimize, step4_explore, step5_compare, step6_compare_detail
 
 # Callback to control page navigation
 @app.callback(
@@ -51,5 +51,7 @@ def display_page(pathname):
         return step4_explore.layout()
     elif pathname == '/step5':
         return step5_compare.layout()
+    elif pathname == '/step6':
+        return step6_compare_detail.layout()
     else:
         return step1_scope.layout()
