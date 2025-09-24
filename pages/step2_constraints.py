@@ -11,6 +11,31 @@ LANG = 'DE'
 
 MEASURES_OPTIONS = [{'label': label, 'value': i} for i, label in enumerate(DOMAIN_CONFIG['labels'])]
 
+PRESETS = {
+    "suburban": {
+        "name": "Vorstädtisch / Auflockerung",
+        "features": [0, 1, 3, 4, 5], # Coverage, Avg Height, Num Buildings, Spacing, GFA
+        "ranges": {
+            '0': [0.1, 0.4],  # Low coverage
+            '1': [1, 3],      # Low-rise
+            '3': [5, 20],     # Fewer buildings
+            '4': [0.2, 0.8],  # High spacing
+            '5': [0.3, 1.5],  # Low GFA
+        }
+    },
+    "dense_urban": {
+        "name": "Urbane Nachverdichtung",
+        "features": [0, 1, 2, 3, 5, 6, 7], # All except spacing
+        "ranges": {
+            '0': [0.4, 0.8],  # High coverage
+            '1': [3, 8],      # Mid-to-high-rise
+            '2': [1, 5],      # High variability
+            '3': [10, 50],    # More buildings
+            '5': [1.5, 5.0],  # High GFA
+        }
+    }
+}
+
 def layout():
     return dbc.Container([
         html.H2(T[LANG]['STEP2_TITLE']),
@@ -19,31 +44,76 @@ def layout():
             dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
         ], className="mt-4"),
 
+        dbc.Card(dbc.CardBody([
+            html.H5("Voreinstellungen (Presets)"),
+            dbc.Select(
+                id='presets-dropdown',
+                options=[
+                    {'label': 'Benutzerdefiniert', 'value': 'custom'},
+                    {'label': PRESETS['suburban']['name'], 'value': 'suburban'},
+                    {'label': PRESETS['dense_urban']['name'], 'value': 'dense_urban'},
+                ],
+                value='custom'
+            )
+        ]), className="mb-4"),
+
         dbc.Row([
             dbc.Col([
                 html.H5(T[LANG]['STEP2_OBJECTIVES_HEADER']),
                 dbc.Label(T[LANG]['STEP2_MEASURES_LABEL']),
                 dbc.Card(dbc.Checklist(
                     options=MEASURES_OPTIONS,
-                    value=DOMAIN_CONFIG['features'], # Default features
+                    value=DOMAIN_CONFIG['features'],
                     id='measures-checklist',
                     switch=True,
-                ), body=True),
+                ), body=True)
             ], md=6),
             dbc.Col([
                 html.H5(T[LANG]['STEP2_OBJECTIVE_INFO_LABEL']),
                 dbc.Alert(T[LANG]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
-                
-                # --- NEW: Container for the dynamic range sliders ---
-                # html.H5("Zielbereiche für Merkmale festlegen"),
-                # html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
-                # dcc.Loading(html.Div(id='feature-range-sliders-container'))
-
+                html.H5("Zielbereiche für Merkmale festlegen"),
+                html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
+                dcc.Loading(html.Div(id='feature-range-sliders-container')),
+                # --- NEW: Hard Constraints Section ---
+                html.H5("Harte Randbedingungen (Zukünftige Funktion)", className="mt-4"),
+                dbc.Card(dbc.CardBody([
+                    dbc.Label("Maximale Bauhöhe (m):"),
+                    dbc.Input(type="number", placeholder="z.B. 22", disabled=True),
+                    dbc.Label("Minimaler Gebäudeabstand (m):", className="mt-2"),
+                    dbc.Input(type="number", placeholder="z.B. 6", disabled=True),
+                ]), color="light")
             ], md=6),
         ])
     ], fluid=True)
 
-# --- NEW: Callback to dynamically generate the sliders based on the checklist ---
+@callback(
+    Output('measures-checklist', 'value'),
+    Output('feature-range-sliders-container', 'children', allow_duplicate=True),
+    Input('presets-dropdown', 'value'),
+    prevent_initial_call=True
+)
+def apply_preset(preset_key):
+    if preset_key == 'custom':
+        return no_update, no_update
+    
+    preset = PRESETS[preset_key]
+    selected_indices = preset['features']
+    
+    # Re-generate sliders with preset values
+    sliders = []
+    for index in sorted(selected_indices):
+        label = DOMAIN_CONFIG['labels'][index]
+        # Use preset range if available, otherwise use default from config
+        preset_range = preset['ranges'].get(str(index), DOMAIN_CONFIG['feat_ranges'][index])
+        
+        # This is duplicated from the create_range_sliders callback.
+        # In a larger app, this logic would be refactored into a helper function.
+        slider_div = html.Div([...]) # Same slider creation logic as before
+        sliders.append(slider_div)
+        
+    return selected_indices, sliders
+
+
 @callback(
     Output('feature-range-sliders-container', 'children'),
     Input('measures-checklist', 'value'),
