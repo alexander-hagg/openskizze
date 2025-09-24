@@ -11,6 +11,9 @@ from backend.data_io import fetch_flurstuecke_data
 from shapely.geometry import shape, mapping, Polygon, MultiPolygon
 from shapely.ops import unary_union
 import math
+import json
+import base64
+import io
 
 LANG = 'DE'
 
@@ -71,10 +74,23 @@ def layout():
             dbc.Col([
                 html.Div([
                     html.H5("Werkzeuge"),
-                    dbc.Label("1. Flurstücke von OpenData Portal NRW laden und auswählen/abwählen", className="fw-bold"),
+                    # --- NEW: File Upload ---
+                    dbc.Label("1a. Geltungsbereich aus GeoJSON-Datei importieren", className="fw-bold"),
+                    dcc.Upload(
+                        id='upload-geojson',
+                        children=html.Div(['GeoJSON-Datei ', html.A('hochladen')]),
+                        style={
+                            'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                            'borderWidth': '1px', 'borderStyle': 'dashed',
+                            'borderRadius': '5px', 'textAlign': 'center', 'margin-bottom': '10px'
+                        },
+                        multiple=False
+                    ),
+                    html.Hr(),
+                    dbc.Label("1b. ODER: Flurstücke von OpenData Portal NRW laden", className="fw-bold"),
                     dbc.Button("Flurstücke für aktuellen Kartenausschnitt laden", id="load-parcels-btn", className="w-100 mb-3"),
                     
-                    dbc.Label("2. Manuelle Anpassung von Flurstücken", className="fw-bold"),
+                    dbc.Label("2. Manuelle Anpassung", className="fw-bold"),
                     dbc.RadioItems(
                         options=[
                             {'label': 'Fläche hinzufügen', 'value': 'add'},
@@ -87,17 +103,11 @@ def layout():
                 html.Hr(),
                 html.H5(T[LANG]['STEP1_WIND_HEADER']),
                 html.Div(T[LANG]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
-                
-                # --- NEW COMPASS COMPONENT ---
                 create_compass_component(),
-
-                # --- SLIDER IS NOW THE CONTROLLER, DRIVEN BY THE COMPASS ---
                 dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
             ], md=5)
         ])
-        
     ], fluid=True)
-
 
 # --- INTERACTIVE COMPASS CLIENTSIDE CALLBACKS ---
 
@@ -209,14 +219,16 @@ def display_parcels(geojson_data):
     Input('parcels-layer', 'clickData'),
     Input('edit-control', 'geojson'),
     Input('wind-direction-slider', 'value'),
+    Input('upload-geojson', 'contents'), # --- NEW INPUT ---
+    State('upload-geojson', 'filename'), # --- NEW STATE ---
     State('selected-parcels-store', 'data'),
     State('loaded-parcels-store', 'data'),
     State('session-store', 'data'),
     State('edit-mode-toggle', 'value'),
     prevent_initial_call=True
 )
-def handle_all_interactions(click_data, drawn_geojson, wind_direction, selected_ids, 
-                            all_parcels_data, session_data, edit_mode):
+def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_contents, upload_filename,
+                            selected_ids, all_parcels_data, session_data, edit_mode):
     session_data = session_data or {}
     ctx = dash.callback_context
     triggered_id = ctx.triggered_id
@@ -258,6 +270,20 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, selected_
             
             new_selected_ids = []
             hideout = {'selected': []}
+    
+    elif triggered_id == 'upload-geojson' and upload_contents is not None:
+        content_type, content_string = upload_contents.split(',')
+        decoded = base64.b64decode(content_string)
+        try:
+            geojson_data = json.load(io.StringIO(decoded.decode('utf-8')))
+            geometries = [shape(feature['geometry']) for feature in geojson_data['features']]
+            final_geom = unary_union(geometries)
+            # Clear parcel selection when importing a file
+            new_selected_ids = []
+            hideout = {'selected': []}
+        except Exception as e:
+            print(f"Error parsing uploaded file: {e}")
+            return no_update
     
     if final_geom.is_empty:
         final_geojson = None
