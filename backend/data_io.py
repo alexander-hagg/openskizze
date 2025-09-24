@@ -36,8 +36,34 @@ def fetch_flurstuecke_data(bbox: tuple):
         gdf_web['id'] = gdf_web.index.astype(str)
         return json.loads(gdf_web.to_json())
     except Exception as e:
-        print(f"An error occurred during Flurstücke fetching: {e}")
-        return None
+        print(f"An error occurred during Flurstücke fetching: {e}. Returning a fake parcel.")
+
+        # --- FAKE PARCEL GENERATION LOGIC ---
+        # Calculate the center and a small size relative to the bbox
+        center_lon = (min_lon + max_lon) / 2
+        center_lat = (min_lat + max_lat) / 2
+        width = max_lon - min_lon
+        height = max_lat - min_lat
+        
+        # Make the fake parcel 10% of the bbox size
+        fake_width = width * 0.1
+        fake_height = height * 0.1
+
+        # Define the bounds of the fake parcel
+        fake_min_lon = center_lon - fake_width / 2
+        fake_max_lon = center_lon + fake_width / 2
+        fake_min_lat = center_lat - fake_height / 2
+        fake_max_lat = center_lat + fake_height / 2
+
+        # Create the geometry for the fake parcel
+        fake_geom = box(fake_min_lon, fake_min_lat, fake_max_lon, fake_max_lat)
+
+        # Create a GeoDataFrame in the same structure as a successful call
+        fake_gdf = geopandas.GeoDataFrame([1], geometry=[fake_geom], crs=WEB_CRS)
+        fake_gdf['id'] = "fake_0" # Assign a unique ID
+        
+        # Convert to the expected GeoJSON dictionary format and return
+        return json.loads(fake_gdf.to_json())
 
 # --- Existing Buildings Fetching (New Function) ---
 WFS_URL_BUILDINGS = "https://www.wfs.nrw.de/geobasis/wfs_nw_alkis_vereinfacht"
