@@ -14,7 +14,7 @@ import uuid
 import os
 from backend.encoding import ParametricEncoding
 from backend.config import ENCODING_CONFIG
-import atexit
+import time
 
 import cProfile # Import the profiler
 import pstats   # Import for saving stats
@@ -27,10 +27,23 @@ TEMP_RESULTS_DIR = "temp_results"
 os.makedirs(TEMP_RESULTS_DIR, exist_ok=True)
 
 # Cleanup temp files on exit
-def cleanup_temp_files():
-    for f in os.listdir(TEMP_RESULTS_DIR):
-        os.remove(os.path.join(TEMP_RESULTS_DIR, f))
-atexit.register(cleanup_temp_files)
+def cleanup_old_files(directory: str, max_age_hours: int = 24):
+    """
+    Removes files from a directory if they are older than max_age_hours.
+    """
+    print(f"Running cleanup on '{directory}' for files older than {max_age_hours} hours...")
+    try:
+        max_age_seconds = max_age_hours * 3600
+        current_time = time.time()
+        for filename in os.listdir(directory):
+            file_path = os.path.join(directory, filename)
+            if os.path.isfile(file_path):
+                file_age_seconds = current_time - os.path.getmtime(file_path)
+                if file_age_seconds > max_age_seconds:
+                    print(f"Deleting stale file: {file_path}")
+                    os.remove(file_path)
+    except Exception as e:
+        print(f"Error during file cleanup: {e}")
 
 
 def layout():
@@ -82,6 +95,9 @@ def toggle_live_updates(n_clicks):
     ],
 )
 def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
+    if n_clicks:
+        cleanup_old_files(TEMP_RESULTS_DIR)
+        
     if not n_clicks or not session_data or not session_data.get('site_polygon'):
         return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning"), True
 

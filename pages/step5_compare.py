@@ -9,6 +9,7 @@ import numpy as np
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
 import plotly.express as px
+import base64 
 
 LANG = 'DE'
 
@@ -281,17 +282,22 @@ def export_pdf_report(n_clicks, results_data):
     results_path = results_data.get('full_results_path')
     labels = results_data.get('labels')
     selected_indices = results_data.get('selected_features_indices')
-    grid_geojson = results_data.get('grid_geojson') # Needed for the map
+    grid_geojson = results_data.get('grid_geojson')
+    xy_length = results_data.get('xy_length')
 
-    if not all([results_path, labels, selected_indices is not None, grid_geojson]):
-         error_content = "Error: Could not find all necessary data for export."
+    if not all([results_path, labels, selected_indices is not None, grid_geojson, xy_length]):
+         error_content = "Error: Could not find all necessary data for export (e.g., xy_length is missing)."
          return dict(content=error_content, filename="error.txt")
 
     # Call the backend function to generate the PDF content
-    pdf_content = generate_pdf_report(results_path, labels, selected_indices, grid_geojson)
-    
+    pdf_content = generate_pdf_report(results_path, labels, selected_indices, grid_geojson, xy_length)
+    print(f'pdf_content: {pdf_content}')  # Debugging line
+
     if pdf_content:
-        return dict(content=pdf_content, filename="OpenSKIZZE_Anforderungen.pdf")
+        # encoded_pdf = base64.b64encode(pdf_content).decode('ascii')
+        encoded_pdf = pdf_content
+        pdf_data_uri = f"data:application/pdf;base64,{encoded_pdf}"
+        return dict(content=pdf_data_uri, filename="OpenSKIZZE_Anforderungen.pdf")
     else:
         error_content = "Error: Failed to generate PDF report."
         return dict(content=error_content, filename="error.txt")

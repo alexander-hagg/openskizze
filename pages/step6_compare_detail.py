@@ -46,9 +46,13 @@ def layout():
     State('results-store', 'data')
 )
 def display_comparison(selected_ids, results_data):
-    if not selected_ids or not results_data:
-        return dbc.Alert("Keine Entwürfe zum Vergleich ausgewählt.", color="warning")
+    if not selected_ids:
+        # This handles the case where the user navigates to the page without any selections
+        return dbc.Alert("Keine Entwürfe zum Vergleich ausgewählt. Bitte gehen Sie zu Schritt 5 zurück und wählen Sie mindestens einen Entwurf aus.", color="info")
 
+    if not results_data:
+        return dbc.Alert("Die Ergebnisdaten konnten nicht geladen werden.", color="danger")
+    
     results_path = results_data.get('full_results_path')
     grid_geojson = results_data.get('grid_geojson')
     if not os.path.exists(results_path) or not grid_geojson:
@@ -59,6 +63,14 @@ def display_comparison(selected_ids, results_data):
     
     # Find the selected solutions
     solutions_to_compare = [s for s in list_of_elites if s['id'] in selected_ids]
+    if not solutions_to_compare:
+        return dbc.Alert(
+            "Fehler: Die ausgewählten Entwurfs-IDs wurden in der aktuellen Ergebnisdatei nicht gefunden. "
+            "Dies kann passieren, wenn nach der Auswahl eine neue Optimierung gestartet wurde. "
+            "Bitte gehen Sie zu Schritt 5 zurück und treffen Sie eine neue Auswahl.",
+            color="warning"
+        )
+    
     lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     map_center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]

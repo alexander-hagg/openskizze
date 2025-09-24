@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from backend.translation import T 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from shapely.geometry import box, mapping
 import geopandas as gpd
@@ -232,7 +234,8 @@ class PDF(FPDF):
         self.set_font('Arial', 'I', 8)
         self.cell(0, 10, f'Seite {self.page_no()}', 0, 0, 'C')
 
-def generate_pdf_report(results_path: str, labels: list, selected_indices: list, grid_geojson: dict):
+def generate_pdf_report(results_path: str, labels: list, selected_indices: list, grid_geojson: dict, xy_length: int):
+    print(f'Generating PDF report with results_path: {results_path}, labels: {labels}, selected_indices: {selected_indices}, xy_length: {xy_length}')
     # 1. Load data
     if not os.path.exists(results_path): return None
     with open(results_path, 'rb') as f:
@@ -280,7 +283,9 @@ def generate_pdf_report(results_path: str, labels: list, selected_indices: list,
                        "Entwürfen häufig vorkommt.")
     
     # Create and save consensus map plot
-    heightmaps = np.array([np.array(hm) for hm in top_solutions['heightmap']])
+    heightmaps = np.array([
+        np.array(hm).reshape((xy_length, xy_length)) for hm in top_solutions['heightmap']
+    ])
     boolean_hms = heightmaps > 0
     consensus_map = np.mean(boolean_hms, axis=0)
     
@@ -296,4 +301,4 @@ def generate_pdf_report(results_path: str, labels: list, selected_indices: list,
     pdf.ln(10)
 
     # 6. Return PDF content
-    return pdf.output(dest='S').encode('latin1')
+    return pdf.output()
