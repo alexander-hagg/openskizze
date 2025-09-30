@@ -1,0 +1,68 @@
+/* assets/compass.css */
+
+.compass-container {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 30px auto; /* Center the compass in its column */
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    background-color: #f8f9fa;
+    /* Prevents page scrolling on mobile when dragging the compass */
+    touch-action: none;
+    user-select: none; /* Prevents text selection while dragging */
+}
+
+.compass-rose {
+    width: 100%;
+    height: 100%;
+}
+
+/* Base styling for the N, E, S, W labels */
+.compass-label {
+    position: absolute;
+    font-weight: bold;
+    color: #333;
+    font-size: 1.2em;
+}
+
+/* Positioning for each label */
+.compass-label-n { top: 5px; left: 50%; transform: translateX(-50%); }
+.compass-label-e { top: 50%; right: 10px; transform: translateY(-50%); }
+.compass-label-s { bottom: 5px; left: 50%; transform: translateX(-50%); }
+.compass-label-w { top: 50%; left: 10px; transform: translateY(-50%); }
+
+/* The container for the needle that will be rotated */
+.compass-needle-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+/* The visual needle */
+.compass-needle {
+    width: 4px;
+    height: 50%;
+    background-color: #C70039; /* A strong red color */
+    position: absolute;
+    top: 0;
+    left: calc(50% - 2px); /* Center the needle horizontally */
+    transform-origin: bottom center; /* This is crucial: rotate around the base */
+}
+
+/* A central pivot point for aesthetics */
+.compass-pivot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 15px;
+    height: 15px;
+    background-color: #333;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+}
