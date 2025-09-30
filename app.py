@@ -2,8 +2,14 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output
 from backend.translation import T
+import plotly.io as pio
 
-# --- THE FIX IS HERE ---
+# Configure kaleido to run without a sandbox. This is often required in
+# containerized or restricted environments.
+# The plotly error messages are contradictory, but this is the correct syntax
+# for the installed version.
+pio.defaults.chromium_args = ("--no-sandbox", "--disable-gpu")
+
 # Add external scripts for chroma.js (for map coloring)
 external_scripts = [
     "https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"
@@ -16,6 +22,7 @@ app = dash.Dash(
     suppress_callback_exceptions=True,
     external_scripts=external_scripts
 )
+
 app.title = T['DE']['APP_TITLE']
 server = app.server
 

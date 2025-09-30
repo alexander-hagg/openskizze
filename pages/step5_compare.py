@@ -84,7 +84,7 @@ def layout():
             dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
 
             # Add a "Compare" button and a store for selections
-            dcc.Store(id='comparison-store', data=[]),
+            dcc.Store(id='comparison-store', storage_type='session', data=[]),
             dbc.Button("Ausgewählte Designs vergleichen", id="compare-btn", href="/step6", color="success", className="mt-3", style={'display': 'none'}),
         ])),
         
@@ -95,9 +95,12 @@ def layout():
              dbc.Alert(T[LANG]['STEP5_NO_SELECTION'], color="light")
         ])),
         
-        dbc.Button("PDF-Bericht exportieren", id="export-reqs-btn-s5", color="info", className="mt-3"),
-        dcc.Download(id="download-requirements-s5")
-
+        # DEBUG: Display the content of the comparison-store
+        html.Div([
+            html.Hr(),
+            html.P("Debug: In-page comparison-store content:"),
+            html.Pre(id='debug-comparison-store-content-s5')
+        ])
         
     ], fluid=True)
 
@@ -270,43 +273,11 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     return cluster_cards
 
 @callback(
-    Output("download-requirements-s5", "data", allow_duplicate=True),
-    Input("export-reqs-btn-s5", "n_clicks"),
-    State("results-store", "data"),
-    prevent_initial_call=True,
-)
-def export_pdf_report(n_clicks, results_data):
-    if not n_clicks or not results_data:
-        return None
-        
-    results_path = results_data.get('full_results_path')
-    labels = results_data.get('labels')
-    selected_indices = results_data.get('selected_features_indices')
-    grid_geojson = results_data.get('grid_geojson')
-    xy_length = results_data.get('xy_length')
-
-    if not all([results_path, labels, selected_indices is not None, grid_geojson, xy_length]):
-         error_content = "Error: Could not find all necessary data for export (e.g., xy_length is missing)."
-         return dict(content=error_content, filename="error.txt")
-
-    # Call the backend function to generate the PDF content
-    pdf_content = generate_pdf_report(results_path, labels, selected_indices, grid_geojson, xy_length)
-    print(f'pdf_content: {pdf_content}')  # Debugging line
-
-    if pdf_content:
-        # encoded_pdf = base64.b64encode(pdf_content).decode('ascii')
-        encoded_pdf = pdf_content
-        pdf_data_uri = f"data:application/pdf;base64,{encoded_pdf}"
-        return dict(content=pdf_data_uri, filename="OpenSKIZZE_Anforderungen.pdf")
-    else:
-        error_content = "Error: Failed to generate PDF report."
-        return dict(content=error_content, filename="error.txt")
-
-@callback(
     Output('comparison-store', 'data'),
     Output('compare-btn', 'style'),
     Input({'type': 'compare-checkbox', 'index': ALL}, 'value'),
     State({'type': 'compare-checkbox', 'index': ALL}, 'id'),
+    prevent_initial_call=True
 )
 def update_comparison_list(checkbox_values, checkbox_ids):
     selected_ids = [
@@ -314,20 +285,3 @@ def update_comparison_list(checkbox_values, checkbox_ids):
     ]
     button_style = {'display': 'inline-block'} if selected_ids else {'display': 'none'}
     return selected_ids, button_style
-
-@callback(
-    Output("download-requirements-s5", "data"),
-    Input("export-reqs-btn-s5", "n_clicks"),
-    State("results-store", "data"),
-    prevent_initial_call=True,
-)
-def export_requirements_s5(n_clicks, results_data):
-    if not n_clicks or not results_data:
-        return None
-    results_path = results_data.get('full_results_path')
-    labels = results_data.get('labels')
-    selected_indices = results_data.get('selected_features_indices')
-    if not all([results_path, labels, selected_indices is not None]):
-         return dict(content="Error: Could not find all necessary data for export.", filename="error.txt")
-    report_text = generate_contest_requirements(results_path, labels, selected_indices)
-    return dict(content=report_text, filename=T[LANG]['STEP5_EXPORT_FILENAME'])

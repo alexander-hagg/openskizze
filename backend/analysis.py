@@ -11,9 +11,15 @@ from sklearn.cluster import DBSCAN
 from sklearn_extra.cluster import KMedoids # <-- New Import
 from sklearn.metrics import pairwise_distances
 import hdbscan # <-- New Import
-from fpdf import FPDF # <-- New Import
 import pickle
 import os
+import plotly.express as px
+import base64
+import zipfile
+import shutil
+from io import BytesIO
+from pylatex import Document, Section, Subsection, Figure, Command
+from pylatex.utils import italic, NoEscape
 
 def heightmap_to_geojson(heightmap_2d: np.ndarray, grid_geojson: dict):
     """
@@ -223,82 +229,219 @@ def generate_contest_requirements(results_path: str, labels: list, selected_indi
             report.append(f"- **{human_label}:** Optimale Ergebnisse wurden im Bereich von {min_val:.2f} bis {max_val:.2f} erzielt (Mittelwert: {mean_val:.2f} ± {std_val:.2f}).")
     return "\n".join(report)
 
-class PDF(FPDF):
-    def header(self):
-        self.set_font('Arial', 'B', 15)
-        self.cell(0, 10, 'OpenSKIZZE - Planungsanforderungen', 0, 1, 'C')
-        self.ln(10)
+def generate_pdf_report(solutions: list, all_elites: list, labels: list, grid_geojson: dict, xy_length: int):
+    """
+    Generates a comprehensive urban planning analysis report as a zip file
+    containing the .tex source, the compiled .pdf, and image assets.
+    """
+    if not solutions:
+        return None
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Seite {self.page_no()}', 0, 0, 'C')
+    report_dir = os.path.join("temp_results", "report_assets")
+    image_dir = os.path.join(report_dir, "images")
+    os.makedirs(image_dir, exist_ok=True)
 
-def generate_pdf_report(results_path: str, labels: list, selected_indices: list, grid_geojson: dict, xy_length: int):
-    print(f'Generating PDF report with results_path: {results_path}, labels: {labels}, selected_indices: {selected_indices}, xy_length: {xy_length}')
-    # 1. Load data
-    if not os.path.exists(results_path): return None
-    with open(results_path, 'rb') as f:
-        list_of_elites = pickle.load(f)
-    if not list_of_elites: return None
+    try:
+        # --- Document Setup ---
+        geometry_options = {"tmargin": "2.5cm", "lmargin": "2.5cm", "rmargin": "2.5cm"}
+        doc = Document(geometry_options=geometry_options)
+        
+        # Add required packages
+        doc.preamble.append(Command('usepackage', 'graphicx'))
+        doc.preamble.append(Command('usepackage', 'xcolor'))
+        doc.preamble.append(Command('usepackage', 'geometry'))
+        doc.preamble.append(Command('title', 'Städtebauliche Analyse & Planungsempfehlungen'))
+        doc.preamble.append(Command('author', 'OpenSKIZZE'))
+        doc.preamble.append(Command('date', NoEscape(r'\today')))
+        doc.append(NoEscape(r'\maketitle'))
 
-    df = pd.DataFrame(list_of_elites)
-    measures_df = pd.DataFrame(df['measures'].tolist(), columns=labels)
-    df = pd.concat([df.drop('measures', axis=1), measures_df], axis=1)
+        # --- Introduction ---
+        with doc.create(Section('Einleitung und Methodik')):
+            intro_text = (
+                "Dieses Dokument analysiert die Ergebnisse einer computergestützten Optimierung von Städtebauentwürfen. "
+                "Ziel war die Maximierung der Kaltluftzufuhr im Plangebiet. Tausende von Varianten wurden erzeugt und bewertet. "
+                "Die vielversprechendsten Lösungen wurden mittels Cluster-Analyse zu Entwurfs-Archetypen zusammengefasst. "
+                "Die hier verglichenen Entwürfe repräsentieren die zentralen Vertreter dieser Archetypen.\\\n"
+                "Der Bericht leitet aus dieser datengestützten Analyse konkrete Empfehlungen für die weitere Bauleitplanung ab, "
+                "insbesondere für die Aufstellung eines Bebauungsplans (B-Plan) gemäß Baugesetzbuch (BauGB). "
+                "Die quantitativen Erkenntnisse sollen als Grundlage für die Definition von Baufenstern und textlichen Festsetzungen dienen."
+            )
+            doc.append(NoEscape(intro_text))
 
-    # 2. Isolate top 20% of solutions
-    top_20_percentile = df['objective'].quantile(0.8)
-    top_solutions = df[df['objective'] >= top_20_percentile]
+        # --- Generate and Verify Images ---
+        image_paths_to_check = []
 
-    pdf = PDF()
-    pdf.add_page()
-    pdf.set_font('Arial', '', 12)
+        # Correlation heatmap
+        df_all = pd.DataFrame(all_elites)
+        measures_df = pd.DataFrame(df_all['measures'].tolist(), columns=labels)
+        df_all = pd.concat([df_all['objective'], measures_df], axis=1)
+        df_all.rename(columns={'objective': 'Zielfunktion (Kaltluft)'}, inplace=True)
+        corr = df_all.corr()
+        
+        fig, ax = plt.subplots(figsize=(12, 10))
+        im = ax.imshow(corr, cmap="RdBu_r", vmin=-1, vmax=1)
+        cbar = ax.figure.colorbar(im, ax=ax)
+        cbar.ax.set_ylabel("Korrelation", rotation=-90, va="bottom")
+        ax.set_xticks(np.arange(len(corr.columns)))
+        ax.set_yticks(np.arange(len(corr.columns)))
+        ax.set_xticklabels(corr.columns)
+        ax.set_yticklabels(corr.columns)
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+        for i in range(len(corr.columns)):
+            for j in range(len(corr.columns)):
+                ax.text(j, i, f"{corr.iloc[i, j]:.2f}", ha="center", va="center", color="w" if abs(corr.iloc[i, j]) > 0.5 else "black")
+        ax.set_title("Korrelation der Merkmale und der Zielfunktion")
+        fig.tight_layout()
+        
+        plot_path_corr_abs = os.path.join(image_dir, "correlation_heatmap.png")
+        fig.savefig(plot_path_corr_abs, dpi=150)
+        plt.close(fig)
+        image_paths_to_check.append(plot_path_corr_abs)
 
-    # 3. Add Summary
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, "1. Zusammenfassung", 0, 1)
-    pdf.set_font('Arial', '', 12)
-    pdf.multi_cell(0, 5, f"Dieser Bericht leitet Planungsanforderungen aus der Analyse von {len(df)} "
-                       f"generierten Entwurfsvarianten ab. Die folgenden quantitativen und qualitativen "
-                       f"Richtlinien basieren auf den {len(top_solutions)} leistungsstärksten Lösungen (Top 20%) "
-                       f"hinsichtlich der Kaltluftförderung.")
-    pdf.ln(10)
+        # Solution heightmaps
+        solution_image_paths = {}
+        for i, sol in enumerate(solutions):
+            heightmap = np.array(sol['heightmap']).reshape((xy_length, xy_length))
+            fig, ax = plt.subplots(figsize=(5, 5))
+            ax.imshow(np.flipud(heightmap), cmap='viridis', origin='lower')
+            ax.set_title(f"Höhenkarte - Archetyp {i+1}")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            plot_path_sol_abs = os.path.join(image_dir, f"solution_{sol['id']}.png")
+            fig.savefig(plot_path_sol_abs, bbox_inches='tight')
+            plt.close(fig)
+            solution_image_paths[sol['id']] = plot_path_sol_abs
+            image_paths_to_check.append(plot_path_sol_abs)
 
-    # 4. Add Quantitative Requirements (Metric Ranges)
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, "2. Quantitative Anforderungen", 0, 1)
-    pdf.set_font('Arial', '', 12)
-    for label in labels:
-        p25 = top_solutions[label].quantile(0.25)
-        p75 = top_solutions[label].quantile(0.75)
-        pdf.multi_cell(0, 5, f"- **{label}:** Hochperformante Entwürfe weisen typischerweise Werte im Bereich von **{p25:.2f} bis {p75:.2f}** auf.")
-    pdf.ln(10)
-    
-    # 5. Add Spatial Patterns (Consensus Map)
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(0, 10, "3. Räumliche Leitlinien", 0, 1)
-    pdf.set_font('Arial', '', 12)
-    pdf.multi_cell(0, 5, "Die Konsens-Karte zeigt die Bebauungswahrscheinlichkeit für die Top-Lösungen. "
-                       "Dunkle Bereiche deuten auf Zonen hin, in denen eine Bebauung in den besten "
-                       "Entwürfen häufig vorkommt.")
-    
-    # Create and save consensus map plot
-    heightmaps = np.array([
-        np.array(hm).reshape((xy_length, xy_length)) for hm in top_solutions['heightmap']
-    ])
-    boolean_hms = heightmaps > 0
-    consensus_map = np.mean(boolean_hms, axis=0)
-    
-    fig, ax = plt.subplots()
-    im = ax.imshow(consensus_map, cmap='Blues', origin='lower')
-    plt.colorbar(im, ax=ax, label="Bebauungswahrscheinlichkeit")
-    ax.set_title("Konsens-Karte der Top 20% Lösungen")
-    plot_path = os.path.join("temp_results", "consensus.png")
-    fig.savefig(plot_path)
-    plt.close(fig)
-    
-    pdf.image(plot_path, x=None, y=None, w=150)
-    pdf.ln(10)
+        # Verify all images were created before proceeding
+        for path in image_paths_to_check:
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Image file was not created: {path}")
 
-    # 6. Return PDF content
-    return pdf.output()
+        # --- Add Content to LaTeX Document ---
+        with doc.create(Section('Analyse der Wirkungszusammenhänge')):
+            doc.append("Zunächst wurde der Zusammenhang zwischen den städtebaulichen Kennzahlen (Merkmalen) und der Zielfunktion (Kaltluft) "
+                       "über alle leistungsstarken Lösungen hinweg untersucht. Die Korrelationsmatrix zeigt, welche Merkmale den größten Einfluss haben.")
+
+            with doc.create(Figure(position='h!')) as heatmap_plot:
+                heatmap_plot.add_image(os.path.join('images', 'correlation_heatmap.png'), width=NoEscape(r'0.9\textwidth'))
+                heatmap_plot.add_caption('Korrelation der Merkmale und der Zielfunktion.')
+
+            corr_objective = corr['Zielfunktion (Kaltluft)'].drop('Zielfunktion (Kaltluft)').sort_values(ascending=False)
+            highest_pos_corr = corr_objective.head(1)
+            highest_neg_corr = corr_objective.tail(1)
+            
+            corr_text = (
+                f"Die Analyse der Zusammenhänge ist entscheidend für das Verständnis der Planungshebel. "
+                f"Erwartungsgemäß zeigt sich eine starke negative Korrelation zwischen '{highest_neg_corr.index[0]}' ({highest_neg_corr.values[0]:.2f}) und der Kaltluftleistung. "
+                f"Dies bestätigt, dass eine Reduzierung der versiegelten oder bebauten Flächen ein primäres Ziel sein muss.\\\\"
+                f"Besonders aufschlussreich ist die stärkste positive Korrelation: Das Merkmal '{highest_pos_corr.index[0]}' ({highest_pos_corr.values[0]:.2f}) "
+                f"begünstigt die Kaltluftzufuhr."
+            )
+            doc.append(NoEscape(corr_text))
+
+        with doc.create(Section('Vergleich der Entwurfs-Archetypen')):
+            for i, sol in enumerate(solutions):
+                with doc.create(Subsection(f'Archetyp {i+1}: Städtebauliches Profil')):
+                    with doc.create(Figure(position='h!')) as sol_plot:
+                        sol_plot.add_image(os.path.join('images', f"solution_{sol['id']}.png"), width='8cm')
+                        sol_plot.add_caption(f'Höhenkarte für Archetyp {i+1}.')
+
+                    doc.append(NoEscape(r'\textbf{Kennzahlen:}\\'))
+                    doc.append(f"Zielfunktion (Kaltluft): {sol['objective']:.4f}\\\n")
+                    for j, label in enumerate(labels):
+                        doc.append(f"{label}: {sol['measures'][j]:.2f}\\\n")
+                    
+                    doc.append(NoEscape(r'\vspace{1cm}\textbf{Analyse und planungsrechtliche Einordnung:}\\'))
+                    
+                    charakter_text = "Dieser Archetyp zeichnet sich durch "
+                    building_count_label = next((l for l in labels if 'GEBÄUDE' in l.upper()), None)
+                    if building_count_label:
+                        measure_avg_buildings = df_all[building_count_label].mean()
+                        if sol['measures'][labels.index(building_count_label)] > measure_avg_buildings * 1.2:
+                            charakter_text += "eine hohe Anzahl kleinteiliger Gebäude aus."
+                        else:
+                            charakter_text += "wenige, aber größere Baukörper aus."
+                    else:
+                        charakter_text += "eine spezifische Baukörperanordnung aus."
+
+                    doc.append(NoEscape(r'\textbf{Städtebaulicher Charakter:} ' + charakter_text + r'\\'))
+                    doc.append(NoEscape(r'\textbf{Empfehlung für die Bauleitplanung:}\\'))
+                    doc.append(NoEscape(r'{\color{red} [Beispiel]: Dieser Archetyp eignet sich als Grundlage für die Festsetzung von Baufenstern...}'))
+
+        with doc.create(Section('Übergreifende Empfehlungen für die Bauleitplanung')):
+            doc.append("Aus der vergleichenden Analyse lassen sich folgende übergreifende Empfehlungen für die Aufstellung des Bebauungsplans ableiten:")
+            
+            # --- Evidence-based recommendations ---
+            top_10_percentile_obj = df_all['Zielfunktion (Kaltluft)'].quantile(0.9)
+            top_solutions = df_all[df_all['Zielfunktion (Kaltluft)'] >= top_10_percentile_obj]
+
+            # Recommendation 1: Ventilation corridors (General)
+            doc.append(NoEscape(r'\subsection*{1. Festsetzung von Ventilationskorridoren}'))
+            doc.append("Basierend auf den leistungsstärksten Entwürfen sollten Hauptventilationsachsen als 'nicht überbaubare Grundstücksflächen' festgesetzt werden, um die Kaltluftzufuhr zu maximieren.")
+
+            # Recommendation 2: Building Density (GRZ/GFZ)
+            doc.append(NoEscape(r'\subsection*{2. Steuerung der Baumassendichte (GRZ/GFZ)}'))
+            grz_label = next((l for l in labels if 'GRZ' in l.upper()), None)
+            gfz_label = next((l for l in labels if 'GFZ' in l.upper()), None)
+            
+            if grz_label and gfz_label and not top_solutions.empty:
+                mean_grz = top_solutions[grz_label].mean()
+                mean_gfz = top_solutions[gfz_label].mean()
+                rec_text = (f"Die Analyse der Top-10%-Lösungen zeigt, dass eine hohe Kaltluftleistung bei einer "
+                            f"durchschnittlichen GRZ von ca. {mean_grz:.2f} und einer GFZ von ca. {mean_gfz:.2f} erreicht wird. Es wird daher empfohlen, "
+                            "ähnliche Obergrenzen im Bebauungsplan festzusetzen, um ausreichend Freifläche zu sichern (§ 16, 17, 19 BauNVO).")
+                doc.append(rec_text)
+            else:
+                doc.append(NoEscape(r'{\color{red} [Beispiel]: Es wird empfohlen, eine maximale Grundflächenzahl (GRZ) von [z.B. 0.4] und eine Geschossflächenzahl (GFZ) von [z.B. 1.2] festzusetzen, um ausreichend Freifläche zu sichern.}'))
+
+            # Recommendation 3: Building Height
+            doc.append(NoEscape(r'\subsection*{3. Höhenentwicklung}'))
+            height_label = next((l for l in labels if 'HÖHE' in l.upper()), None)
+            if height_label and not top_solutions.empty:
+                mean_height = top_solutions[height_label].mean()
+                std_height = top_solutions[height_label].std()
+                rec_text = (f"Die leistungsstärksten Lösungen weisen eine durchschnittliche Gebäudehöhe von {mean_height:.2f}m (Standardabweichung: {std_height:.2f}m) auf. "
+                            "Eine moderate Höhenentwicklung scheint die Kaltluftströmung nicht negativ zu beeinflussen, solange ausreichend Freiflächen vorhanden sind. "
+                            "Eine gestaffelte Höhenentwicklung kann die Durchlüftung weiter positiv beeinflussen und sollte als städtebauliches Ziel im B-Plan verankert werden.")
+                doc.append(rec_text)
+            else:
+                doc.append(NoEscape(r'{\color{red} [Beispiel]: Eine gestaffelte Höhenentwicklung, wie in Archetyp [z.B. 2] angedeutet, kann die Durchlüftung positiv beeinflussen und sollte als städtebauliches Ziel im B-Plan verankert werden.}'))
+
+            # Recommendation 4: Flexible Baufenster (General)
+            doc.append(NoEscape(r'\subsection*{4. Flexible Baufenster}'))
+            doc.append("Die Analyse der Cluster-Robustheit (Konsens-Karten, siehe Schritt 5) kann genutzt werden, um Kern-Bebauungszonen (hoher Konsens) und flexible Erweiterungsbereiche (niedriger Konsens) zu definieren. Dies ermöglicht architektonische Vielfalt bei gleichzeitiger Sicherung der Performance.")
+
+            doc.append(NoEscape(r'\vspace{1cm}'))
+            doc.append("Diese datengestützten Erkenntnisse bieten eine valide Grundlage für die weiteren Schritte im Bauleitplanverfahren und helfen, die umweltbezogenen Planungsziele objektiv zu untermauern.")
+
+
+        # --- Generate and Zip Files ---
+        # The actual compilation happens here. This requires a LaTeX installation.
+        doc.generate_pdf(os.path.join(report_dir, 'report'), clean_tex=False)
+        
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.write(os.path.join(report_dir, 'report.pdf'), arcname='report.pdf')
+            zip_file.write(os.path.join(report_dir, 'report.tex'), arcname='report.tex')
+            
+            for image_file in os.listdir(image_dir):
+                zip_file.write(os.path.join(image_dir, image_file), arcname=os.path.join('images', image_file))
+
+        zip_buffer.seek(0)
+        b64_zip = base64.b64encode(zip_buffer.read()).decode('utf-8')
+        return b64_zip
+
+    except Exception as e:
+        print(f"LaTeX PDF generation failed: {e}")
+        print("Falling back to returning TeX source file.")
+        try:
+            tex_content = doc.dumps()
+            return base64.b64encode(tex_content.encode('utf-8')).decode('utf-8')
+        except Exception as inner_e:
+            print(f"Failed to even generate TeX source: {inner_e}")
+            return None
+    finally:
+        # Clean up the temporary directory
+        if os.path.exists(report_dir):
+            shutil.rmtree(report_dir)

@@ -169,24 +169,24 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
             df_for_plot = pd.DataFrame(full_list_of_elites)
             measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
             df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()
+            df_for_plot.rename(columns={'objective': 'Zielfunktion (Kaltluft)'}, inplace=True)
 
             corr = df_for_plot.corr()
-            heatmap_fig = px.imshow(corr, text_auto=True, aspect="auto",
+            heatmap_fig = px.imshow(corr, text_auto=".2f", aspect="auto",
                                 color_continuous_scale="RdBu",
                                 range_color=[-1, 1],
-                                title="Korrelation der Lösungsmerkmale")
+                                title="Korrelation der Lösungsmerkmale und der Zielfunktion")
+            heatmap_fig.update_xaxes(side="top")
             
             parallel_fig = px.parallel_coordinates(
-                df_for_plot, dimensions=['objective'] + labels, color="objective",
-                labels={dim: dim.replace(" ", "<br>") for dim in ['objective'] + labels},
+                df_for_plot, dimensions=['Zielfunktion (Kaltluft)'] + labels, color="Zielfunktion (Kaltluft)",
+                labels={dim: dim.replace(" ", "<br>") for dim in ['Zielfunktion (Kaltluft)'] + labels},
                 title="Erkundung des Lösungsraums"
             )
 
             final_output = html.Div([
-                dbc.Row([
-                    dbc.Col(dcc.Graph(figure=heatmap_fig), md=5),
-                    dbc.Col(dcc.Graph(figure=parallel_fig), md=7)
-                ])
+                dbc.Row(dcc.Graph(figure=parallel_fig)),
+                dbc.Row(dcc.Graph(figure=heatmap_fig))
             ])
 
             # profiler.disable()

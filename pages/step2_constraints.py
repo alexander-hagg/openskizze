@@ -78,7 +78,7 @@ def layout():
                 html.H5("Harte Randbedingungen", className="mt-4"),
                 dbc.Card(dbc.CardBody([
                     dbc.Label("Maximale Bauhöhe (in Geschossen, ca. 3m pro Geschoss):"),
-                    dbc.Input(id='max-height-constraint', type="number", placeholder="z.B. 7 (= 21m)", min=1, step=1, value=3*ENCODING_CONFIG['z_length']),
+                    dbc.Input(id='max-height-constraint', type="number", placeholder="z.B. 7 (= 21m)", min=1, step=1, value=ENCODING_CONFIG['z_length']),
                     dbc.Label("Minimaler Gebäudeabstand (m):", className="mt-2"),
                     dbc.Input(id='min-distance-constraint', type="number", placeholder="z.B. 6", min=0, step=1, value=0),
                 ]), color="light")
@@ -186,7 +186,7 @@ def update_session_with_features_and_ranges(
 
     # --- NEW: Save hard constraints ---
     session_data['hard_constraints'] = {
-        'max_height': max_height,
+        'max_height': 3*max_height,
         'min_distance': min_distance
     }
     

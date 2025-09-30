@@ -10,7 +10,7 @@ import os
 import dash_leaflet as dl
 import pandas as pd
 import numpy as np
-from backend.analysis import heightmap_to_geojson
+from backend.analysis import heightmap_to_geojson, generate_pdf_report
 from backend.config import ENCODING_CONFIG
 
 LANG = 'DE'
@@ -32,9 +32,15 @@ function(feature, context){
 
 def layout():
     return dbc.Container([
+        dcc.Location(id='url-s6', refresh=False),
         html.H2("Detailvergleich der ausgewählten Entwürfe"),
+        dcc.Store(id='comparison-store', storage_type='session'),
         dbc.Row([
             dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step5', color="secondary")),
+            dbc.Col([
+                dbc.Button("PDF-Bericht exportieren", id="export-pdf-btn-s6", color="info"),
+                dcc.Download(id="download-pdf-s6")
+            ], className="text-end")
         ], className="mt-4 mb-4"),
         dcc.Loading(html.Div(id='comparison-content'))
     ], fluid=True)
@@ -42,12 +48,11 @@ def layout():
 
 @callback(
     Output('comparison-content', 'children'),
-    Input('comparison-store', 'data'), # Triggered by page load via data in store
+    Input('comparison-store', 'data'),  # Trigger when the store's data is loaded/changed
     State('results-store', 'data')
 )
 def display_comparison(selected_ids, results_data):
     if not selected_ids:
-        # This handles the case where the user navigates to the page without any selections
         return dbc.Alert("Keine Entwürfe zum Vergleich ausgewählt. Bitte gehen Sie zu Schritt 5 zurück und wählen Sie mindestens einen Entwurf aus.", color="info")
 
     if not results_data:
@@ -61,7 +66,6 @@ def display_comparison(selected_ids, results_data):
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Find the selected solutions
     solutions_to_compare = [s for s in list_of_elites if s['id'] in selected_ids]
     if not solutions_to_compare:
         return dbc.Alert(
@@ -76,11 +80,9 @@ def display_comparison(selected_ids, results_data):
     map_center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
     heightmap_res = results_data['xy_length']
     
-    # Create the comparison layout
     cols = []
     for i, sol in enumerate(solutions_to_compare):
-        # Map component
-        heightmap = np.array(sol['heightmap']).reshape(...)
+        heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
         design_geojson = heightmap_to_geojson(np.flipud(heightmap), grid_geojson)
         map_component = dl.Map(
             center=map_center, zoom=14,
@@ -93,7 +95,6 @@ def display_comparison(selected_ids, results_data):
             id={'type': 'compare-map', 'index': i}
         )
         
-        # Metrics table
         metrics_data = {'Merkmal': results_data['labels'], 'Wert': [f"{v:.3f}" for v in sol['measures']]}
         metrics_df = pd.DataFrame(metrics_data)
         table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True)
@@ -108,3 +109,39 @@ def display_comparison(selected_ids, results_data):
         cols.append(col)
         
     return dbc.Row(cols)
+
+@callback(
+    Output("download-pdf-s6", "data"),
+    Input("export-pdf-btn-s6", "n_clicks"),
+    State('comparison-store', 'data'),
+    State('results-store', 'data'),
+    prevent_initial_call=True,
+)
+def export_pdf_report_s6(n_clicks, selected_ids, results_data):
+    if not n_clicks or not selected_ids or not results_data:
+        return None
+
+    results_path = results_data.get('full_results_path')
+    if not os.path.exists(results_path):
+        return dict(content="Error: Results file not found.", filename="error.txt")
+
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+
+    solutions_to_compare = [s for s in list_of_elites if s['id'] in selected_ids]
+    
+    if not solutions_to_compare:
+        return dict(content="Error: Selected solutions not found in results.", filename="error.txt")
+
+    pdf_content = generate_pdf_report(
+        solutions_to_compare,
+        list_of_elites, # Pass all elites for correlation analysis
+        results_data['labels'],
+        results_data['grid_geojson'],
+        results_data['xy_length']
+    )
+
+    if pdf_content:
+        return dict(content=pdf_content, filename="OpenSKIZZE_Vergleichsbericht.zip", base64=True)
+    else:
+        return dict(content="Error: Failed to generate PDF report.", filename="error.txt")

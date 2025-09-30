@@ -23,6 +23,38 @@ window.dashExtensions = Object.assign({}, window.dashExtensions, {
 
             ,
         function1: function(feature, context) {
+                const {
+                    z_length
+                } = context.hideout;
+                const height = feature.properties.height;
+                const colorscale = chroma.scale('viridis').domain([0, z_length]);
+                return {
+                    fillColor: colorscale(height),
+                    color: '#333',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                };
+            }
+
+            ,
+        function2: function(feature, context) {
+                const {
+                    z_length
+                } = context.hideout;
+                const height = feature.properties.height;
+                const colorscale = chroma.scale('viridis').domain([0, z_length]);
+                return {
+                    fillColor: colorscale(height),
+                    color: '#333',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                };
+            }
+
+            ,
+        function3: function(feature, context) {
             const {
                 z_length
             } = context.hideout;
