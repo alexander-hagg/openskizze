@@ -32,9 +32,8 @@ function(feature, context){
 
 def layout():
     return dbc.Container([
-        dcc.Location(id='url-s6', refresh=False),
-        html.H2("Detailvergleich der ausgewählten Entwürfe"),
-        dcc.Store(id='comparison-store', storage_type='session'),
+    dcc.Location(id='url-s6', refresh=False),
+    html.H2("Detailvergleich der ausgewählten Entwürfe"),
         dbc.Row([
             dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step5', color="secondary")),
             dbc.Col([
@@ -48,8 +47,8 @@ def layout():
 
 @callback(
     Output('comparison-content', 'children'),
-    Input('comparison-store', 'data'),  # Trigger when the store's data is loaded/changed
-    State('results-store', 'data')
+    Input('comparison-store', 'data'),
+    Input('results-store', 'data')
 )
 def display_comparison(selected_ids, results_data):
     if not selected_ids:

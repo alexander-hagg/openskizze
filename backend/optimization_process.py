@@ -92,12 +92,27 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     final_labels = [DOMAIN_CONFIG['labels'][i] for i in selected_features]
     # if the user_feature_ranges dict is empty
     if not user_feature_ranges:
-        dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(
-        buildable_mask)
-        final_feat_ranges = [dynamic_ranges[i] for i in selected_features]
+        final_feat_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
     else:
-        final_feat_ranges = [user_feature_ranges[str(i)] for i in selected_features]
+        # If user ranges are provided, we still need the full dynamic ranges first,
+        # then we can overwrite them with the user's choices.
+        dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
+        
+        # Create a copy to modify
+        final_feat_ranges = list(dynamic_ranges) 
 
+        # Map selected features to their user-defined ranges
+        for i, feature_index in enumerate(selected_features):
+            # The user_feature_ranges are keyed by the original feature index (as a string)
+            user_range = user_feature_ranges.get(str(feature_index))
+            if user_range:
+                # The final_feat_ranges passed to the optimizer only contains ranges
+                # for the *selected* features. So we update the range at position 'i'.
+                final_feat_ranges[i] = user_range
+    
+    # Filter the final_feat_ranges to only include those for selected_features
+    final_feat_ranges = [final_feat_ranges[i] for i in selected_features]
+    
     grid_geojson = json.loads(grid_poly_web.to_json())
 
     return {
@@ -105,7 +120,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         'env_3d_fixed': env_3d_fixed,
         'labels': final_labels,
         'feat_ranges': final_feat_ranges, # This now contains the user's ranges
-        'buildable_area_in_sq_meters': 0, # Placeholder, calculation removed for brevity
+        'buildable_area_in_sq_meters': buildable_area_m2,
         'selected_features': selected_features,
         'grid_geojson': grid_geojson,
     }

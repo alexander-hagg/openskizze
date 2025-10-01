@@ -59,8 +59,13 @@ def layout():
     Output('x-axis-dropdown-s4', 'value'),
     Output('y-axis-dropdown-s4', 'value'),
     Input('results-store', 'data'),
+    Input('url', 'pathname'),
 )
-def populate_dropdowns_s4(results_data):
+def populate_dropdowns_s4(results_data, pathname):
+    # Only populate when on this page
+    if pathname != '/step4':
+        return no_update, no_update, no_update, no_update
+        
     if not results_data or 'labels' not in results_data:
         return [], [], None, None
     
@@ -73,10 +78,10 @@ def populate_dropdowns_s4(results_data):
     Output('solution-map-grid-container', 'children'),
     Input('x-axis-dropdown-s4', 'value'),
     Input('y-axis-dropdown-s4', 'value'),
-    State('results-store', 'data'),
+    Input('results-store', 'data'),
 )
 def update_solution_map_grid(x_axis_idx, y_axis_idx, results_data):
-    if not all([isinstance(x_axis_idx, int), isinstance(y_axis_idx, int), results_data]):
+    if not results_data or not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
         return dbc.Alert("Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.", color="warning")
 
     results_path = results_data.get('full_results_path')

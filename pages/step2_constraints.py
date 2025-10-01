@@ -161,6 +161,30 @@ def create_range_sliders(selected_indices):
         
     return sliders
 
+# Callback to restore settings from loaded session data
+@callback(
+    Output('measures-checklist', 'value', allow_duplicate=True),
+    Output('max-height-constraint', 'value', allow_duplicate=True),
+    Output('min-distance-constraint', 'value', allow_duplicate=True),
+    Input('session-store', 'data'),
+    Input('url', 'pathname'),
+    prevent_initial_call=True
+)
+def restore_step2_from_session(session_data, pathname):
+    if pathname != '/step2' or not session_data:
+        return no_update, no_update, no_update
+    
+    selected_features = session_data.get('selected_features')
+    hard_constraints = session_data.get('hard_constraints', {})
+    
+    max_height = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'] * 3) / 3
+    min_distance = hard_constraints.get('min_distance', 0)
+    
+    if selected_features is not None:
+        return selected_features, int(max_height), min_distance
+    
+    return no_update, int(max_height), min_distance
+
 # --- UPDATED: Callback to save both selections and ranges to the session ---
 @callback(
     Output('session-store', 'data', allow_duplicate=True),

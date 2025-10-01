@@ -1,6 +1,7 @@
 #
 # pages/step3_optimize.py
 #
+import dash
 from dash import dcc, html, Input, Output, State, callback, no_update
 import dash_bootstrap_components as dbc
 from backend.translation import T
@@ -78,12 +79,13 @@ def toggle_live_updates(n_clicks):
     return False, session_id # Enable interval and set session ID
 
 @callback(
-    Output('results-store', 'data'),
-    Output('results-output-div', 'children'),
+    Output('results-store', 'data', allow_duplicate=True),
+    Output('results-output-div', 'children', allow_duplicate=True),
     Output('live-update-interval', 'disabled', allow_duplicate=True),
     Input('start-optimization-btn', 'n_clicks'),
     State('session-store', 'data'),
     State('opt-session-id', 'data'), # Get the session ID
+    State('results-store', 'data'), # Check existing results
     background=True,
     manager=background_callback_manager,
     prevent_initial_call=True,
@@ -94,11 +96,14 @@ def toggle_live_updates(n_clicks):
         Output("progress-container", "style")
     ],
 )
-def run_optimization(set_progress, n_clicks, session_data, opt_session_id):
+def run_optimization(set_progress, n_clicks, session_data, opt_session_id, existing_results):
     if n_clicks:
         cleanup_old_files(TEMP_RESULTS_DIR)
         
     if not n_clicks or not session_data or not session_data.get('site_polygon'):
+        # Don't overwrite existing results, just show no update
+        if existing_results:
+            return no_update, no_update, no_update
         return None, dbc.Alert("Bitte definieren Sie einen Geltungsbereich in Schritt 1.", color="warning"), True
 
     selected_features = session_data.get('selected_features', list(range(8)))
@@ -231,3 +236,53 @@ def display_live_plot(n, opt_session_id):
         title=f"Lösungsraum-Erkundung (Live-Update...)"
     )
     return dcc.Graph(figure=fig)
+
+# --- NEW: Callback to display loaded results ---
+@callback(
+    Output('results-output-div', 'children', allow_duplicate=True),
+    Input('results-store', 'data'),
+    Input('url', 'pathname'), # Trigger when page is loaded
+    prevent_initial_call='initial_duplicate'
+)
+def display_loaded_results(results_data, pathname):
+    # Only show results when on step3 page
+    if pathname != '/step3':
+        return no_update
+        
+    # If no results data, don't update
+    if not results_data or not results_data.get('full_results_path'):
+        return no_update
+
+    full_results_path = results_data.get('full_results_path')
+    if not os.path.exists(full_results_path):
+        print(f"[DEBUG] Results file not found: {full_results_path}")
+        return no_update
+
+    with open(full_results_path, 'rb') as f:
+        full_list_of_elites = pickle.load(f)
+
+    labels = results_data.get('labels')
+
+    df_for_plot = pd.DataFrame(full_list_of_elites)
+    measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
+    df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()
+    df_for_plot.rename(columns={'objective': 'Zielfunktion (Kaltluft)'}, inplace=True)
+
+    corr = df_for_plot.corr()
+    heatmap_fig = px.imshow(corr, text_auto=".2f", aspect="auto",
+                        color_continuous_scale="RdBu",
+                        range_color=[-1, 1],
+                        title="Korrelation der Lösungsmerkmale und der Zielfunktion")
+    heatmap_fig.update_xaxes(side="top")
+    
+    parallel_fig = px.parallel_coordinates(
+        df_for_plot, dimensions=['Zielfunktion (Kaltluft)'] + labels, color="Zielfunktion (Kaltluft)",
+        labels={dim: dim.replace(" ", "<br>") for dim in ['Zielfunktion (Kaltluft)'] + labels},
+        title="Erkundung des Lösungsraums"
+    )
+
+    final_output = html.Div([
+        dbc.Row(dcc.Graph(figure=parallel_fig)),
+        dbc.Row(dcc.Graph(figure=heatmap_fig))
+    ])
+    return final_output

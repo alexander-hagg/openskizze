@@ -210,10 +210,32 @@ def load_parcels_data(n_clicks, bounds):
 def display_parcels(geojson_data):
     return geojson_data
 
+# Callback to restore the polygon and wind direction when a project is loaded
+@callback(
+    Output('active-polygon-layer', 'data', allow_duplicate=True),
+    Output('wind-direction-slider', 'value', allow_duplicate=True),
+    Input('session-store', 'data'),
+    Input('url', 'pathname'),
+    prevent_initial_call=True
+)
+def restore_from_session(session_data, pathname):
+    if pathname != '/' or not session_data:
+        return no_update, no_update
+    
+    ctx = dash.callback_context
+    # Only restore when session-store changes (e.g., project load), not on every visit
+    if not ctx.triggered or ctx.triggered[0]['prop_id'] != 'session-store.data':
+        return no_update, no_update
+    
+    site_polygon = session_data.get('site_polygon')
+    wind_direction = session_data.get('wind_direction', 180)
+    
+    return site_polygon, wind_direction
+
 # The single, authoritative callback that manages the active green polygon.
 @callback(
-    Output('session-store', 'data'),
-    Output('active-polygon-layer', 'data'),
+    Output('session-store', 'data', allow_duplicate=True),
+    Output('active-polygon-layer', 'data', allow_duplicate=True),
     Output('selected-parcels-store', 'data'),
     Output('parcels-layer', 'hideout'),
     Input('parcels-layer', 'clickData'),

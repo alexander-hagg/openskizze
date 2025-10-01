@@ -10,7 +10,7 @@ T = {
         'STEP1_TITLE': "Schritt 1: Geltungsbereich und klimatische Parameter festlegen",
         'STEP1_WIND_HEADER': "Klimatische Parameter",
         'STEP1_WIND_SLIDER_LABEL': "Windrichtung (TODO: importieren von Klimamodell)",
-        'STEP1_DATA_SOURCE_INFO': "Kartengrundlage: OpenStreetMap. Zukünftig: Anbindung an Geodatenportal NRW.",
+        'STEP1_DATA_SOURCE_INFO': "Kartengrundlage: OpenStreetMap und Geodatenportal NRW.",
 
         # Step 2
         'STEP2_TITLE': "Schritt 2: Leistungsmerkmale und Optimierungsziele festlegen",

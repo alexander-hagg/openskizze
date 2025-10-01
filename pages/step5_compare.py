@@ -69,7 +69,7 @@ def layout():
             html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
                 dbc.Row([
                     dbc.Col(dbc.Label(T[LANG]['STEP5_KMEDOIDS_K_LABEL']), width='auto'),
-                    dbc.Col(dcc.Slider(id='kmedoids-k-slider', min=2, max=50, step=1, value=30, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
+                    dbc.Col(dcc.Slider(id='kmedoids-k-slider', min=2, max=50, step=1, value=10, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
                 ], className="align-items-center mt-2"),
             ]),
 
@@ -83,8 +83,7 @@ def layout():
 
             dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
 
-            # Add a "Compare" button and a store for selections
-            dcc.Store(id='comparison-store', storage_type='session', data=[]),
+            # Add a "Compare" button and link to comparison view
             dbc.Button("Ausgewählte Designs vergleichen", id="compare-btn", href="/step6", color="success", className="mt-3", style={'display': 'none'}),
         ])),
         
@@ -273,7 +272,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     return cluster_cards
 
 @callback(
-    Output('comparison-store', 'data'),
+    Output('comparison-store', 'data', allow_duplicate=True),
     Output('compare-btn', 'style'),
     Input({'type': 'compare-checkbox', 'index': ALL}, 'value'),
     State({'type': 'compare-checkbox', 'index': ALL}, 'id'),
