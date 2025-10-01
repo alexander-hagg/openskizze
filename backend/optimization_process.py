@@ -87,31 +87,28 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
 
     env_3d_fixed[buildable_mask, :] = 0
     
-    # --- THE FIX IS HERE ---
-    # Use the user-defined ranges to construct the final list of ranges for the optimizer.
-    final_labels = [DOMAIN_CONFIG['labels'][i] for i in selected_features]
-    # if the user_feature_ranges dict is empty
-    if not user_feature_ranges:
-        final_feat_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
-    else:
-        # If user ranges are provided, we still need the full dynamic ranges first,
-        # then we can overwrite them with the user's choices.
-        dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
-        
-        # Create a copy to modify
-        final_feat_ranges = list(dynamic_ranges) 
-
-        # Map selected features to their user-defined ranges
-        for i, feature_index in enumerate(selected_features):
-            # The user_feature_ranges are keyed by the original feature index (as a string)
-            user_range = user_feature_ranges.get(str(feature_index))
-            if user_range:
-                # The final_feat_ranges passed to the optimizer only contains ranges
-                # for the *selected* features. So we update the range at position 'i'.
-                final_feat_ranges[i] = user_range
+    # --- Use the user-defined ranges to construct the final list of ranges for the optimizer ---
+    # Get dynamic ranges for all 8 features first
+    dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
     
-    # Filter the final_feat_ranges to only include those for selected_features
-    final_feat_ranges = [final_feat_ranges[i] for i in selected_features]
+    # Build the final ranges list: only for selected features
+    final_feat_ranges = []
+    final_labels = []
+    
+    for feature_index in selected_features:
+        # Get label for this feature
+        final_labels.append(DOMAIN_CONFIG['labels'][feature_index])
+        
+        # Check if user provided a custom range for this feature
+        user_range = user_feature_ranges.get(str(feature_index))
+        if user_range:
+            # Use user's custom range
+            final_feat_ranges.append(user_range)
+            print(f"[INFO] Using user-defined range for feature {feature_index} ({DOMAIN_CONFIG['labels'][feature_index]}): {user_range}")
+        else:
+            # Use dynamic range from calculations
+            final_feat_ranges.append(dynamic_ranges[feature_index])
+            print(f"[INFO] Using dynamic range for feature {feature_index} ({DOMAIN_CONFIG['labels'][feature_index]}): {dynamic_ranges[feature_index]}")
     
     grid_geojson = json.loads(grid_poly_web.to_json())
 

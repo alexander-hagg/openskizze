@@ -104,14 +104,40 @@ def apply_preset(preset_key, lang):
     
     # Re-generate sliders with preset values
     sliders = []
+    num_buildings_original_index = 3  # The original index for 'Anzahl der Gebäude'
+    
     for index in sorted(selected_indices):
         label = DOMAIN_CONFIG['labels'][index]
         # Use preset range if available, otherwise use default from config
         preset_range = preset['ranges'].get(str(index), DOMAIN_CONFIG['feat_ranges'][index])
+        min_val, max_val = preset_range[0], preset_range[1]
         
-        # This is duplicated from the create_range_sliders callback.
-        # In a larger app, this logic would be refactored into a helper function.
-        slider_div = html.Div([...]) # Same slider creation logic as before
+        # Create slider based on whether it's the number of buildings (integer) or continuous
+        if index == num_buildings_original_index:
+            min_v = int(np.floor(min_val))
+            max_v = int(np.ceil(max_val))
+            if min_v == max_v: max_v += 1
+            slider_div = html.Div([
+                dbc.Label(label),
+                dcc.RangeSlider(
+                    id={'type': 'feature-range-slider', 'index': index},
+                    min=min_v, max=max_v, step=1, value=[min_v, max_v],
+                    tooltip={"placement": "bottom", "always_visible": True}, marks=None
+                )
+            ], className="mb-3")
+        else:
+            min_v = round(min_val, 2)
+            max_v = round(max_val, 2)
+            if min_v == max_v: max_v += 0.01
+            slider_div = html.Div([
+                dbc.Label(label),
+                dcc.RangeSlider(
+                    id={'type': 'feature-range-slider', 'index': index},
+                    min=min_v, max=max_v, step=0.01, value=[min_v, max_v],
+                    tooltip={"placement": "bottom", "always_visible": True}, marks=None
+                )
+            ], className="mb-3")
+        
         sliders.append(slider_div)
         
     return selected_indices, sliders
