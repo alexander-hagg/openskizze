@@ -22,7 +22,6 @@ import pstats   # Import for saving stats
 
 cache = diskcache.Cache("./cache")
 background_callback_manager = DiskcacheManager(cache)
-LANG = 'DE'
 
 TEMP_RESULTS_DIR = "temp_results"
 os.makedirs(TEMP_RESULTS_DIR, exist_ok=True)
@@ -47,22 +46,22 @@ def cleanup_old_files(directory: str, max_age_hours: int = 24):
         print(f"Error during file cleanup: {e}")
 
 
-def layout():
+def layout(lang='DE'):
     return dbc.Container([
-        html.H2(T[LANG]['STEP3_TITLE']),
+        html.H2(T[lang]['STEP3_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step2', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step4', color="primary"), className="text-end")
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step2', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step4', color="primary"), className="text-end")
         ], className="mt-4"),
 
-        dbc.Button(T[LANG]['STEP3_START_BUTTON'], id='start-optimization-btn', color="success", size="lg", className="mb-3"),
+        dbc.Button(T[lang]['STEP3_START_BUTTON'], id='start-optimization-btn', color="success", size="lg", className="mb-3"),
         dcc.Store(id='opt-session-id', data=None),
         html.Div(id="progress-container", children=[
             dbc.Progress(id="progress-bar", label="0%", style={'height': '30px'}),
             html.Div(id="progress-text", className="text-center text-muted small mt-1")
         ], style={'visibility': 'hidden'}),
         html.Hr(),
-        html.H4(T[LANG]['STEP3_RESULTS_HEADER']),
+        html.H4(T[lang]['STEP3_RESULTS_HEADER']),
         dcc.Interval(id='live-update-interval', interval=5*1000, n_intervals=0, disabled=True),
         dcc.Loading(id="loading-results", children=html.Div(id='results-output-div'))
     ], fluid=True)

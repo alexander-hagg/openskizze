@@ -12,8 +12,6 @@ import os
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
 
-LANG = 'DE'
-
 # JS for styling the building polygons based on height using chroma.js
 style_handle = assign("""
 function(feature, context){
@@ -30,26 +28,26 @@ function(feature, context){
 }
 """)
 
-def layout():
+def layout(lang='DE'):
     return dbc.Container([
-        html.H2(T[LANG]['STEP4_TITLE']),
+        html.H2(T[lang]['STEP4_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step3', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step5', color="primary"), className="text-end")
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step3', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step5', color="primary"), className="text-end")
         ], className="mt-4"),
 
         dbc.Card(dbc.CardBody([
             dbc.Row([
-                dbc.Col(dbc.Label(T[LANG]['STEP4_X_AXIS_LABEL'])),
+                dbc.Col(dbc.Label(T[lang]['STEP4_X_AXIS_LABEL'])),
                 dbc.Col(dcc.Dropdown(id='x-axis-dropdown-s4')),
             ]),
             dbc.Row([
-                dbc.Col(dbc.Label(T[LANG]['STEP4_Y_AXIS_LABEL'])),
+                dbc.Col(dbc.Label(T[lang]['STEP4_Y_AXIS_LABEL'])),
                 dbc.Col(dcc.Dropdown(id='y-axis-dropdown-s4')),
             ])
         ])),
         html.Hr(),
-        html.H4(T[LANG]['STEP4_GRID_HEADER']),
+        html.H4(T[lang]['STEP4_GRID_HEADER']),
         dcc.Loading(html.Div(id='solution-map-grid-container'))
     ], fluid=True)
 

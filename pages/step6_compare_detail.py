@@ -13,8 +13,6 @@ import numpy as np
 from backend.analysis import heightmap_to_geojson, generate_pdf_report
 from backend.config import ENCODING_CONFIG
 
-LANG = 'DE'
-
 style_handle = assign("""
 function(feature, context){
     const { z_length } = context.hideout;
@@ -30,14 +28,14 @@ function(feature, context){
 }
 """)
 
-def layout():
+def layout(lang='DE'):
     return dbc.Container([
     dcc.Location(id='url-s6', refresh=False),
-    html.H2("Detailvergleich der ausgewählten Entwürfe"),
+    html.H2(T[lang]['STEP6_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step5', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step5', color="secondary")),
             dbc.Col([
-                dbc.Button("PDF-Bericht exportieren", id="export-pdf-btn-s6", color="info"),
+                dbc.Button(T[lang]['STEP6_EXPORT_PDF'], id="export-pdf-btn-s6", color="info"),
                 dcc.Download(id="download-pdf-s6")
             ], className="text-end")
         ], className="mt-4 mb-4"),
@@ -48,31 +46,29 @@ def layout():
 @callback(
     Output('comparison-content', 'children'),
     Input('comparison-store', 'data'),
-    Input('results-store', 'data')
+    Input('results-store', 'data'),
+    State('language-store', 'data')
 )
-def display_comparison(selected_ids, results_data):
+def display_comparison(selected_ids, results_data, lang):
+    if lang is None: lang = 'DE'  # Default to German
+    
     if not selected_ids:
-        return dbc.Alert("Keine Entwürfe zum Vergleich ausgewählt. Bitte gehen Sie zu Schritt 5 zurück und wählen Sie mindestens einen Entwurf aus.", color="info")
+        return dbc.Alert(T[lang]['STEP6_NO_SELECTION'], color="info")
 
     if not results_data:
-        return dbc.Alert("Die Ergebnisdaten konnten nicht geladen werden.", color="danger")
+        return dbc.Alert(T[lang]['STEP6_NO_RESULTS'], color="danger")
     
     results_path = results_data.get('full_results_path')
     grid_geojson = results_data.get('grid_geojson')
     if not os.path.exists(results_path) or not grid_geojson:
-        return dbc.Alert("Ergebnisdatei oder Georeferenzierung nicht gefunden.", color="danger")
+        return dbc.Alert(T[lang]['STEP6_FILE_NOT_FOUND'], color="danger")
 
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
     solutions_to_compare = [s for s in list_of_elites if s['id'] in selected_ids]
     if not solutions_to_compare:
-        return dbc.Alert(
-            "Fehler: Die ausgewählten Entwurfs-IDs wurden in der aktuellen Ergebnisdatei nicht gefunden. "
-            "Dies kann passieren, wenn nach der Auswahl eine neue Optimierung gestartet wurde. "
-            "Bitte gehen Sie zu Schritt 5 zurück und treffen Sie eine neue Auswahl.",
-            color="warning"
-        )
+        return dbc.Alert(T[lang]['STEP6_IDS_NOT_FOUND'], color="warning")
     
     lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
@@ -94,15 +90,15 @@ def display_comparison(selected_ids, results_data):
             id={'type': 'compare-map', 'index': i}
         )
         
-        metrics_data = {'Merkmal': results_data['labels'], 'Wert': [f"{v:.3f}" for v in sol['measures']]}
+        metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: results_data['labels'], T[lang]['STEP6_VALUE_LABEL']: [f"{v:.3f}" for v in sol['measures']]}
         metrics_df = pd.DataFrame(metrics_data)
         table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True)
         
         col = dbc.Col([
-            html.H4(f"Entwurf {i+1}"),
-            html.B(f"Zielfunktion (Kaltluft): {sol['objective']:.4f}"),
+            html.H4(T[lang]['STEP6_DESIGN_TITLE'].format(num=i+1)),
+            html.B(T[lang]['STEP6_OBJECTIVE_LABEL'].format(value=sol['objective'])),
             map_component,
-            html.H5("Leistungsmerkmale", className="mt-3"),
+            html.H5(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
             table
         ], width=4)
         cols.append(col)

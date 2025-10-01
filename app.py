@@ -35,6 +35,7 @@ app.layout = html.Div([
     dcc.Store(id='session-store', storage_type='session'),
     dcc.Store(id='results-store', storage_type='session'),
     dcc.Store(id='comparison-store', storage_type='session', data=[]),
+    dcc.Store(id='language-store', storage_type='session', data='DE'),
     dcc.Download(id="download-project-file"),
 
     dbc.NavbarSimple(
@@ -52,6 +53,15 @@ app.layout = html.Div([
                 nav=True,
                 in_navbar=True,
                 label="File",
+            ),
+            dbc.DropdownMenu(
+                children=[
+                    dbc.DropdownMenuItem("🇩🇪 Deutsch", id="lang-de-btn", n_clicks=0),
+                    dbc.DropdownMenuItem("🇬🇧 English", id="lang-en-btn", n_clicks=0),
+                ],
+                nav=True,
+                in_navbar=True,
+                label="Language",
             ),
             dbc.NavbarBrand(T['DE']['APP_TITLE'], href="/"),
         ],
@@ -130,21 +140,47 @@ def new_project(n_clicks):
         return empty_state['session_data'], empty_state['results_data'], empty_state['comparison_data'], '/'
     return no_update, no_update, no_update, no_update
 
+# Callback to handle language selection
+@app.callback(
+    Output('language-store', 'data'),
+    Input('lang-de-btn', 'n_clicks'),
+    Input('lang-en-btn', 'n_clicks'),
+    State('language-store', 'data'),
+    prevent_initial_call=True
+)
+def change_language(de_clicks, en_clicks, current_lang):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return current_lang
+    
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if button_id == 'lang-de-btn':
+        return 'DE'
+    elif button_id == 'lang-en-btn':
+        return 'EN'
+    
+    return current_lang
+
 # Callback to control page navigation
 @app.callback(
     Output('page-content', 'children'),
-    Input('url', 'pathname')
+    Input('url', 'pathname'),
+    Input('language-store', 'data')
 )
-def display_page(pathname):
+def display_page(pathname, lang):
+    if lang is None:
+        lang = 'DE'
+    
     if pathname == '/step2':
-        return step2_constraints.layout()
+        return step2_constraints.layout(lang)
     elif pathname == '/step3':
-        return step3_optimize.layout()
+        return step3_optimize.layout(lang)
     elif pathname == '/step4':
-        return step4_explore.layout()
+        return step4_explore.layout(lang)
     elif pathname == '/step5':
-        return step5_compare.layout()
+        return step5_compare.layout(lang)
     elif pathname == '/step6':
-        return step6_compare_detail.layout()
+        return step6_compare_detail.layout(lang)
     else:
-        return step1_scope.layout()
+        return step1_scope.layout(lang)

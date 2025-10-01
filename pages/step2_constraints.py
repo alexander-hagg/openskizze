@@ -7,49 +7,49 @@ from backend.translation import T
 from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG
 import numpy as np
 
-LANG = 'DE'
-
 MEASURES_OPTIONS = [{'label': label, 'value': i} for i, label in enumerate(DOMAIN_CONFIG['labels'])]
 
-PRESETS = {
-    "suburban": {
-        "name": "Vorstädtisch / Auflockerung",
-        "features": [0, 1, 3, 4, 5], # Coverage, Avg Height, Num Buildings, Spacing, GFA
-        "ranges": {
-            '0': [0.1, 0.4],  # Low coverage
-            '1': [1, 3],      # Low-rise
-            '3': [5, 20],     # Fewer buildings
-            '4': [0.2, 0.8],  # High spacing
-            '5': [0.3, 1.5],  # Low GFA
-        }
-    },
-    "dense_urban": {
-        "name": "Urbane Nachverdichtung",
-        "features": [0, 1, 2, 3, 5, 6, 7], # All except spacing
-        "ranges": {
-            '0': [0.4, 0.8],  # High coverage
-            '1': [3, 8],      # Mid-to-high-rise
-            '2': [1, 5],      # High variability
-            '3': [10, 50],    # More buildings
-            '5': [1.5, 5.0],  # High GFA
+def get_presets(lang):
+    return {
+        "suburban": {
+            "name": T[lang]['STEP2_PRESET_SUBURBAN'],
+            "features": [0, 1, 3, 4, 5],
+            "ranges": {
+                '0': [0.1, 0.4],
+                '1': [1, 3],
+                '3': [5, 20],
+                '4': [0.2, 0.8],
+                '5': [0.3, 1.5],
+            }
+        },
+        "dense_urban": {
+            "name": T[lang]['STEP2_PRESET_DENSE'],
+            "features": [0, 1, 2, 3, 5, 6, 7],
+            "ranges": {
+                '0': [0.4, 0.8],
+                '1': [3, 8],
+                '2': [1, 5],
+                '3': [10, 50],
+                '5': [1.5, 5.0],
+            }
         }
     }
-}
 
-def layout():
+def layout(lang='DE'):
+    PRESETS = get_presets(lang)
     return dbc.Container([
-        html.H2(T[LANG]['STEP2_TITLE']),
+        html.H2(T[lang]['STEP2_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
         ], className="mt-4"),
 
         dbc.Card(dbc.CardBody([
-            html.H5("Voreinstellungen (Presets)"),
+            html.H5(T[lang]['STEP2_PRESETS_HEADER']),
             dbc.Select(
                 id='presets-dropdown',
                 options=[
-                    {'label': 'Benutzerdefiniert', 'value': 'custom'},
+                    {'label': T[lang]['STEP2_PRESET_CUSTOM'], 'value': 'custom'},
                     {'label': PRESETS['suburban']['name'], 'value': 'suburban'},
                     {'label': PRESETS['dense_urban']['name'], 'value': 'dense_urban'},
                 ],
@@ -59,8 +59,8 @@ def layout():
 
         dbc.Row([
             dbc.Col([
-                html.H5(T[LANG]['STEP2_OBJECTIVES_HEADER']),
-                dbc.Label(T[LANG]['STEP2_MEASURES_LABEL']),
+                html.H5(T[lang]['STEP2_OBJECTIVES_HEADER']),
+                dbc.Label(T[lang]['STEP2_MEASURES_LABEL']),
                 dbc.Card(dbc.Checklist(
                     options=MEASURES_OPTIONS,
                     value=DOMAIN_CONFIG['features'],
@@ -69,18 +69,18 @@ def layout():
                 ), body=True)
             ], md=6),
             dbc.Col([
-                html.H5(T[LANG]['STEP2_OBJECTIVE_INFO_LABEL']),
-                dbc.Alert(T[LANG]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
-                html.H5("Zielbereiche für Merkmale festlegen"),
-                html.P("Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.", className="text-muted small"),
+                html.H5(T[lang]['STEP2_OBJECTIVE_INFO_LABEL']),
+                dbc.Alert(T[lang]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
+                html.H5(T[lang]['STEP2_TARGET_RANGES_HEADER']),
+                html.P(T[lang]['STEP2_TARGET_RANGES_INFO'], className="text-muted small"),
                 dcc.Loading(html.Div(id='feature-range-sliders-container')),
                 # --- NEW: Hard Constraints Section ---
-                html.H5("Harte Randbedingungen", className="mt-4"),
+                html.H5(T[lang]['STEP2_HARD_CONSTRAINTS_HEADER'], className="mt-4"),
                 dbc.Card(dbc.CardBody([
-                    dbc.Label("Maximale Bauhöhe (in Geschossen, ca. 3m pro Geschoss):"),
-                    dbc.Input(id='max-height-constraint', type="number", placeholder="z.B. 7 (= 21m)", min=1, step=1, value=ENCODING_CONFIG['z_length']),
-                    dbc.Label("Minimaler Gebäudeabstand (m):", className="mt-2"),
-                    dbc.Input(id='min-distance-constraint', type="number", placeholder="z.B. 6", min=0, step=1, value=0),
+                    dbc.Label(T[lang]['STEP2_MAX_HEIGHT_LABEL']),
+                    dbc.Input(id='max-height-constraint', type="number", placeholder=T[lang]['STEP2_MAX_HEIGHT_PLACEHOLDER'], min=1, step=1, value=ENCODING_CONFIG['z_length']),
+                    dbc.Label(T[lang]['STEP2_MIN_DISTANCE_LABEL'], className="mt-2"),
+                    dbc.Input(id='min-distance-constraint', type="number", placeholder=T[lang]['STEP2_MIN_DISTANCE_PLACEHOLDER'], min=0, step=1, value=0),
                 ]), color="light")
             ], md=6),
         ])
@@ -90,13 +90,16 @@ def layout():
     Output('measures-checklist', 'value'),
     Output('feature-range-sliders-container', 'children', allow_duplicate=True),
     Input('presets-dropdown', 'value'),
+    State('language-store', 'data'),
     prevent_initial_call=True
 )
-def apply_preset(preset_key):
+def apply_preset(preset_key, lang):
     if preset_key == 'custom':
         return no_update, no_update
     
-    preset = PRESETS[preset_key]
+    if lang is None: lang = 'DE'
+    presets = get_presets(lang)
+    preset = presets[preset_key]
     selected_indices = preset['features']
     
     # Re-generate sliders with preset values

@@ -15,8 +15,6 @@ import json
 import base64
 import io
 
-LANG = 'DE'
-
 # Client-side styling for the selectable parcel layer
 style_handle = assign("""
 function(feature, context){
@@ -44,11 +42,11 @@ def create_compass_component():
         html.Div(className='compass-pivot')
     ])
 
-def layout():
+def layout(lang='DE'):
     return dbc.Container([
-        html.H2(T[LANG]['STEP1_TITLE']),
-        dbc.Button(T[LANG]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4"),
-        html.P(T[LANG]['STEP1_DATA_SOURCE_INFO'], className="text-muted mb-3"),
+        html.H2(T[lang]['STEP1_TITLE']),
+        dbc.Button(T[lang]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4"),
+        html.P(T[lang]['STEP1_DATA_SOURCE_INFO'], className="text-muted mb-3"),
         dcc.Store(id='loaded-parcels-store'),
         dcc.Store(id='selected-parcels-store', data=[]),
         dcc.Store(id='active-polygon-store'),
@@ -73,12 +71,12 @@ def layout():
             
             dbc.Col([
                 html.Div([
-                    html.H5("Werkzeuge"),
+                    html.H5(T[lang]['STEP1_TOOLS_HEADER']),
                     # --- NEW: File Upload ---
-                    dbc.Label("1a. Geltungsbereich aus GeoJSON-Datei importieren", className="fw-bold"),
+                    dbc.Label(T[lang]['STEP1_UPLOAD_LABEL'], className="fw-bold"),
                     dcc.Upload(
                         id='upload-geojson',
-                        children=html.Div(['GeoJSON-Datei ', html.A('hochladen')]),
+                        children=html.Div([T[lang]['STEP1_UPLOAD_BUTTON_TEXT']]),
                         style={
                             'width': '100%', 'height': '60px', 'lineHeight': '60px',
                             'borderWidth': '1px', 'borderStyle': 'dashed',
@@ -87,22 +85,22 @@ def layout():
                         multiple=False
                     ),
                     html.Hr(),
-                    dbc.Label("1b. ODER: Flurstücke von OpenData Portal NRW laden", className="fw-bold"),
-                    dbc.Button("Flurstücke für aktuellen Kartenausschnitt laden", id="load-parcels-btn", className="w-100 mb-3"),
+                    dbc.Label(T[lang]['STEP1_LOAD_PARCELS_LABEL'], className="fw-bold"),
+                    dbc.Button(T[lang]['STEP1_LOAD_PARCELS_BUTTON'], id="load-parcels-btn", className="w-100 mb-3"),
                     
-                    dbc.Label("2. Manuelle Anpassung", className="fw-bold"),
+                    dbc.Label(T[lang]['STEP1_MANUAL_ADJUSTMENT_LABEL'], className="fw-bold"),
                     dbc.RadioItems(
                         options=[
-                            {'label': 'Fläche hinzufügen', 'value': 'add'},
-                            {'label': 'Fläche entfernen', 'value': 'subtract'},
+                            {'label': T[lang]['STEP1_ADD_AREA'], 'value': 'add'},
+                            {'label': T[lang]['STEP1_REMOVE_AREA'], 'value': 'subtract'},
                         ],
                         value='add', id='edit-mode-toggle', inline=True,
                     ),
-                    html.P("Nutzen Sie die Werkzeuge links auf der Karte, um die grüne Auswahl anzupassen.", className="small fst-italic"),
+                    html.P(T[lang]['STEP1_EDIT_INSTRUCTIONS'], className="small fst-italic"),
                 ]),
                 html.Hr(),
-                html.H5(T[LANG]['STEP1_WIND_HEADER']),
-                html.Div(T[LANG]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
+                html.H5(T[lang]['STEP1_WIND_HEADER']),
+                html.Div(T[lang]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
                 create_compass_component(),
                 dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
             ], md=5)

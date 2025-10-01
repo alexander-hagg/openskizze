@@ -11,8 +11,6 @@ from dash_extensions.javascript import assign
 import plotly.express as px
 import base64 
 
-LANG = 'DE'
-
 style_handle = assign("""
 function(feature, context){
     const { z_length } = context.hideout;
@@ -28,27 +26,27 @@ function(feature, context){
 }
 """)
 
-def layout():
+def layout(lang='DE'):
     return dbc.Container([
-        html.H2(T[LANG]['STEP5_TITLE']),
+        html.H2(T[lang]['STEP5_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[LANG]['PREV_STEP'], href='/step4', color="secondary")),
-            dbc.Col(dbc.Button(T[LANG]['NEXT_STEP'], href='/step6', color="primary"), className="text-end")
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step4', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step6', color="primary"), className="text-end")
         ], className="mt-4"),
 
         
         dbc.Card(dbc.CardBody([
-            html.H4(T[LANG]['STEP5_FILTER_HEADER']),
-            html.P("Filtern Sie die Lösungen nach ihren Merkmalen und passen Sie die Clustering-Parameter an, um Entwurfstypen zu identifizieren.", className="text-muted"),
+            html.H4(T[lang]['STEP5_FILTER_HEADER']),
+            html.P(T[lang]['STEP5_FILTER_INFO'], className="text-muted"),
             html.Div(id='feature-filter-controls'),
             
-            dbc.Label(T[LANG]['STEP5_ALGORITHM_LABEL']),
+            dbc.Label(T[lang]['STEP5_ALGORITHM_LABEL']),
             dbc.RadioItems(
                 id='algorithm-selector',
                 options=[
-                    {'label': 'K-Medoids (Partionierend)', 'value': 'kmedoids'},
-                    {'label': 'HDBSCAN (Automatisch)', 'value': 'hdbscan'},
-                    {'label': 'DBSCAN (Dichte-basiert)', 'value': 'dbscan'},
+                    {'label': T[lang]['STEP5_ALG_KMEDOIDS'], 'value': 'kmedoids'},
+                    {'label': T[lang]['STEP5_ALG_HDBSCAN'], 'value': 'hdbscan'},
+                    {'label': T[lang]['STEP5_ALG_DBSCAN'], 'value': 'dbscan'},
                 ],
                 value='kmedoids',
                 inline=True,
@@ -68,30 +66,30 @@ def layout():
 
             html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
                 dbc.Row([
-                    dbc.Col(dbc.Label(T[LANG]['STEP5_KMEDOIDS_K_LABEL']), width='auto'),
+                    dbc.Col(dbc.Label(T[lang]['STEP5_KMEDOIDS_K_LABEL']), width='auto'),
                     dbc.Col(dcc.Slider(id='kmedoids-k-slider', min=2, max=50, step=1, value=10, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
                 ], className="align-items-center mt-2"),
             ]),
 
             html.Div(id='hdbscan-params-div', style={'display': 'none'}, children=[
                 dbc.Row([
-                    dbc.Col(dbc.Label(T[LANG]['STEP5_HDBSCAN_MINCLUSTER']), width='auto'),
+                    dbc.Col(dbc.Label(T[lang]['STEP5_HDBSCAN_MINCLUSTER']), width='auto'),
                     dbc.Col(dcc.Slider(id='hdbscan-minsamples-slider', min=2, max=20, step=1, value=5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
                 ], className="align-items-center mt-2"),
             ]),
 
 
-            dbc.Button(T[LANG]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
+            dbc.Button(T[lang]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
 
             # Add a "Compare" button and link to comparison view
-            dbc.Button("Ausgewählte Designs vergleichen", id="compare-btn", href="/step6", color="success", className="mt-3", style={'display': 'none'}),
+            dbc.Button(T[lang]['STEP5_COMPARE_BUTTON'], id="compare-btn", href="/step6", color="success", className="mt-3", style={'display': 'none'}),
         ])),
         
         html.Hr(),
         
-        html.H4(T[LANG]['STEP5_ANALYSIS_HEADER']),
+        html.H4(T[lang]['STEP5_ANALYSIS_HEADER']),
         dcc.Loading(html.Div(id='cluster-results-container', children=[
-             dbc.Alert(T[LANG]['STEP5_NO_SELECTION'], color="light")
+             dbc.Alert(T[lang]['STEP5_NO_SELECTION'], color="light")
         ])),
         
         # DEBUG: Display the content of the comparison-store
@@ -202,16 +200,18 @@ def create_filter_controls(results_data):
     State('dbscan-eps-slider', 'value'),
     State('dbscan-minsamples-slider', 'value'),
     State('kmedoids-k-slider', 'value'),
+    State('language-store', 'data'),
     prevent_initial_call=True
 )
 def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
-                             algorithm, eps, min_samples, k):
+                             algorithm, eps, min_samples, k, lang):
     if not n_clicks: return no_update
+    if lang is None: lang = 'DE'  # Default to German
 
     results_path = results_data.get('full_results_path')
     grid_geojson = results_data.get('grid_geojson')
     if not results_path or not grid_geojson:
-        return dbc.Alert("Ergebnisdatei oder Georeferenzierung nicht gefunden.", color="danger")
+        return dbc.Alert(T[lang]['STEP5_NO_RESULTS_ERROR'], color="danger")
         
     feature_filters = {s_id['index']: s_val for s_id, s_val in zip(slider_ids, slider_values)}
 
@@ -224,7 +224,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters)
 
     if not clusters:
-        return dbc.Alert(T[LANG]['STEP5_NO_CLUSTERS_FOUND'], color="warning")
+        return dbc.Alert(T[lang]['STEP5_NO_CLUSTERS_FOUND'], color="warning")
 
     lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
@@ -256,15 +256,15 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         card = dbc.Card(dbc.CardBody([
             dbc.Checkbox(
                 id={'type': 'compare-checkbox', 'index': cluster['central_solution']['id']}, # Assuming solutions have a unique ID
-                label=f"Zum Vergleich auswählen",
+                label=T[lang]['STEP5_SELECT_FOR_COMPARISON'],
                 value=False
             ),
-            html.H5(T[LANG]['STEP5_CLUSTER_CARD_TITLE'].format(id=cluster['cluster_id'], size=cluster['size'])),
-            html.P(T[LANG]['STEP5_CLUSTER_CARD_TEXT'].format(size=cluster['size']), className="text-muted small"),
+            html.H5(T[lang]['STEP5_CLUSTER_CARD_TITLE'].format(id=cluster['cluster_id'], size=cluster['size'])),
+            html.P(T[lang]['STEP5_CLUSTER_CARD_TEXT'].format(size=cluster['size']), className="text-muted small"),
             dbc.Row([
-                dbc.Col([html.H6(T[LANG]['STEP5_BEST_SOLUTION_HEADER']), best_map], md=4),
-                dbc.Col([html.H6(T[LANG]['STEP5_CENTRAL_SOLUTION_HEADER']), central_map], md=4),
-                dbc.Col([html.H6(T[LANG]['STEP5_CONSENSUS_MAP_HEADER']), consensus_graph], md=4)
+                dbc.Col([html.H6(T[lang]['STEP5_BEST_SOLUTION_HEADER']), best_map], md=4),
+                dbc.Col([html.H6(T[lang]['STEP5_CENTRAL_SOLUTION_HEADER']), central_map], md=4),
+                dbc.Col([html.H6(T[lang]['STEP5_CONSENSUS_MAP_HEADER']), consensus_graph], md=4)
             ])
         ]), className="mb-3")
         cluster_cards.append(card)
