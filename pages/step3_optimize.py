@@ -78,11 +78,7 @@ def layout(lang='DE'):
         dbc.Row([
             dbc.Col([
                 dbc.Button(T[lang]['STEP3_START_BUTTON'], id='start-optimization-btn', color="success", size="lg", className="mb-3"),
-            ], md=8),
-            dbc.Col([
-                dbc.Label(T[lang]['STEP3_UPDATE_INTERVAL_LABEL']),
-                dbc.Input(id='live-update-interval-generations', type="number", min=1, max=500, step=1, value=200, size="sm"),
-            ], md=4),
+            ], md=12),
         ]),
         
         dcc.Store(id='opt-session-id', data=None),
@@ -119,19 +115,17 @@ def layout(lang='DE'):
             ], md=6),
         ]),
         
-        dcc.Interval(id='live-update-interval', interval=2*1000, n_intervals=0, disabled=True),  # Poll every 2 seconds
     ], fluid=True)
 
-# --- NEW: Callback to start interval and generate session ID ---
+# --- Generate session ID when optimization starts ---
 @callback(
-    Output('live-update-interval', 'disabled'),
     Output('opt-session-id', 'data'),
     Input('start-optimization-btn', 'n_clicks'),
     prevent_initial_call=True
 )
-def toggle_live_updates(n_clicks):
+def generate_session_id(n_clicks):
     session_id = str(uuid.uuid4())
-    return False, session_id # Enable interval and set session ID
+    return session_id
 
 # --- Populate axis dropdowns from results ---
 @callback(
@@ -166,48 +160,18 @@ def populate_dropdowns_s3(results_data, language):
     Input('x-axis-dropdown-s3', 'value'),
     Input('y-axis-dropdown-s3', 'value'),
     Input('results-store', 'data'),
-    Input('live-update-interval', 'n_intervals'),
-    State('opt-session-id', 'data'),
 )
-def update_solution_map_grid_s3(x_axis_idx, y_axis_idx, results_data, n_intervals, opt_session_id):
-    from dash import ctx
-    import time
-    
-    # Determine which data source to use - check if live file exists and is recent
-    live_results_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl") if opt_session_id else None
-    use_live_data = False
-    
-    if live_results_path and os.path.exists(live_results_path):
-        # Check if file was modified in last 10 seconds (optimization is active)
-        file_age = time.time() - os.path.getmtime(live_results_path)
-        if file_age < 10:
-            use_live_data = True
-    
-    if use_live_data:
-        # Live update during optimization
-        
-        # Load live results
-        with open(live_results_path, 'rb') as f:
-            live_data = pickle.load(f)
-        
-        if not results_data or 'grid_geojson' not in results_data:
-            return no_update
-            
-        # Use live elite list
-        list_of_elites = live_data.get('elites', [])
-        if not list_of_elites:
-            return html.Div("Warte auf erste Lösungen...", className="text-muted")
-    else:
-        # Final results or axis change
-        if not results_data or not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
-            return dbc.Alert("Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.", color="warning")
+def update_solution_map_grid_s3(x_axis_idx, y_axis_idx, results_data):
+    # Load final results only
+    if not results_data or not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
+        return dbc.Alert("Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.", color="warning")
 
-        results_path = results_data.get('full_results_path')
-        if not results_path or not os.path.exists(results_path):
-            return dbc.Alert("Fehler: Große Ergebnisdatei nicht gefunden.", color="danger")
+    results_path = results_data.get('full_results_path')
+    if not results_path or not os.path.exists(results_path):
+        return dbc.Alert("Fehler: Große Ergebnisdatei nicht gefunden.", color="danger")
 
-        with open(results_path, 'rb') as f:
-            list_of_elites = pickle.load(f)
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
     
     # Common visualization code
     grid_geojson = results_data.get('grid_geojson')
@@ -292,57 +256,28 @@ clientside_callback(
 @callback(
     Output('parallel-coords-plot-s3', 'figure'),
     Input('results-store', 'data'),
-    Input('live-update-interval', 'n_intervals'),
     Input('language-store', 'data'),
-    State('opt-session-id', 'data'),
 )
-def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_id):
-    from dash import ctx
+def update_parallel_coords_s3(results_data, language):
     from backend.translation import translate_feature_labels
-    import time
     
     # Get current language (default to 'DE')
     lang = language if language else 'DE'
     
-    # Determine which data source to use - check if live file exists and is recent
-    live_results_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl") if opt_session_id else None
-    use_live_data = False
+    # Load final results only
+    if not results_data:
+        return {}
     
-    if live_results_path and os.path.exists(live_results_path):
-        # Check if file was modified in last 10 seconds (optimization is active)
-        file_age = time.time() - os.path.getmtime(live_results_path)
-        if file_age < 10:
-            use_live_data = True
-    
-    if use_live_data:
-        # Live update during optimization
-        with open(live_results_path, 'rb') as f:
-            live_data = pickle.load(f)
-        
-        list_of_elites = live_data.get('elites', [])
-        if not list_of_elites or not results_data:
-            return {}
-        
-        # Translate labels based on current language
-        feature_indices = results_data.get('selected_features_indices', [])
-        labels = translate_feature_labels(feature_indices, lang)
-        is_live = True
-    else:
-        # Final results
-        if not results_data:
-            return {}
-        
-        results_path = results_data.get('full_results_path')
-        if not results_path or not os.path.exists(results_path):
-            return {}
+    results_path = results_data.get('full_results_path')
+    if not results_path or not os.path.exists(results_path):
+        return {}
 
-        with open(results_path, 'rb') as f:
-            list_of_elites = pickle.load(f)
-        
-        # Translate labels based on current language
-        feature_indices = results_data.get('selected_features_indices', [])
-        labels = translate_feature_labels(feature_indices, lang)
-        is_live = False
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+    
+    # Translate labels based on current language
+    feature_indices = results_data.get('selected_features_indices', [])
+    labels = translate_feature_labels(feature_indices, lang)
     
     # Create parallel coordinates plot
     df_for_plot = pd.DataFrame(list_of_elites)
@@ -374,19 +309,17 @@ def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_i
     parallel_fig = px.parallel_coordinates(
         df_for_plot, dimensions=all_dims, color=objective_label,
         labels=dim_labels,
-        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'] + (" (Live)" if is_live else "")
+        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER']
     )
     
     return parallel_fig
 
 @callback(
     Output('results-store', 'data', allow_duplicate=True),
-    Output('live-update-interval', 'disabled', allow_duplicate=True),
     Input('start-optimization-btn', 'n_clicks'),
     State('session-store', 'data'),
     State('opt-session-id', 'data'), # Get the session ID
     State('results-store', 'data'), # Check existing results
-    State('live-update-interval-generations', 'value'), # Get generation interval
     background=True,
     manager=background_callback_manager,
     prevent_initial_call=True,
@@ -397,76 +330,28 @@ def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_i
         Output("progress-container", "style")
     ],
 )
-def run_optimization(set_progress, n_clicks, session_data, opt_session_id, existing_results, live_update_generations):
+def run_optimization(set_progress, n_clicks, session_data, opt_session_id, existing_results):
     if n_clicks:
         cleanup_old_files(TEMP_RESULTS_DIR)
         
     if not n_clicks or not session_data or not session_data.get('site_polygon'):
         # Don't overwrite existing results, just show no update
         if existing_results:
-            return no_update, no_update
-        return None, True
+            return no_update
+        return None
 
     selected_features = session_data.get('selected_features', list(range(8)))
     user_feature_ranges = session_data.get('feature_ranges', {})
     hard_constraints = session_data.get('hard_constraints', {})
     qd_hyperparams = session_data.get('qd_hyperparams', {})
-    
-    # Add live update interval to qd_hyperparams
-    if live_update_generations and live_update_generations > 0:
-        qd_hyperparams['live_update_interval'] = int(live_update_generations)
-    else:
-        qd_hyperparams['live_update_interval'] = 200  # Default
 
-    # Shared state for live updates
-    live_state = {'buildable_mask': None, 'encoding_obj': ParametricEncoding(ENCODING_CONFIG)}
-
+    # Simplified progress callback without live updates
     def progress_callback(progress, text, archive=None):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
-        if archive and not archive.empty and live_state['buildable_mask'] is not None:
-            try:
-                # Save a snapshot of the archive for the live visualization
-                live_update_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl")
-                
-                # Get archive data
-                objectives = archive.data('objective')
-                measures = archive.data('measures')
-                solutions = archive.data('solution')
-                grid_indices = archive.index_of(measures)
-                grid_indices = archive.int_to_grid_index(grid_indices)
-                
-                # Create elite list for visualization with regenerated heightmaps
-                live_elites = []
-                # Limit to 200 elites for performance during live updates
-                num_to_process = min(len(objectives), 200)
-                for i in range(num_to_process):
-                    genome = solutions[i]
-                    heightmap = live_state['encoding_obj'].express(live_state['buildable_mask'], genome)
-                    live_elites.append({
-                        "objective": objectives[i],
-                        "measures": measures[i].tolist(),
-                        "grid_indices": grid_indices[i].tolist(),
-                        "heightmap": heightmap.flatten().tolist()
-                    })
-                
-                with open(live_update_path, 'wb') as f:
-                    pickle.dump({'elites': live_elites}, f)
-            except Exception as e:
-                print(f"Error saving live update: {e}")
 
     try:
         # profiler = cProfile.Profile()
         # profiler.enable()
-        
-        # Pre-create environment to get buildable_mask for live updates
-        from backend.optimization_process import create_environment
-        set_progress((5, "5%", "Creating environment...", {'visibility': 'visible'}))
-        env_config = create_environment(
-            session_data['site_polygon'],
-            selected_features,
-            user_feature_ranges
-        )
-        live_state['buildable_mask'] = env_config['buildable_mask']
         
         # Start optimization
         archive, labels, env_config = start_optimization(
@@ -531,15 +416,15 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             # stats.dump_stats('optimization_profile.prof') # Save the results to a file
             
             # Visualization is now handled by separate callbacks for parallel-coords-plot-s3 and solution-map-grid-container-s3
-            return results_summary_to_store, True
+            return results_summary_to_store
         
     except Exception as e:
         import traceback
         print("!!!!!! OPTIMIZATION FAILED in UI callback !!!!!!")
         traceback.print_exc()
-        return None, True
+        return None
     
-    return None, True
+    return None
 
 # Note: Live visualization is now handled by update_parallel_coords_s3 and update_solution_map_grid_s3 callbacks
 # which update parallel-coords-plot-s3 and solution-map-grid-container-s3 respectively
