@@ -81,7 +81,7 @@ def layout(lang='DE'):
             ], md=8),
             dbc.Col([
                 dbc.Label(T[lang]['STEP3_UPDATE_INTERVAL_LABEL']),
-                dbc.Input(id='live-update-interval-generations', type="number", min=1, max=500, step=1, value=50, size="sm"),
+                dbc.Input(id='live-update-interval-generations', type="number", min=1, max=500, step=1, value=200, size="sm"),
             ], md=4),
         ]),
         
@@ -171,13 +171,20 @@ def populate_dropdowns_s3(results_data, language):
 )
 def update_solution_map_grid_s3(x_axis_idx, y_axis_idx, results_data, n_intervals, opt_session_id):
     from dash import ctx
+    import time
     
-    # Determine which data source to use
-    if ctx.triggered_id == 'live-update-interval' and opt_session_id:
+    # Determine which data source to use - check if live file exists and is recent
+    live_results_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl") if opt_session_id else None
+    use_live_data = False
+    
+    if live_results_path and os.path.exists(live_results_path):
+        # Check if file was modified in last 10 seconds (optimization is active)
+        file_age = time.time() - os.path.getmtime(live_results_path)
+        if file_age < 10:
+            use_live_data = True
+    
+    if use_live_data:
         # Live update during optimization
-        live_results_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl")
-        if not os.path.exists(live_results_path):
-            return no_update
         
         # Load live results
         with open(live_results_path, 'rb') as f:
@@ -292,18 +299,23 @@ clientside_callback(
 def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_id):
     from dash import ctx
     from backend.translation import translate_feature_labels
+    import time
     
     # Get current language (default to 'DE')
     lang = language if language else 'DE'
     
-    # Determine which data source to use
-    if ctx.triggered_id == 'live-update-interval' and opt_session_id:
+    # Determine which data source to use - check if live file exists and is recent
+    live_results_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl") if opt_session_id else None
+    use_live_data = False
+    
+    if live_results_path and os.path.exists(live_results_path):
+        # Check if file was modified in last 10 seconds (optimization is active)
+        file_age = time.time() - os.path.getmtime(live_results_path)
+        if file_age < 10:
+            use_live_data = True
+    
+    if use_live_data:
         # Live update during optimization
-        live_results_path = os.path.join(TEMP_RESULTS_DIR, f"live_{opt_session_id}.pkl")
-        if not os.path.exists(live_results_path):
-            return no_update
-        
-        # Load live results
         with open(live_results_path, 'rb') as f:
             live_data = pickle.load(f)
         
@@ -314,6 +326,7 @@ def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_i
         # Translate labels based on current language
         feature_indices = results_data.get('selected_features_indices', [])
         labels = translate_feature_labels(feature_indices, lang)
+        is_live = True
     else:
         # Final results
         if not results_data:
@@ -329,6 +342,7 @@ def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_i
         # Translate labels based on current language
         feature_indices = results_data.get('selected_features_indices', [])
         labels = translate_feature_labels(feature_indices, lang)
+        is_live = False
     
     # Create parallel coordinates plot
     df_for_plot = pd.DataFrame(list_of_elites)
@@ -360,7 +374,7 @@ def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_i
     parallel_fig = px.parallel_coordinates(
         df_for_plot, dimensions=all_dims, color=objective_label,
         labels=dim_labels,
-        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'] + (" (Live)" if ctx.triggered_id == 'live-update-interval' else "")
+        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'] + (" (Live)" if is_live else "")
     )
     
     return parallel_fig
@@ -402,7 +416,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
     if live_update_generations and live_update_generations > 0:
         qd_hyperparams['live_update_interval'] = int(live_update_generations)
     else:
-        qd_hyperparams['live_update_interval'] = 50  # Default
+        qd_hyperparams['live_update_interval'] = 200  # Default
 
     # Shared state for live updates
     live_state = {'buildable_mask': None, 'encoding_obj': ParametricEncoding(ENCODING_CONFIG)}

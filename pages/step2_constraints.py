@@ -284,6 +284,9 @@ def create_range_sliders(selected_indices, lang, session_data, max_height_input)
             print(f"Warning: Could not calculate dynamic ranges: {e}")
             dynamic_ranges = None
 
+    # Get saved feature ranges from session if available
+    saved_ranges = session_data.get('feature_ranges', {}) if session_data else {}
+    
     for i, index in enumerate(sorted_indices):
         label = labels[i]
         unit = get_unit_label(index, lang)
@@ -298,17 +301,22 @@ def create_range_sliders(selected_indices, lang, session_data, max_height_input)
         # Add unit to label
         label_with_unit = f"{label} ({unit})" if unit else label
         
+        # Check if user has previously set a custom range for this feature
+        user_range = saved_ranges.get(str(index), None)
+        
         slider_div = None
         # Integer sliders for count-based features
         if index == num_buildings_original_index:  # Number of Buildings
             min_v = int(np.floor(min_val))
             max_v = int(np.ceil(max_val))
             if min_v == max_v: max_v += 1
+            # Use saved value if available, otherwise use full range
+            slider_value = user_range if user_range else [min_v, max_v]
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=min_v, max=max_v, step=1, value=[min_v, max_v],
+                    min=min_v, max=max_v, step=1, value=slider_value,
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
@@ -316,11 +324,12 @@ def create_range_sliders(selected_indices, lang, session_data, max_height_input)
         elif index in [6, 7]:  # Building Mass X/Y
             min_v = 0.0
             max_v = 1.0
+            slider_value = user_range if user_range else [0.0, 1.0]
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=min_v, max=max_v, step=0.01, value=[0.0, 1.0],
+                    min=min_v, max=max_v, step=0.01, value=slider_value,
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
@@ -338,11 +347,13 @@ def create_range_sliders(selected_indices, lang, session_data, max_height_input)
             else:
                 step = 0.1  # Small ranges (heights)
             
+            # Use saved value if available, otherwise use full range
+            slider_value = user_range if user_range else [min_v, max_v]
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=min_v, max=max_v, step=step, value=[min_v, max_v],
+                    min=min_v, max=max_v, step=step, value=slider_value,
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
