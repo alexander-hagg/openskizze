@@ -29,15 +29,14 @@ function(feature, context){
 }
 """)
 
-def create_3d_building_plot(heightmap, grid_geojson, camera_mode='fly', height_exaggeration=1.0, 
+def create_3d_building_plot(heightmap, grid_geojson, height_exaggeration=1.0, 
                             camera_state=None, pixel_size_m=3.0):
     """
-    Create a 3D visualization of the building design with configurable camera
+    Create a 3D visualization of the building design as voxel blocks
     
     Args:
         heightmap: 2D numpy array of building heights (in floors)
         grid_geojson: GeoJSON with spatial reference
-        camera_mode: 'fly' for aerial view or 'fps' for first-person (1.8m height)
         height_exaggeration: Factor to exaggerate building heights for visualization
         camera_state: Dict with camera position/orientation to sync across views
         pixel_size_m: Size of each grid pixel in meters (default 3m per floor)
@@ -47,32 +46,100 @@ def create_3d_building_plot(heightmap, grid_geojson, camera_mode='fly', height_e
     
     # Create grid coordinates
     rows, cols = heightmap_meters.shape
-    x = np.arange(cols) * pixel_size_m
-    y = np.arange(rows) * pixel_size_m
-    X, Y = np.meshgrid(x, y)
     
-    # Create the 3D surface for buildings
+    # Create the 3D figure
     fig = go.Figure()
     
-    # Add building surfaces with color based on height
-    fig.add_trace(go.Surface(
-        x=X, y=Y, z=heightmap_meters,
-        colorscale='Viridis',
-        name='Buildings',
-        showscale=True,
-        colorbar=dict(title="Höhe (m)", x=1.1),
-        hovertemplate='X: %{x:.1f}m<br>Y: %{y:.1f}m<br>Höhe: %{z:.1f}m<extra></extra>'
-    ))
+    # Create voxel blocks using Mesh3d
+    # For each non-zero cell, create a box from 0 to its height
+    x_coords = []
+    y_coords = []
+    z_coords = []
+    i_indices = []
+    j_indices = []
+    k_indices = []
+    colors = []
     
-    # Add ground plane (2D basemap representation)
-    ground = np.zeros_like(heightmap_meters)
-    fig.add_trace(go.Surface(
-        x=X, y=Y, z=ground,
-        colorscale=[[0, 'lightgray'], [1, 'lightgray']],
-        showscale=False,
+    # Color scale for heights
+    max_height = heightmap_meters.max() if heightmap_meters.max() > 0 else 1
+    
+    vertex_count = 0
+    for row in range(rows):
+        for col in range(cols):
+            height = heightmap_meters[row, col]
+            if height > 0:
+                # Define the 8 vertices of the box
+                x0, x1 = col * pixel_size_m, (col + 1) * pixel_size_m
+                y0, y1 = row * pixel_size_m, (row + 1) * pixel_size_m
+                z0, z1 = 0, height
+                
+                # 8 vertices of the box
+                vertices = [
+                    [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],  # bottom
+                    [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]   # top
+                ]
+                
+                for v in vertices:
+                    x_coords.append(v[0])
+                    y_coords.append(v[1])
+                    z_coords.append(v[2])
+                
+                # 12 triangles (2 per face, 6 faces)
+                faces = [
+                    [0, 1, 2], [0, 2, 3],  # bottom
+                    [4, 5, 6], [4, 6, 7],  # top
+                    [0, 1, 5], [0, 5, 4],  # front
+                    [2, 3, 7], [2, 7, 6],  # back
+                    [0, 3, 7], [0, 7, 4],  # left
+                    [1, 2, 6], [1, 6, 5]   # right
+                ]
+                
+                for face in faces:
+                    i_indices.append(vertex_count + face[0])
+                    j_indices.append(vertex_count + face[1])
+                    k_indices.append(vertex_count + face[2])
+                
+                # Color based on height (normalized)
+                color_val = height / max_height
+                colors.extend([color_val] * 8)  # One color per vertex
+                
+                vertex_count += 8
+    
+    # Add the mesh if there are any buildings
+    if vertex_count > 0:
+        fig.add_trace(go.Mesh3d(
+            x=x_coords,
+            y=y_coords,
+            z=z_coords,
+            i=i_indices,
+            j=j_indices,
+            k=k_indices,
+            intensity=colors,
+            colorscale='Viridis',
+            showscale=False,
+            name='Buildings',
+            hovertemplate='X: %{x:.1f}m<br>Y: %{y:.1f}m<br>Höhe: %{z:.1f}m<extra></extra>',
+            flatshading=True,  # Sharp edges for voxel look
+            lighting=dict(ambient=0.6, diffuse=0.8, specular=0.1, roughness=0.9)
+        ))
+    
+    # Add ground plane
+    x_ground = [0, cols * pixel_size_m, cols * pixel_size_m, 0]
+    y_ground = [0, 0, rows * pixel_size_m, rows * pixel_size_m]
+    z_ground = [0, 0, 0, 0]
+    
+    fig.add_trace(go.Mesh3d(
+        x=x_ground,
+        y=y_ground,
+        z=z_ground,
+        i=[0, 0],
+        j=[1, 2],
+        k=[2, 3],
+        color='lightgray',
         opacity=0.3,
         name='Ground',
-        hoverinfo='skip'
+        hoverinfo='skip',
+        showlegend=False
     ))
     
     # Calculate scene bounds
@@ -80,20 +147,12 @@ def create_3d_building_plot(heightmap, grid_geojson, camera_mode='fly', height_e
     y_range = [0, rows * pixel_size_m]
     z_range = [0, max(heightmap_meters.max() * 1.2, 30)]  # At least 30m for empty scenes
     
-    # Set camera based on mode
+    # Set camera
     if camera_state:
         # Use provided camera state for syncing
         camera = camera_state
-    elif camera_mode == 'fps':
-        # First-person: camera at 1.8m height, looking horizontally
-        center_x, center_y = cols * pixel_size_m / 2, rows * pixel_size_m / 2
-        camera = dict(
-            eye=dict(x=0.5, y=0.5, z=0.05),  # Relative position for 1.8m height
-            center=dict(x=0.5, y=0.6, z=0.05),  # Looking forward
-            up=dict(x=0, y=0, z=1)
-        )
     else:
-        # Flying camera: aerial oblique view
+        # Aerial oblique view
         camera = dict(
             eye=dict(x=1.5, y=1.5, z=1.2),
             center=dict(x=0.5, y=0.5, z=0.2),
@@ -129,34 +188,6 @@ def layout(lang='DE'):
             ], className="text-end")
         ], className="mt-4 mb-4"),
         
-        # 3D View Controls
-        dbc.Card(dbc.CardBody([
-            html.H5("3D Ansicht Einstellungen" if lang == 'DE' else "3D View Settings"),
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label("Kameramodus:" if lang == 'DE' else "Camera Mode:"),
-                    dbc.RadioItems(
-                        id='camera-mode-selector',
-                        options=[
-                            {'label': 'Fliegende Kamera' if lang == 'DE' else 'Flying Camera', 'value': 'fly'},
-                            {'label': 'Erste-Person (1,80m)' if lang == 'DE' else 'First Person (1.80m)', 'value': 'fps'}
-                        ],
-                        value='fly',
-                        inline=True
-                    )
-                ], md=6),
-                dbc.Col([
-                    dbc.Label("Gebäudehöhe Faktor:" if lang == 'DE' else "Building Height Factor:"),
-                    dcc.Slider(
-                        id='height-exaggeration-slider',
-                        min=0.5, max=3.0, step=0.1, value=1.0,
-                        marks={0.5: '0.5x', 1: '1x', 2: '2x', 3: '3x'},
-                        tooltip={"placement": "bottom", "always_visible": True}
-                    )
-                ], md=6)
-            ], className="mb-3")
-        ]), className="mb-3"),
-        
         # Store for syncing camera state
         dcc.Store(id='camera-sync-store', data={}),
         # Store for solution display mode (central vs best) per cluster
@@ -170,13 +201,11 @@ def layout(lang='DE'):
     Output('comparison-content', 'children'),
     Input('comparison-store', 'data'),
     Input('results-store', 'data'),
-    Input('camera-mode-selector', 'value'),
-    Input('height-exaggeration-slider', 'value'),
     Input('solution-mode-store', 'data'),
     State('language-store', 'data'),
     State('camera-sync-store', 'data')
 )
-def display_comparison(selected_ids, results_data, camera_mode, height_exag, solution_modes, lang, camera_state):
+def display_comparison(selected_ids, results_data, solution_modes, lang, camera_state):
     if lang is None: lang = 'DE'  # Default to German
     
     if not selected_ids:
@@ -250,8 +279,7 @@ def display_comparison(selected_ids, results_data, camera_mode, height_exag, sol
         fig_3d = create_3d_building_plot(
             heightmap, 
             grid_geojson, 
-            camera_mode=camera_mode,
-            height_exaggeration=height_exag,
+            height_exaggeration=1.0,
             camera_state=camera_state,
             pixel_size_m=pixel_size
         )

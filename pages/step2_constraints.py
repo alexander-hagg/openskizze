@@ -45,8 +45,8 @@ def layout(lang='DE'):
     return dbc.Container([
         html.H2(T[lang]['STEP2_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/', color="secondary")),
-            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step3', color="primary"), className="text-end")
+            dbc.Col(dcc.Link(dbc.Button(T[lang]['PREV_STEP'], color="secondary"), href='/')),
+            dbc.Col(dcc.Link(dbc.Button(T[lang]['NEXT_STEP'], color="primary"), href='/step3'), className="text-end")
         ], className="mt-4"),
 
         dbc.Card(dbc.CardBody([
