@@ -395,10 +395,16 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             with open(full_results_path, 'wb') as f:
                 pickle.dump(full_list_of_elites, f)
             
-            # Save env_3d_fixed separately (it's too large for session store)
+            # Save env_3d_expanded and building metadata separately for visualization
             env_3d_path = os.path.join(TEMP_RESULTS_DIR, f"{session_id}_env.pkl")
             with open(env_3d_path, 'wb') as f:
-                pickle.dump(env_config.get('env_3d_fixed'), f)
+                # Save the expanded version and building function data
+                env_data = {
+                    'env_3d_expanded': env_config.get('env_3d_expanded', env_config.get('env_3d_fixed')),
+                    'building_function_map': env_config.get('building_function_map'),
+                    'function_lookup': env_config.get('function_lookup', {})
+                }
+                pickle.dump(env_data, f)
 
             results_summary_to_store = {
                 'full_results_path': full_results_path,
@@ -408,7 +414,9 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
                 'grid_geojson': env_config['grid_geojson'],
                 'xy_length': ENCODING_CONFIG['xy_length'],
                 'selected_features_indices': selected_features,
-                'grid_bounds_native': env_config.get('grid_bounds_native'),  # Add geographic bounds
+                'grid_bounds_native': env_config.get('grid_bounds_native'),  # Design area bounds
+                'expanded_bounds_native': env_config.get('expanded_bounds_native'),  # Expanded visualization bounds
+                'design_offset': env_config.get('design_offset'),  # Design position within expanded grid
             }
 
             # profiler.disable()

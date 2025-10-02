@@ -65,26 +65,93 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     rows, cols = np.unravel_index(indices, (res, res))
     buildable_mask[rows, cols] = True
     
+    # Create two arrays: one for optimization (same size as design grid), 
+    # one for visualization (expanded to show more neighborhood)
     env_3d_fixed = np.zeros((res, res, ENCODING_CONFIG['z_length']), dtype=np.int8)
+    
+    # Expand the area for fetching buildings for better visualization context
+    neighborhood_expansion = 1.0  # Multiplier: 1.0 means 3x area (1x on each side)
+    expanded_grid_side = grid_side_length * (1 + 2 * neighborhood_expansion)
+    expanded_res = int(res * (1 + 2 * neighborhood_expansion))
+    expanded_min_x = grid_min_x - (neighborhood_expansion * grid_side_length)
+    expanded_min_y = grid_min_y - (neighborhood_expansion * grid_side_length)
+    expanded_max_x = grid_max_x + (neighborhood_expansion * grid_side_length)
+    expanded_max_y = grid_max_y + (neighborhood_expansion * grid_side_length)
+    
+    # Calculate where the design grid sits within the expanded grid
+    start_idx = int(res * neighborhood_expansion)
+    
+    # Create expanded array for visualization
+    env_3d_expanded = np.zeros((expanded_res, expanded_res, ENCODING_CONFIG['z_length']), dtype=np.int8)
+    
     grid_poly_native = gpd.GeoSeries([Polygon.from_bounds(grid_min_x, grid_min_y, grid_max_x, grid_max_y)], crs="EPSG:25832")
     grid_poly_web = grid_poly_native.to_crs("EPSG:4326")
-    b_min_lon, b_min_lat, b_max_lon, b_max_lat = grid_poly_web.total_bounds
+    
+    # Use expanded bounds for fetching buildings
+    fetch_poly_native = gpd.GeoSeries([Polygon.from_bounds(expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y)], crs="EPSG:25832")
+    fetch_poly_web = fetch_poly_native.to_crs("EPSG:4326")
+    b_min_lon, b_min_lat, b_max_lon, b_max_lat = fetch_poly_web.total_bounds
     
     gdf_buildings_native = fetch_existing_buildings_data((b_min_lon, b_min_lat, b_max_lon, b_max_lat))
     
     if gdf_buildings_native is not None:
+        # Filter by geometry type
         geom_types = gdf_buildings_native.geometry.type
         polygon_mask = geom_types.isin(['Polygon', 'MultiPolygon'])
         gdf_polygons = gdf_buildings_native[polygon_mask].copy()
 
-        perimeter = gdf_polygons.geometry.length
-        area = gdf_polygons.geometry.area
-        perimeter[perimeter == 0] = 1e-9
-        compactness = 4 * math.pi * area / (perimeter**2)
-        compact_mask = compactness > 0.1
-        gdf_building_polygons = gdf_polygons[compact_mask]
+        # Filter by function to exclude non-building structures
+        if 'funktion' in gdf_polygons.columns:
+            # Exclude structures that are not actual buildings:
+            # - "Überdachung" = canopy/roofing (like market coverings)
+            # - "Tiefgarage" = underground garage (not visible above ground)
+            exclude_types = ['Überdachung', 'Tiefgarage']
+            
+            # Keep everything except the excluded types
+            function_mask = ~gdf_polygons['funktion'].isin(exclude_types)
+            gdf_building_polygons = gdf_polygons[function_mask]
+            
+            print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after excluding {exclude_types}")
+        else:
+            # Fallback if no function attribute
+            perimeter = gdf_polygons.geometry.length
+            area = gdf_polygons.geometry.area
+            perimeter[perimeter == 0] = 1e-9
+            compactness = 4 * math.pi * area / (perimeter**2)
+            compact_mask = compactness > 0.1
+            gdf_building_polygons = gdf_polygons[compact_mask]
+            print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after geometric filter")
         
         if not gdf_building_polygons.empty:
+            # Create a mapping array to store building function for each pixel
+            # We'll encode each unique function as a number
+            if 'funktion' in gdf_building_polygons.columns:
+                unique_functions = gdf_building_polygons['funktion'].unique()
+                function_to_id = {func: idx + 1 for idx, func in enumerate(unique_functions)}
+                id_to_function = {idx + 1: func for idx, func in enumerate(unique_functions)}
+                
+                # Rasterize with building IDs
+                shapes_with_ids = [(geom, function_to_id[func]) for geom, func in 
+                                   zip(gdf_building_polygons.geometry, gdf_building_polygons['funktion'])]
+            else:
+                shapes_with_ids = [(geom, 1) for geom in gdf_building_polygons.geometry]
+                id_to_function = {1: 'Gebäude'}
+            
+            # Rasterize to EXPANDED grid for visualization
+            cell_size_exp = expanded_grid_side / expanded_res
+            transform_exp = from_origin(expanded_min_x, expanded_max_y, cell_size_exp, cell_size_exp)
+            
+            building_function_map_exp = features.rasterize(
+                shapes=shapes_with_ids, out_shape=(expanded_res, expanded_res), transform=transform_exp,
+                fill=0, dtype='uint8'
+            )
+            building_function_map_exp = np.flipud(building_function_map_exp)
+            
+            # Create boolean footprint and 3D array
+            building_footprints_2d_exp = building_function_map_exp > 0
+            env_3d_expanded[building_footprints_2d_exp, :3] = 1
+            
+            # Also rasterize to ORIGINAL grid for optimization
             cell_size = grid_side_length / res
             transform = from_origin(grid_min_x, grid_max_y, cell_size, cell_size)
             
@@ -93,10 +160,29 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
                 fill=0, default_value=1, dtype='uint8'
             ).astype(bool)
             building_footprints_2d = np.flipud(building_footprints_2d)
-            
             env_3d_fixed[building_footprints_2d, :3] = 1
+        else:
+            building_function_map_exp = None
+            id_to_function = {}
 
+    # Initialize these in case no buildings were found
+    if gdf_buildings_native is None or gdf_building_polygons.empty:
+        building_function_map_exp = None
+        id_to_function = {}
+    
+    # Clear buildings in the buildable area for both arrays
     env_3d_fixed[buildable_mask, :] = 0
+    
+    # Clear buildable area in expanded array - need to iterate through mask indices
+    end_idx = start_idx + res
+    buildable_rows, buildable_cols = np.where(buildable_mask)
+    for r, c in zip(buildable_rows, buildable_cols):
+        env_3d_expanded[start_idx + r, start_idx + c, :] = 0
+    
+    # Also clear the function map in buildable area
+    if building_function_map_exp is not None:
+        for r, c in zip(buildable_rows, buildable_cols):
+            building_function_map_exp[start_idx + r, start_idx + c] = 0
     
     # --- Use the user-defined ranges to construct the final list of ranges for the optimizer ---
     # Extract max height from constraints (convert voxels to floors: divide by 3)
@@ -127,13 +213,18 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
 
     return {
         'buildable_mask': buildable_mask, 
-        'env_3d_fixed': env_3d_fixed,
+        'env_3d_fixed': env_3d_fixed,  # Original size for optimization
+        'env_3d_expanded': env_3d_expanded,  # Expanded size for visualization
+        'building_function_map': building_function_map_exp,  # 2D map of building functions
+        'function_lookup': id_to_function,  # Dictionary to lookup function names
         'labels': final_labels,
         'feat_ranges': final_feat_ranges, # This now contains the user's ranges
         'buildable_area_in_sq_meters': buildable_area_m2,
         'selected_features': selected_features,
         'grid_geojson': grid_geojson,
-        'grid_bounds_native': (grid_min_x, grid_min_y, grid_max_x, grid_max_y),  # Store bounds for visualization
+        'grid_bounds_native': (grid_min_x, grid_min_y, grid_max_x, grid_max_y),  # Design area bounds
+        'expanded_bounds_native': (expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y),  # Expanded visualization bounds
+        'design_offset': (start_idx, start_idx),  # Where design grid sits within expanded grid
     }
 
 

@@ -154,10 +154,13 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
             'size': len(cluster_indices),
             'best_solution': filtered_elites[best_solution_orig_idx],
             'central_solution': filtered_elites[central_solution_orig_idx],
-            'consensus_map': consensus_map.tolist()
+            'consensus_map': consensus_map.tolist(),
+            'objective_values': cluster_objectives.tolist(),  # Add objective values for histogram
+            'median_objective': float(np.median(cluster_objectives))  # Add median for sorting
         })
 
-    analysis_results.sort(key=lambda x: x['size'], reverse=True)
+    # Sort by median objective value (highest first), then by size
+    analysis_results.sort(key=lambda x: (x['median_objective'], x['size']), reverse=True)
     return analysis_results
 
 def create_parallel_coords_fig(results_archive, measures_map):

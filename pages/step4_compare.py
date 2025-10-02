@@ -296,18 +296,40 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         consensus_fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
         consensus_graph = dcc.Graph(figure=consensus_fig, style={'height': '200px', 'width': '100%'})
         
+        # Create histogram of objective function values for this cluster
+        objective_values = cluster['objective_values']  # List of objective values for solutions in this cluster
+        objective_label = T[lang].get('OBJECTIVE_FUNCTION', 'Objective Function')
+        
+        histogram_fig = px.histogram(
+            x=objective_values,
+            nbins=20,
+            labels={'x': objective_label, 'y': T[lang].get('COUNT', 'Count')},
+            title=None
+        )
+        histogram_fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=30),
+            showlegend=False,
+            height=200,
+            xaxis_title=objective_label,
+            yaxis_title=T[lang].get('COUNT', 'Count'),
+            bargap=0.1
+        )
+        histogram_fig.update_traces(marker_color='rgb(50, 150, 200)', marker_line_width=1, marker_line_color='white')
+        histogram_graph = dcc.Graph(figure=histogram_fig, style={'height': '200px', 'width': '100%'})
+        
         card = dbc.Card(dbc.CardBody([
             dbc.Checkbox(
-                id={'type': 'compare-checkbox', 'index': cluster['central_solution']['id']}, # Assuming solutions have a unique ID
+                id={'type': 'compare-checkbox', 'index': cluster['cluster_id']},  # Use stable cluster_id
                 label=T[lang]['STEP5_SELECT_FOR_COMPARISON'],
                 value=False
             ),
             html.H5(T[lang]['STEP5_CLUSTER_CARD_TITLE'].format(id=cluster['cluster_id'], size=cluster['size'])),
             html.P(T[lang]['STEP5_CLUSTER_CARD_TEXT'].format(size=cluster['size']), className="text-muted small"),
             dbc.Row([
-                dbc.Col([html.H6(T[lang]['STEP5_BEST_SOLUTION_HEADER']), best_map], md=4),
-                dbc.Col([html.H6(T[lang]['STEP5_CENTRAL_SOLUTION_HEADER']), central_map], md=4),
-                dbc.Col([html.H6(T[lang]['STEP5_CONSENSUS_MAP_HEADER']), consensus_graph], md=4)
+                dbc.Col([html.H6(T[lang]['STEP5_BEST_SOLUTION_HEADER']), best_map], md=3),
+                dbc.Col([html.H6(T[lang]['STEP5_CENTRAL_SOLUTION_HEADER']), central_map], md=3),
+                dbc.Col([html.H6(T[lang]['STEP5_CONSENSUS_MAP_HEADER']), consensus_graph], md=3),
+                dbc.Col([html.H6(T[lang].get('OBJECTIVE_DISTRIBUTION', 'Objective Distribution')), histogram_graph], md=3)
             ])
         ]), className="mb-3")
         cluster_cards.append(card)

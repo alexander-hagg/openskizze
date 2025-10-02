@@ -30,27 +30,30 @@ function(feature, context){
 """)
 
 def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, height_exaggeration=1.0, 
-                            camera_state=None, pixel_size_m=3.0):
+                            camera_state=None, pixel_size_m=3.0, expanded_bounds_native=None, design_offset=None,
+                            building_function_map=None, function_lookup=None):
     """
     Create a 3D visualization of the building design as voxel blocks in geographic coordinates
     
     Args:
         heightmap: 2D numpy array of building heights (in meters/voxels)
-        grid_bounds_native: (min_x, min_y, max_x, max_y) in EPSG:25832
-        env_3d_fixed: 3D array of existing buildings (optional)
+        grid_bounds_native: (min_x, min_y, max_x, max_y) in EPSG:25832 for design area
+        env_3d_fixed: 3D array of existing buildings (optional, may be larger than design grid)
         height_exaggeration: Factor to exaggerate building heights for visualization
         camera_state: Dict with camera position/orientation to sync across views
         pixel_size_m: Size of each grid pixel in meters (default 3m)
+        expanded_bounds_native: (min_x, min_y, max_x, max_y) for expanded visualization area (optional)
+        design_offset: (row_offset, col_offset) for design placement within expanded grid (optional)
     """
     # Heightmap for generated designs is in floors, convert to meters
     # 1 floor = 3 meters, so multiply by 3
     heightmap_meters = heightmap * 3.0 * height_exaggeration
     
-    # Get grid dimensions
+    # Get grid dimensions for design
     rows, cols = heightmap_meters.shape
     min_x, min_y, max_x, max_y = grid_bounds_native
     
-    # Create geographic coordinate mapping
+    # Create geographic coordinate mapping for design
     x_coords_geo = np.linspace(min_x, max_x, cols + 1)
     y_coords_geo = np.linspace(min_y, max_y, rows + 1)
     
@@ -58,15 +61,25 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     fig = go.Figure()
     
     # Helper function to create solid building blocks
-    def add_voxel_blocks(height_array, color_value, name, opacity=1.0, show_in_legend=True, voxel_size=3):
+    def add_voxel_blocks(height_array, color_value, name, opacity=1.0, show_in_legend=True, voxel_size=3, 
+                        x_coords=None, y_coords=None, function_map=None, func_lookup=None):
+        # Use provided coordinates or default to design grid coordinates
+        if x_coords is None:
+            x_coords_base = x_coords_geo
+        else:
+            x_coords_base = x_coords
+        if y_coords is None:
+            y_coords_base = y_coords_geo
+        else:
+            y_coords_base = y_coords
         """
         Render buildings as solid blocks using go.Surface for smoother appearance
         """
         # Group connected cells into larger meshes to reduce seams
         processed = np.zeros_like(height_array, dtype=bool)
-        x_coords = []
-        y_coords = []
-        z_coords = []
+        x_coords_list = []
+        y_coords_list = []
+        z_coords_list = []
         i_indices = []
         j_indices = []
         k_indices = []
@@ -105,9 +118,18 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                 # Mark all cells in this rectangle as processed
                 processed[min_row:max_row, min_col:max_col] = True
                 
+                # Get building function if available
+                building_func = None
+                if function_map is not None and func_lookup is not None:
+                    # Get function ID from the center of the building
+                    center_row = (min_row + max_row) // 2
+                    center_col = (min_col + max_col) // 2
+                    func_id = function_map[center_row, center_col]
+                    building_func = func_lookup.get(func_id, 'Unbekannt')
+                
                 # Get geographic coordinates for this merged rectangle
-                x0, x1 = x_coords_geo[min_col], x_coords_geo[max_col]
-                y0, y1 = y_coords_geo[min_row], y_coords_geo[max_row]
+                x0, x1 = x_coords_base[min_col], x_coords_base[max_col]
+                y0, y1 = y_coords_base[min_row], y_coords_base[max_row]
                 z0, z1 = 0, height
                 
                 # Create ONE solid box for this merged region
@@ -117,9 +139,9 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                 ]
                 
                 for v in vertices:
-                    x_coords.append(v[0])
-                    y_coords.append(v[1])
-                    z_coords.append(v[2])
+                    x_coords_list.append(v[0])
+                    y_coords_list.append(v[1])
+                    z_coords_list.append(v[2])
                 
                 # 12 triangles (2 per face, 6 faces)
                 faces = [
@@ -141,9 +163,9 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         if vertex_count > 0:
             # Use a single mesh trace with all building blocks combined
             fig.add_trace(go.Mesh3d(
-                x=x_coords,
-                y=y_coords,
-                z=z_coords,
+                x=x_coords_list,
+                y=y_coords_list,
+                z=z_coords_list,
                 i=i_indices,
                 j=j_indices,
                 k=k_indices,
@@ -172,19 +194,50 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         # env_3d_fixed z-axis is already in meters (1 voxel = 1 meter)
         # No multiplication needed - heights are already correct
         existing_heightmap = np.sum(env_3d_fixed > 0, axis=2) * height_exaggeration
+        
         if existing_heightmap.max() > 0:
-            add_voxel_blocks(existing_heightmap, 'rgb(100, 100, 100)', 'Existing Buildings', 
-                           opacity=1.0, show_in_legend=True)
+            # Determine coordinates for existing buildings
+            if expanded_bounds_native is not None:
+                exp_min_x, exp_min_y, exp_max_x, exp_max_y = expanded_bounds_native
+                exp_rows, exp_cols = existing_heightmap.shape
+                x_coords_exp = np.linspace(exp_min_x, exp_max_x, exp_cols + 1)
+                y_coords_exp = np.linspace(exp_min_y, exp_max_y, exp_rows + 1)
+            else:
+                x_coords_exp = x_coords_geo
+                y_coords_exp = y_coords_geo
+            
+            # If we have building function data, create separate traces for each function type
+            if building_function_map is not None and function_lookup:
+                for func_id, func_name in function_lookup.items():
+                    # Create a mask for this function type
+                    func_mask = building_function_map == func_id
+                    # Create heightmap for only this function type
+                    func_heightmap = existing_heightmap.copy()
+                    func_heightmap[~func_mask] = 0
+                    
+                    if func_heightmap.max() > 0:
+                        add_voxel_blocks(func_heightmap, 'rgb(100, 100, 100)', f'Bestand: {func_name}', 
+                                       opacity=1.0, show_in_legend=True, x_coords=x_coords_exp, y_coords=y_coords_exp)
+            else:
+                # No function data, show all as one group
+                add_voxel_blocks(existing_heightmap, 'rgb(100, 100, 100)', 'Existing Buildings', 
+                               opacity=1.0, show_in_legend=True, x_coords=x_coords_exp, y_coords=y_coords_exp)
     
     # Add new design buildings (in blue, fully opaque)
     if heightmap_meters.max() > 0:
         add_voxel_blocks(heightmap_meters, 'rgb(50, 150, 200)', 'New Design', 
                         opacity=1.0, show_in_legend=True)
     
-    # Add ground plane (simple rectangle at z=0)
-    x_ground = [min_x, max_x, max_x, min_x]
-    y_ground = [min_y, min_y, max_y, max_y]
-    z_ground = [0, 0, 0, 0]
+    # Determine scene bounds - use expanded if available
+    if expanded_bounds_native is not None:
+        scene_min_x, scene_min_y, scene_max_x, scene_max_y = expanded_bounds_native
+    else:
+        scene_min_x, scene_min_y, scene_max_x, scene_max_y = min_x, min_y, max_x, max_y
+    
+    # Add simple ground plane
+    x_ground = [scene_min_x, scene_max_x, scene_max_x, scene_min_x]
+    y_ground = [scene_min_y, scene_min_y, scene_max_y, scene_max_y]
+    z_ground = [-1.0, -1.0, -1.0, -1.0]
     
     fig.add_trace(go.Mesh3d(
         x=x_ground,
@@ -193,16 +246,16 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         i=[0, 0],
         j=[1, 2],
         k=[2, 3],
-        color='rgba(200, 220, 200, 0.3)',
-        opacity=0.3,
+        color='rgba(200, 220, 200, 0.5)',
+        opacity=0.5,
         name='Ground',
         hoverinfo='skip',
         showlegend=False
     ))
     
     # Calculate scene bounds in geographic coordinates
-    x_range = [min_x, max_x]
-    y_range = [min_y, max_y]
+    x_range = [scene_min_x, scene_max_x]
+    y_range = [scene_min_y, scene_max_y]
     
     # Calculate max height from both new and existing buildings
     max_z = heightmap_meters.max() if heightmap_meters.max() > 0 else 30
@@ -212,10 +265,10 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     z_range = [0, max(max_z * 1.2, 30)]  # At least 30m for empty scenes
     
     # Calculate center and extent for camera positioning
-    center_x = (min_x + max_x) / 2
-    center_y = (min_y + max_y) / 2
-    extent_x = max_x - min_x
-    extent_y = max_y - min_y
+    center_x = (scene_min_x + scene_max_x) / 2
+    center_y = (scene_min_y + scene_max_y) / 2
+    extent_x = scene_max_x - scene_min_x
+    extent_y = scene_max_y - scene_min_y
     
     # Set camera
     if camera_state:
@@ -312,10 +365,10 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
     solution_modes = solution_modes or {}  # Initialize if None
     
     for idx, cluster_id in enumerate(selected_ids):
-        # Find the cluster with this central solution ID
+        # Find the cluster with this cluster_id (selected_ids now contain cluster_id, not solution ID)
         matching_cluster = None
         for cluster in clusters:
-            if cluster['central_solution']['id'] == cluster_id:
+            if cluster['cluster_id'] == cluster_id:
                 matching_cluster = cluster
                 break
         
@@ -338,14 +391,26 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
     
     # Get geographic bounds and existing buildings data
     grid_bounds_native = results_data.get('grid_bounds_native')
+    expanded_bounds_native = results_data.get('expanded_bounds_native')  # May be None for old data
+    design_offset = results_data.get('design_offset')  # May be None for old data
     
     # Load existing buildings from separate pickle file
     env_3d_fixed = None
+    building_function_map = None
+    function_lookup = {}
     env_3d_path = results_data.get('env_3d_path')
     if env_3d_path and os.path.exists(env_3d_path):
         try:
             with open(env_3d_path, 'rb') as f:
-                env_3d_fixed = pickle.load(f)
+                env_data = pickle.load(f)
+                # Handle both old format (just array) and new format (dict)
+                if isinstance(env_data, dict):
+                    env_3d_fixed = env_data.get('env_3d_expanded')
+                    building_function_map = env_data.get('building_function_map')
+                    function_lookup = env_data.get('function_lookup', {})
+                else:
+                    # Old format compatibility
+                    env_3d_fixed = env_data
         except Exception as e:
             print(f"Warning: Could not load existing buildings data: {e}")
             env_3d_fixed = None
@@ -375,7 +440,11 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
             env_3d_fixed=env_3d_fixed,
             height_exaggeration=1.0,
             camera_state=camera_state,
-            pixel_size_m=pixel_size
+            pixel_size_m=pixel_size,
+            expanded_bounds_native=expanded_bounds_native,
+            design_offset=design_offset,
+            building_function_map=building_function_map,
+            function_lookup=function_lookup
         )
         
         # Format values with physical units
