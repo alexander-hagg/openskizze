@@ -1,7 +1,7 @@
 #
 # pages/step6_compare_detail.py
 #
-from dash import dcc, html, Input, Output, State, callback
+from dash import dcc, html, Input, Output, State, callback, ALL, MATCH, ctx, no_update
 import dash_bootstrap_components as dbc
 from dash_extensions.javascript import assign
 from backend.translation import T
@@ -10,6 +10,7 @@ import os
 import dash_leaflet as dl
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 from backend.analysis import heightmap_to_geojson, generate_pdf_report
 from backend.config import ENCODING_CONFIG
 
@@ -28,6 +29,94 @@ function(feature, context){
 }
 """)
 
+def create_3d_building_plot(heightmap, grid_geojson, camera_mode='fly', height_exaggeration=1.0, 
+                            camera_state=None, pixel_size_m=3.0):
+    """
+    Create a 3D visualization of the building design with configurable camera
+    
+    Args:
+        heightmap: 2D numpy array of building heights (in floors)
+        grid_geojson: GeoJSON with spatial reference
+        camera_mode: 'fly' for aerial view or 'fps' for first-person (1.8m height)
+        height_exaggeration: Factor to exaggerate building heights for visualization
+        camera_state: Dict with camera position/orientation to sync across views
+        pixel_size_m: Size of each grid pixel in meters (default 3m per floor)
+    """
+    # Convert heightmap to meters (3m per floor)
+    heightmap_meters = heightmap * pixel_size_m * height_exaggeration
+    
+    # Create grid coordinates
+    rows, cols = heightmap_meters.shape
+    x = np.arange(cols) * pixel_size_m
+    y = np.arange(rows) * pixel_size_m
+    X, Y = np.meshgrid(x, y)
+    
+    # Create the 3D surface for buildings
+    fig = go.Figure()
+    
+    # Add building surfaces with color based on height
+    fig.add_trace(go.Surface(
+        x=X, y=Y, z=heightmap_meters,
+        colorscale='Viridis',
+        name='Buildings',
+        showscale=True,
+        colorbar=dict(title="Höhe (m)", x=1.1),
+        hovertemplate='X: %{x:.1f}m<br>Y: %{y:.1f}m<br>Höhe: %{z:.1f}m<extra></extra>'
+    ))
+    
+    # Add ground plane (2D basemap representation)
+    ground = np.zeros_like(heightmap_meters)
+    fig.add_trace(go.Surface(
+        x=X, y=Y, z=ground,
+        colorscale=[[0, 'lightgray'], [1, 'lightgray']],
+        showscale=False,
+        opacity=0.3,
+        name='Ground',
+        hoverinfo='skip'
+    ))
+    
+    # Calculate scene bounds
+    x_range = [0, cols * pixel_size_m]
+    y_range = [0, rows * pixel_size_m]
+    z_range = [0, max(heightmap_meters.max() * 1.2, 30)]  # At least 30m for empty scenes
+    
+    # Set camera based on mode
+    if camera_state:
+        # Use provided camera state for syncing
+        camera = camera_state
+    elif camera_mode == 'fps':
+        # First-person: camera at 1.8m height, looking horizontally
+        center_x, center_y = cols * pixel_size_m / 2, rows * pixel_size_m / 2
+        camera = dict(
+            eye=dict(x=0.5, y=0.5, z=0.05),  # Relative position for 1.8m height
+            center=dict(x=0.5, y=0.6, z=0.05),  # Looking forward
+            up=dict(x=0, y=0, z=1)
+        )
+    else:
+        # Flying camera: aerial oblique view
+        camera = dict(
+            eye=dict(x=1.5, y=1.5, z=1.2),
+            center=dict(x=0.5, y=0.5, z=0.2),
+            up=dict(x=0, y=0, z=1)
+        )
+    
+    # Update layout
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title='X (m)', range=x_range, showgrid=True),
+            yaxis=dict(title='Y (m)', range=y_range, showgrid=True),
+            zaxis=dict(title='Z (m)', range=z_range, showgrid=True),
+            camera=camera,
+            aspectmode='manual',
+            aspectratio=dict(x=1, y=1, z=0.5)
+        ),
+        height=600,
+        margin=dict(l=0, r=0, t=30, b=0),
+        hovermode='closest'
+    )
+    
+    return fig
+
 def layout(lang='DE'):
     return dbc.Container([
     dcc.Location(id='url-s6', refresh=False),
@@ -39,6 +128,40 @@ def layout(lang='DE'):
                 dcc.Download(id="download-pdf-s6")
             ], className="text-end")
         ], className="mt-4 mb-4"),
+        
+        # 3D View Controls
+        dbc.Card(dbc.CardBody([
+            html.H5("3D Ansicht Einstellungen" if lang == 'DE' else "3D View Settings"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Kameramodus:" if lang == 'DE' else "Camera Mode:"),
+                    dbc.RadioItems(
+                        id='camera-mode-selector',
+                        options=[
+                            {'label': 'Fliegende Kamera' if lang == 'DE' else 'Flying Camera', 'value': 'fly'},
+                            {'label': 'Erste-Person (1,80m)' if lang == 'DE' else 'First Person (1.80m)', 'value': 'fps'}
+                        ],
+                        value='fly',
+                        inline=True
+                    )
+                ], md=6),
+                dbc.Col([
+                    dbc.Label("Gebäudehöhe Faktor:" if lang == 'DE' else "Building Height Factor:"),
+                    dcc.Slider(
+                        id='height-exaggeration-slider',
+                        min=0.5, max=3.0, step=0.1, value=1.0,
+                        marks={0.5: '0.5x', 1: '1x', 2: '2x', 3: '3x'},
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    )
+                ], md=6)
+            ], className="mb-3")
+        ]), className="mb-3"),
+        
+        # Store for syncing camera state
+        dcc.Store(id='camera-sync-store', data={}),
+        # Store for solution display mode (central vs best) per cluster
+        dcc.Store(id='solution-mode-store', data={}),
+        
         dcc.Loading(html.Div(id='comparison-content'))
     ], fluid=True)
 
@@ -47,9 +170,13 @@ def layout(lang='DE'):
     Output('comparison-content', 'children'),
     Input('comparison-store', 'data'),
     Input('results-store', 'data'),
-    State('language-store', 'data')
+    Input('camera-mode-selector', 'value'),
+    Input('height-exaggeration-slider', 'value'),
+    Input('solution-mode-store', 'data'),
+    State('language-store', 'data'),
+    State('camera-sync-store', 'data')
 )
-def display_comparison(selected_ids, results_data, lang):
+def display_comparison(selected_ids, results_data, camera_mode, height_exag, solution_modes, lang, camera_state):
     if lang is None: lang = 'DE'  # Default to German
     
     if not selected_ids:
@@ -66,35 +193,68 @@ def display_comparison(selected_ids, results_data, lang):
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    solutions_to_compare = [s for s in list_of_elites if s['id'] in selected_ids]
+    # Load cluster data to get both best and central solutions
+    from backend.analysis import cluster_and_analyze_solutions
+    
+    # Get clustering results (use default k-medoids with k=10)
+    clusters = cluster_and_analyze_solutions(results_path, 'kmedoids', {'n_clusters': 10}, {})
+    
+    # Map selected IDs to their clusters
+    solutions_to_compare = []
+    solution_modes = solution_modes or {}  # Initialize if None
+    
+    for idx, cluster_id in enumerate(selected_ids):
+        # Find the cluster with this central solution ID
+        matching_cluster = None
+        for cluster in clusters:
+            if cluster['central_solution']['id'] == cluster_id:
+                matching_cluster = cluster
+                break
+        
+        if matching_cluster:
+            # Get the display mode for this cluster (default to 'best')
+            display_mode = solution_modes.get(str(idx), 'best')
+            solutions_to_compare.append({
+                'cluster': matching_cluster,
+                'display_mode': display_mode,
+                'index': idx
+            })
+    
     if not solutions_to_compare:
         return dbc.Alert(T[lang]['STEP6_IDS_NOT_FOUND'], color="warning")
     
-    lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
-    lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
-    map_center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
+    from backend.config import DOMAIN_CONFIG
+    
     heightmap_res = results_data['xy_length']
+    pixel_size = DOMAIN_CONFIG.get('pixel_size_in_meters', 3.0)  # Default 3m per pixel
+    
+    # Get feature translation setup
+    from backend.translation import translate_feature_labels
+    from backend.units import format_value_with_unit
+    feature_indices = results_data.get('selected_features_indices', [])
+    labels = translate_feature_labels(feature_indices, lang)
     
     cols = []
-    for i, sol in enumerate(solutions_to_compare):
-        heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
-        design_geojson = heightmap_to_geojson(np.flipud(heightmap), grid_geojson)
-        map_component = dl.Map(
-            center=map_center, zoom=14,
-            children=[
-                dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
-                dl.GeoJSON(data=design_geojson, options=dict(style=style_handle), 
-                           hideout={'z_length': ENCODING_CONFIG['z_length']})
-            ], 
-            style={'width': '100%', 'height': '250px'},
-            id={'type': 'compare-map', 'index': i}
-        )
+    for sol_data in solutions_to_compare:
+        cluster = sol_data['cluster']
+        display_mode = sol_data.get('display_mode', 'best')
+        i = sol_data['index']
         
-        # Translate feature labels and format values with units
-        from backend.translation import translate_feature_labels
-        from backend.units import format_value_with_unit
-        feature_indices = results_data.get('selected_features_indices', [])
-        labels = translate_feature_labels(feature_indices, lang)
+        # Get the solution to display (central or best)
+        sol = cluster['central_solution'] if display_mode == 'central' else cluster['best_solution']
+        
+        # Create heightmap
+        heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
+        
+        # Create 3D visualization
+        fig_3d = create_3d_building_plot(
+            heightmap, 
+            grid_geojson, 
+            camera_mode=camera_mode,
+            height_exaggeration=height_exag,
+            camera_state=camera_state,
+            pixel_size_m=pixel_size
+        )
         
         # Format values with physical units
         formatted_values = []
@@ -107,24 +267,100 @@ def display_comparison(selected_ids, results_data, lang):
         
         metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: labels, T[lang]['STEP6_VALUE_LABEL']: formatted_values}
         metrics_df = pd.DataFrame(metrics_data)
-        table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True)
+        table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True, size='sm')
         
-        # Format objective with unit - pass raw value to format string, then append unit
+        # Format objective with unit
         objective_unit = T[lang].get('OBJECTIVE_UNIT', '')
         objective_formatted = T[lang]['STEP6_OBJECTIVE_LABEL'].format(value=sol['objective'])
         if objective_unit:
             objective_formatted = f"{objective_formatted} {objective_unit}"
         
-        col = dbc.Col([
-            html.H4(T[lang]['STEP6_DESIGN_TITLE'].format(num=i+1)),
-            html.B(objective_formatted),
-            map_component,
-            html.H5(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
-            table
-        ], width=4)
-        cols.append(col)
+        # Create toggle for best/central solution
+        toggle_radio = dbc.RadioItems(
+            id={'type': 'solution-toggle', 'index': i},
+            options=[
+                {'label': 'Zentrale Lösung' if lang == 'DE' else 'Central Solution', 'value': 'central'},
+                {'label': 'Beste Lösung' if lang == 'DE' else 'Best Solution', 'value': 'best'}
+            ],
+            value=display_mode,
+            inline=True,
+            className="mb-2"
+        )
         
+        col = dbc.Col([
+            html.H5(f"Cluster {cluster['cluster_id']} ({cluster['size']} " + 
+                   ("Lösungen" if lang == 'DE' else "solutions") + ")"),
+            toggle_radio,
+            html.B(objective_formatted, className="d-block mb-2"),
+            dcc.Graph(
+                figure=fig_3d,
+                id={'type': '3d-plot', 'index': i},
+                config={'displayModeBar': True, 'displaylogo': False},
+                style={'height': '600px'}
+            ),
+            html.H6(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
+            html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
+        ], md=4)
+        cols.append(col)
+    
     return dbc.Row(cols)
+
+# Callback to sync camera positions across all 3D plots
+@callback(
+    Output('camera-sync-store', 'data'),
+    Input({'type': '3d-plot', 'index': ALL}, 'relayoutData'),
+    State('camera-sync-store', 'data'),
+    prevent_initial_call=True
+)
+def sync_camera_positions(relayout_data_list, current_camera_state):
+    """Synchronize camera position across all 3D views"""
+    # Find which plot triggered the callback
+    triggered = ctx.triggered_id
+    
+    if not triggered or not relayout_data_list:
+        return no_update
+    
+    # Get the index of the plot that was updated
+    trigger_idx = triggered.get('index', 0)
+    
+    # Get the relayout data from the triggered plot
+    relayout_data = relayout_data_list[trigger_idx] if trigger_idx < len(relayout_data_list) else {}
+    
+    # Check if camera was updated
+    if relayout_data and 'scene.camera' in relayout_data:
+        # Extract camera state
+        new_camera = relayout_data['scene.camera']
+        return new_camera
+    
+    return no_update
+
+
+# Callback to handle solution toggle (central vs best)
+@callback(
+    Output('solution-mode-store', 'data'),
+    Input({'type': 'solution-toggle', 'index': ALL}, 'value'),
+    State('solution-mode-store', 'data'),
+    prevent_initial_call=True
+)
+def toggle_solution_mode(values_list, current_modes):
+    """Update which solution mode is active for each cluster"""
+    if not ctx.triggered_id:
+        return no_update
+    
+    # Get which radio was changed
+    trigger_idx = ctx.triggered_id.get('index', 0)
+    
+    # Initialize modes dict if empty
+    if not current_modes:
+        current_modes = {}
+    
+    # Update the mode for this cluster index with the new value
+    if trigger_idx < len(values_list):
+        new_value = values_list[trigger_idx]
+        current_modes[str(trigger_idx)] = new_value
+    
+    return current_modes
+
 
 @callback(
     Output("download-pdf-s6", "data"),
