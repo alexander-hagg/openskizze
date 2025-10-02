@@ -133,6 +133,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         'buildable_area_in_sq_meters': buildable_area_m2,
         'selected_features': selected_features,
         'grid_geojson': grid_geojson,
+        'grid_bounds_native': (grid_min_x, grid_min_y, grid_max_x, grid_max_y),  # Store bounds for visualization
     }
 
 

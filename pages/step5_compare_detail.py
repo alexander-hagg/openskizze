@@ -29,51 +29,88 @@ function(feature, context){
 }
 """)
 
-def create_3d_building_plot(heightmap, grid_geojson, height_exaggeration=1.0, 
+def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, height_exaggeration=1.0, 
                             camera_state=None, pixel_size_m=3.0):
     """
-    Create a 3D visualization of the building design as voxel blocks
+    Create a 3D visualization of the building design as voxel blocks in geographic coordinates
     
     Args:
-        heightmap: 2D numpy array of building heights (in floors)
-        grid_geojson: GeoJSON with spatial reference
+        heightmap: 2D numpy array of building heights (in meters/voxels)
+        grid_bounds_native: (min_x, min_y, max_x, max_y) in EPSG:25832
+        env_3d_fixed: 3D array of existing buildings (optional)
         height_exaggeration: Factor to exaggerate building heights for visualization
         camera_state: Dict with camera position/orientation to sync across views
-        pixel_size_m: Size of each grid pixel in meters (default 3m per floor)
+        pixel_size_m: Size of each grid pixel in meters (default 3m)
     """
-    # Convert heightmap to meters (3m per floor)
-    heightmap_meters = heightmap * pixel_size_m * height_exaggeration
+    # Heightmap for generated designs is in floors, convert to meters
+    # 1 floor = 3 meters, so multiply by 3
+    heightmap_meters = heightmap * 3.0 * height_exaggeration
     
-    # Create grid coordinates
+    # Get grid dimensions
     rows, cols = heightmap_meters.shape
+    min_x, min_y, max_x, max_y = grid_bounds_native
+    
+    # Create geographic coordinate mapping
+    x_coords_geo = np.linspace(min_x, max_x, cols + 1)
+    y_coords_geo = np.linspace(min_y, max_y, rows + 1)
     
     # Create the 3D figure
     fig = go.Figure()
     
-    # Create voxel blocks using Mesh3d
-    # For each non-zero cell, create a box from 0 to its height
-    x_coords = []
-    y_coords = []
-    z_coords = []
-    i_indices = []
-    j_indices = []
-    k_indices = []
-    colors = []
-    
-    # Color scale for heights
-    max_height = heightmap_meters.max() if heightmap_meters.max() > 0 else 1
-    
-    vertex_count = 0
-    for row in range(rows):
-        for col in range(cols):
-            height = heightmap_meters[row, col]
-            if height > 0:
-                # Define the 8 vertices of the box
-                x0, x1 = col * pixel_size_m, (col + 1) * pixel_size_m
-                y0, y1 = row * pixel_size_m, (row + 1) * pixel_size_m
+    # Helper function to create solid building blocks
+    def add_voxel_blocks(height_array, color_value, name, opacity=1.0, show_in_legend=True, voxel_size=3):
+        """
+        Render buildings as solid blocks using go.Surface for smoother appearance
+        """
+        # Group connected cells into larger meshes to reduce seams
+        processed = np.zeros_like(height_array, dtype=bool)
+        x_coords = []
+        y_coords = []
+        z_coords = []
+        i_indices = []
+        j_indices = []
+        k_indices = []
+        
+        vertex_count = 0
+        
+        # Process each cell and try to merge with neighbors of same height
+        for row in range(height_array.shape[0]):
+            for col in range(height_array.shape[1]):
+                if processed[row, col] or height_array[row, col] <= 1.5:  # Skip if less than half a floor
+                    continue
+                
+                height = height_array[row, col]
+                
+                # Find the rectangular extent of cells with same height
+                # Start with current cell
+                min_row, max_row = row, row + 1
+                min_col, max_col = col, col + 1
+                
+                # Expand horizontally (col direction) first
+                while max_col < height_array.shape[1] and \
+                      not processed[row, max_col] and \
+                      abs(height_array[row, max_col] - height) < 1.5:  # Within 1.5m = same floor level
+                    max_col += 1
+                
+                # Try to expand vertically (row direction) with same width
+                can_expand = True
+                while can_expand and max_row < height_array.shape[0]:
+                    for c in range(min_col, max_col):
+                        if processed[max_row, c] or abs(height_array[max_row, c] - height) >= 1.5:
+                            can_expand = False
+                            break
+                    if can_expand:
+                        max_row += 1
+                
+                # Mark all cells in this rectangle as processed
+                processed[min_row:max_row, min_col:max_col] = True
+                
+                # Get geographic coordinates for this merged rectangle
+                x0, x1 = x_coords_geo[min_col], x_coords_geo[max_col]
+                y0, y1 = y_coords_geo[min_row], y_coords_geo[max_row]
                 z0, z1 = 0, height
                 
-                # 8 vertices of the box
+                # Create ONE solid box for this merged region
                 vertices = [
                     [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],  # bottom
                     [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]   # top
@@ -86,11 +123,11 @@ def create_3d_building_plot(heightmap, grid_geojson, height_exaggeration=1.0,
                 
                 # 12 triangles (2 per face, 6 faces)
                 faces = [
-                    [0, 1, 2], [0, 2, 3],  # bottom
+                    [0, 2, 1], [0, 3, 2],  # bottom
                     [4, 5, 6], [4, 6, 7],  # top
                     [0, 1, 5], [0, 5, 4],  # front
-                    [2, 3, 7], [2, 7, 6],  # back
-                    [0, 3, 7], [0, 7, 4],  # left
+                    [3, 7, 6], [3, 6, 2],  # back
+                    [0, 4, 7], [0, 7, 3],  # left
                     [1, 2, 6], [1, 6, 5]   # right
                 ]
                 
@@ -99,33 +136,54 @@ def create_3d_building_plot(heightmap, grid_geojson, height_exaggeration=1.0,
                     j_indices.append(vertex_count + face[1])
                     k_indices.append(vertex_count + face[2])
                 
-                # Color based on height (normalized)
-                color_val = height / max_height
-                colors.extend([color_val] * 8)  # One color per vertex
-                
                 vertex_count += 8
+        
+        if vertex_count > 0:
+            # Use a single mesh trace with all building blocks combined
+            fig.add_trace(go.Mesh3d(
+                x=x_coords,
+                y=y_coords,
+                z=z_coords,
+                i=i_indices,
+                j=j_indices,
+                k=k_indices,
+                color=color_value,
+                opacity=opacity,
+                showscale=False,
+                name=name,
+                showlegend=show_in_legend,
+                hovertemplate=f'{name}<br>X: %{{x:.1f}}m<br>Y: %{{y:.1f}}m<br>Höhe: %{{z:.1f}}m<extra></extra>',
+                flatshading=False,  # Smooth shading
+                lighting=dict(
+                    ambient=0.7,      # Higher ambient for well-lit buildings
+                    diffuse=0.8,      # Good diffuse lighting
+                    specular=0.2,     # Low specular to reduce shine
+                    roughness=0.9,    # Very rough surfaces (matte)
+                    fresnel=0.0       # No fresnel effect
+                ),
+                # Hide mesh edges
+                contour=dict(show=False),
+                lightposition=dict(x=1e5, y=1e5, z=1e5)  # Distant light source
+            ))
     
-    # Add the mesh if there are any buildings
-    if vertex_count > 0:
-        fig.add_trace(go.Mesh3d(
-            x=x_coords,
-            y=y_coords,
-            z=z_coords,
-            i=i_indices,
-            j=j_indices,
-            k=k_indices,
-            intensity=colors,
-            colorscale='Viridis',
-            showscale=False,
-            name='Buildings',
-            hovertemplate='X: %{x:.1f}m<br>Y: %{y:.1f}m<br>Höhe: %{z:.1f}m<extra></extra>',
-            flatshading=True,  # Sharp edges for voxel look
-            lighting=dict(ambient=0.6, diffuse=0.8, specular=0.1, roughness=0.9)
-        ))
+    # Add existing buildings first (in gray, fully opaque)
+    if env_3d_fixed is not None and env_3d_fixed.size > 0:
+        # Convert env_3d_fixed to heightmap (max height in each column)
+        # env_3d_fixed z-axis is already in meters (1 voxel = 1 meter)
+        # No multiplication needed - heights are already correct
+        existing_heightmap = np.sum(env_3d_fixed > 0, axis=2) * height_exaggeration
+        if existing_heightmap.max() > 0:
+            add_voxel_blocks(existing_heightmap, 'rgb(100, 100, 100)', 'Existing Buildings', 
+                           opacity=1.0, show_in_legend=True)
     
-    # Add ground plane
-    x_ground = [0, cols * pixel_size_m, cols * pixel_size_m, 0]
-    y_ground = [0, 0, rows * pixel_size_m, rows * pixel_size_m]
+    # Add new design buildings (in blue, fully opaque)
+    if heightmap_meters.max() > 0:
+        add_voxel_blocks(heightmap_meters, 'rgb(50, 150, 200)', 'New Design', 
+                        opacity=1.0, show_in_legend=True)
+    
+    # Add ground plane (simple rectangle at z=0)
+    x_ground = [min_x, max_x, max_x, min_x]
+    y_ground = [min_y, min_y, max_y, max_y]
     z_ground = [0, 0, 0, 0]
     
     fig.add_trace(go.Mesh3d(
@@ -135,43 +193,64 @@ def create_3d_building_plot(heightmap, grid_geojson, height_exaggeration=1.0,
         i=[0, 0],
         j=[1, 2],
         k=[2, 3],
-        color='lightgray',
+        color='rgba(200, 220, 200, 0.3)',
         opacity=0.3,
         name='Ground',
         hoverinfo='skip',
         showlegend=False
     ))
     
-    # Calculate scene bounds
-    x_range = [0, cols * pixel_size_m]
-    y_range = [0, rows * pixel_size_m]
-    z_range = [0, max(heightmap_meters.max() * 1.2, 30)]  # At least 30m for empty scenes
+    # Calculate scene bounds in geographic coordinates
+    x_range = [min_x, max_x]
+    y_range = [min_y, max_y]
+    
+    # Calculate max height from both new and existing buildings
+    max_z = heightmap_meters.max() if heightmap_meters.max() > 0 else 30
+    if env_3d_fixed is not None and env_3d_fixed.size > 0:
+        existing_max = np.sum(env_3d_fixed > 0, axis=2).max() * height_exaggeration
+        max_z = max(max_z, existing_max)
+    z_range = [0, max(max_z * 1.2, 30)]  # At least 30m for empty scenes
+    
+    # Calculate center and extent for camera positioning
+    center_x = (min_x + max_x) / 2
+    center_y = (min_y + max_y) / 2
+    extent_x = max_x - min_x
+    extent_y = max_y - min_y
     
     # Set camera
     if camera_state:
         # Use provided camera state for syncing
         camera = camera_state
     else:
-        # Aerial oblique view
+        # Aerial oblique view - positioned to view geographic extent
+        # Camera eye in relative coordinates (will be scaled by scene)
         camera = dict(
             eye=dict(x=1.5, y=1.5, z=1.2),
             center=dict(x=0.5, y=0.5, z=0.2),
             up=dict(x=0, y=0, z=1)
         )
     
-    # Update layout
+    # Update layout with geographic coordinate system
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title='X (m)', range=x_range, showgrid=True),
-            yaxis=dict(title='Y (m)', range=y_range, showgrid=True),
-            zaxis=dict(title='Z (m)', range=z_range, showgrid=True),
+            xaxis=dict(title='Easting (m)', range=x_range, showgrid=True),
+            yaxis=dict(title='Northing (m)', range=y_range, showgrid=True),
+            zaxis=dict(title='Height (m)', range=z_range, showgrid=True),
             camera=camera,
             aspectmode='manual',
-            aspectratio=dict(x=1, y=1, z=0.5)
+            # Keep reasonable aspect ratio (z scaled down)
+            aspectratio=dict(
+                x=1.0, 
+                y=extent_y / extent_x if extent_x > 0 else 1.0, 
+                z=max(0.3, min(0.7, max_z / max(extent_x, extent_y)))
+            ),
+            # Add sun-like lighting effect with sky blue background
+            bgcolor='rgb(230, 240, 255)',  # Light sky blue background
         ),
         height=600,
         margin=dict(l=0, r=0, t=30, b=0),
-        hovermode='closest'
+        hovermode='closest',
+        legend=dict(x=1.02, y=1, xanchor='left', yanchor='top')
     )
     
     return fig
@@ -257,6 +336,20 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
     heightmap_res = results_data['xy_length']
     pixel_size = DOMAIN_CONFIG.get('pixel_size_in_meters', 3.0)  # Default 3m per pixel
     
+    # Get geographic bounds and existing buildings data
+    grid_bounds_native = results_data.get('grid_bounds_native')
+    
+    # Load existing buildings from separate pickle file
+    env_3d_fixed = None
+    env_3d_path = results_data.get('env_3d_path')
+    if env_3d_path and os.path.exists(env_3d_path):
+        try:
+            with open(env_3d_path, 'rb') as f:
+                env_3d_fixed = pickle.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load existing buildings data: {e}")
+            env_3d_fixed = None
+    
     # Get feature translation setup
     from backend.translation import translate_feature_labels
     from backend.units import format_value_with_unit
@@ -275,10 +368,11 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
         # Create heightmap
         heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
         
-        # Create 3D visualization
+        # Create 3D visualization with geographic context
         fig_3d = create_3d_building_plot(
             heightmap, 
-            grid_geojson, 
+            grid_bounds_native if grid_bounds_native else (0, 0, heightmap_res * pixel_size, heightmap_res * pixel_size),
+            env_3d_fixed=env_3d_fixed,
             height_exaggeration=1.0,
             camera_state=camera_state,
             pixel_size_m=pixel_size
@@ -324,11 +418,11 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
                 figure=fig_3d,
                 id={'type': '3d-plot', 'index': i},
                 config={'displayModeBar': True, 'displaylogo': False},
-                style={'height': '600px'}
+                style={'height': '70vh', 'minHeight': '500px'}  # Increased height for better horizontal viewing
             ),
             html.H6(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
             html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
-        ], md=4)
+        ], md=6, lg=6, xl=6)  # 2 designs per row (12/6 = 2)
         cols.append(col)
     
     return dbc.Row(cols)
