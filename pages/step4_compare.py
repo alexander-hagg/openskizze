@@ -153,10 +153,85 @@ def create_filter_controls(results_data, language):
     
     # Translate feature labels based on current language
     from backend.translation import translate_feature_labels
+    from backend.units import get_unit_label
     selected_feature_indices = results_data.get('selected_features_indices', [])
     if not selected_feature_indices: return no_update
     
     labels = translate_feature_labels(selected_feature_indices, lang)
+    
+    # Extract measures data to get actual ranges from optimization results
+    measures_data = np.array([e['measures'] for e in list_of_elites if e is not None])
+    if measures_data.size == 0:
+        return []
+    
+    # Create filter sliders for each feature
+    sliders = []
+    num_buildings_original_index = 3  # Feature index for "Number of Buildings"
+    
+    for i, label in enumerate(labels):
+        current_feature_index = selected_feature_indices[i]
+        unit = get_unit_label(current_feature_index, lang)
+        label_with_unit = f"{label} ({unit})" if unit else label
+        
+        # Get min/max from actual results data
+        min_val, max_val = measures_data[:, i].min(), measures_data[:, i].max()
+        
+        # Integer slider for Number of Buildings
+        if current_feature_index == num_buildings_original_index:
+            min_v = int(np.floor(min_val))
+            max_v = int(np.ceil(max_val))
+            if min_v == max_v: max_v += 1
+            
+            slider_div = html.Div([
+                dbc.Label(label_with_unit),
+                dcc.RangeSlider(
+                    id={'type': 'filter-slider', 'index': i},
+                    min=min_v, max=max_v, step=1,
+                    value=[min_v, max_v],
+                    tooltip={"placement": "bottom", "always_visible": True},
+                    marks=None,
+                )
+            ], className="mb-2")
+        # Normalized sliders for Building Mass X/Y (0-1)
+        elif current_feature_index in [6, 7]:
+            slider_div = html.Div([
+                dbc.Label(label_with_unit),
+                dcc.RangeSlider(
+                    id={'type': 'filter-slider', 'index': i},
+                    min=0.0, max=1.0, step=0.01,
+                    value=[0.0, 1.0],
+                    tooltip={"placement": "bottom", "always_visible": True},
+                    marks=None,
+                )
+            ], className="mb-2")
+        # Physical unit sliders (m, m²)
+        else:
+            min_v = round(min_val, 1)
+            max_v = round(max_val, 1)
+            if min_v == max_v: max_v = min_v + 1.0
+            
+            # Determine appropriate step size
+            if max_v - min_v > 100:
+                step = 1.0
+            elif max_v - min_v > 10:
+                step = 0.5
+            else:
+                step = 0.1
+            
+            slider_div = html.Div([
+                dbc.Label(label_with_unit),
+                dcc.RangeSlider(
+                    id={'type': 'filter-slider', 'index': i},
+                    min=min_v, max=max_v, step=step,
+                    value=[min_v, max_v],
+                    tooltip={"placement": "bottom", "always_visible": True},
+                    marks=None,
+                )
+            ], className="mb-2")
+        
+        sliders.append(slider_div)
+    
+    return sliders
 
 @callback(
     Output('cluster-results-container', 'children'),
@@ -336,10 +411,21 @@ def generate_correlation_heatmap(results_data, pathname, language):
     
     labels = translate_feature_labels(feature_indices, lang)
     
+    # Add units to feature labels
+    from backend.units import get_unit_label
+    labels_with_units = []
+    for i, label in enumerate(labels):
+        feature_idx = feature_indices[i]
+        unit = get_unit_label(feature_idx, lang)
+        if unit:
+            labels_with_units.append(f"{label} ({unit})")
+        else:
+            labels_with_units.append(label)
+    
     try:
         # Create dataframe with objectives and measures
         df_for_plot = pd.DataFrame(list_of_elites)
-        measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
+        measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels_with_units)
         df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()
         
         # Use translated objective label

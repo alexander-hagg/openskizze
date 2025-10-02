@@ -64,6 +64,18 @@ T = {
         'MEASURE_5': 'Brutto-Grundfläche',
         'MEASURE_6': 'Gebäudemasse X-Achse',
         'MEASURE_7': 'Gebäudemasse Y-Achse',
+        
+        # Feature units
+        'MEASURE_0_UNIT': 'm²',
+        'MEASURE_1_UNIT': 'm',
+        'MEASURE_2_UNIT': 'm',
+        'MEASURE_3_UNIT': '',  # count, no unit
+        'MEASURE_4_UNIT': 'm',
+        'MEASURE_5_UNIT': 'm²',
+        'MEASURE_6_UNIT': '',  # normalized position
+        'MEASURE_7_UNIT': '',  # normalized position
+        
+        'OBJECTIVE_UNIT': '',  # porosity is dimensionless (0-1)
 
         # Step 3
         'STEP3_TITLE': "Schritt 3: Entwurfsvarianten generieren",
@@ -214,6 +226,18 @@ T = {
         'MEASURE_5': 'Gross Floor Area',
         'MEASURE_6': 'Building Mass X-Axis',
         'MEASURE_7': 'Building Mass Y-Axis',
+        
+        # Feature units
+        'MEASURE_0_UNIT': 'm²',
+        'MEASURE_1_UNIT': 'm',
+        'MEASURE_2_UNIT': 'm',
+        'MEASURE_3_UNIT': '',  # count, no unit
+        'MEASURE_4_UNIT': 'm',
+        'MEASURE_5_UNIT': 'm²',
+        'MEASURE_6_UNIT': '',  # normalized position
+        'MEASURE_7_UNIT': '',  # normalized position
+        
+        'OBJECTIVE_UNIT': '',  # porosity is dimensionless (0-1)
 
         # Step 3
         'STEP3_TITLE': "Step 3: Generate Design Variants",

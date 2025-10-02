@@ -335,14 +335,32 @@ def update_parallel_coords_s3(results_data, n_intervals, language, opt_session_i
     if df_for_plot.empty:
         return {}
     
-    measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels)
+    # Add units to feature labels
+    from backend.units import get_unit_label
+    labels_with_units = []
+    for i, label in enumerate(labels):
+        feature_idx = feature_indices[i]
+        unit = get_unit_label(feature_idx, lang)
+        if unit:
+            labels_with_units.append(f"{label}<br>({unit})")
+        else:
+            labels_with_units.append(label)
+    
+    measures_df = pd.DataFrame(df_for_plot['measures'].tolist(), columns=labels_with_units)
     df_for_plot = pd.concat([df_for_plot['objective'], measures_df], axis=1).copy()
-    df_for_plot.rename(columns={'objective': 'Zielfunktion (Kaltluft)'}, inplace=True)
+    
+    # Use translated objective label
+    objective_label = T[lang]['STEP6_OBJECTIVE'].replace(':', '')  # Remove colon
+    df_for_plot.rename(columns={'objective': objective_label}, inplace=True)
+    
+    # Create dimension labels with line breaks
+    all_dims = [objective_label] + labels_with_units
+    dim_labels = {dim: dim.replace(" ", "<br>") for dim in all_dims}
     
     parallel_fig = px.parallel_coordinates(
-        df_for_plot, dimensions=['Zielfunktion (Kaltluft)'] + labels, color="Zielfunktion (Kaltluft)",
-        labels={dim: dim.replace(" ", "<br>") for dim in ['Zielfunktion (Kaltluft)'] + labels}, # TODO fix translation of objective function
-        title="Erkundung des Lösungsraums" + (" (Live)" if ctx.triggered_id == 'live-update-interval' else "")
+        df_for_plot, dimensions=all_dims, color=objective_label,
+        labels=dim_labels,
+        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'] + (" (Live)" if ctx.triggered_id == 'live-update-interval' else "")
     )
     
     return parallel_fig

@@ -141,6 +141,9 @@ def layout(lang='DE'):
     prevent_initial_call=True
 )
 def apply_preset(preset_key, lang):
+    """Apply preset feature selections - uses default ranges, not preset-specific ranges"""
+    from backend.units import get_unit_label
+    
     if preset_key == 'custom':
         return no_update, no_update
     
@@ -149,7 +152,9 @@ def apply_preset(preset_key, lang):
     preset = presets[preset_key]
     selected_indices = preset['features']
     
-    # Re-generate sliders with preset values
+    # Re-generate sliders with default (physical unit) ranges from config
+    # Note: Preset-specific ranges are intentionally not applied here anymore
+    # as they were in old normalized format. Users can adjust after selecting preset.
     sliders = []
     num_buildings_original_index = 3  # The original index for 'Anzahl der Gebäude'
     
@@ -159,32 +164,53 @@ def apply_preset(preset_key, lang):
     
     for i, index in enumerate(sorted_indices):
         label = labels[i]
-        # Use preset range if available, otherwise use default from config
-        preset_range = preset['ranges'].get(str(index), DOMAIN_CONFIG['feat_ranges'][index])
-        min_val, max_val = preset_range[0], preset_range[1]
+        unit = get_unit_label(index, lang)
+        label_with_unit = f"{label} ({unit})" if unit else label
         
-        # Create slider based on whether it's the number of buildings (integer) or continuous
-        if index == num_buildings_original_index:
+        # Use default ranges from config (these are now in physical units after our changes)
+        default_range = DOMAIN_CONFIG['feat_ranges'][index]
+        min_val, max_val = default_range[0], default_range[1]
+        
+        # Create slider based on feature type
+        if index == num_buildings_original_index:  # Number of buildings
             min_v = int(np.floor(min_val))
             max_v = int(np.ceil(max_val))
             if min_v == max_v: max_v += 1
             slider_div = html.Div([
-                dbc.Label(label),
+                dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
                     min=min_v, max=max_v, step=1, value=[min_v, max_v],
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
-        else:
-            min_v = round(min_val, 2)
-            max_v = round(max_val, 2)
-            if min_v == max_v: max_v += 0.01
+        elif index in [6, 7]:  # Building Mass X/Y - normalized
             slider_div = html.Div([
-                dbc.Label(label),
+                dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=min_v, max=max_v, step=0.01, value=[min_v, max_v],
+                    min=0.0, max=1.0, step=0.01, value=[0.0, 1.0],
+                    tooltip={"placement": "bottom", "always_visible": True}, marks=None
+                )
+            ], className="mb-3")
+        else:  # Physical units (m, m²)
+            min_v = round(min_val, 1)
+            max_v = round(max_val, 1)
+            if min_v == max_v: max_v = min_v + 1.0
+            
+            # Determine step size
+            if max_v - min_v > 100:
+                step = 1.0
+            elif max_v - min_v > 10:
+                step = 0.5
+            else:
+                step = 0.1
+                
+            slider_div = html.Div([
+                dbc.Label(label_with_unit),
+                dcc.RangeSlider(
+                    id={'type': 'feature-range-slider', 'index': index},
+                    min=min_v, max=max_v, step=step, value=[min_v, max_v],
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
@@ -198,9 +224,15 @@ def apply_preset(preset_key, lang):
     Output('feature-range-sliders-container', 'children'),
     Input('measures-checklist', 'value'),
     State('language-store', 'data'),
+    State('session-store', 'data'),
+    State('max-height-constraint', 'value'),
     prevent_initial_call=True
 )
-def create_range_sliders(selected_indices, lang):
+def create_range_sliders(selected_indices, lang, session_data, max_height_input):
+    from backend.units import calculate_dynamic_ranges_physical, get_unit_label
+    import geopandas as gpd
+    import math
+    
     if lang is None: lang = 'DE'
     
     if not selected_indices:
@@ -212,34 +244,105 @@ def create_range_sliders(selected_indices, lang):
     # Get translated labels for sorted indices
     sorted_indices = sorted(selected_indices)
     labels = translate_feature_labels(sorted_indices, lang)
+    
+    # Try to calculate dynamic ranges based on selected site from Step 1
+    dynamic_ranges = None
+    if session_data and 'site_polygon' in session_data:
+        try:
+            # Recreate the buildable mask to calculate proper ranges
+            from backend.config import ENCODING_CONFIG
+            user_polygon_geojson = session_data['site_polygon']
+            gdf_user_poly = gpd.GeoDataFrame.from_features(user_polygon_geojson, crs="EPSG:4326")
+            gdf_user_poly_native = gdf_user_poly.to_crs("EPSG:25832")
+            min_x, min_y, max_x, max_y = gdf_user_poly_native.total_bounds
+            
+            width = max_x - min_x
+            height = max_y - min_y
+            square_size = max(width, height)
+            border = square_size * (DOMAIN_CONFIG['environment_border_size'] - 1.0) / 2.0
+            grid_side_length = square_size + (2 * border)
+            
+            pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+            res = math.ceil(grid_side_length / pixel_size)
+            
+            # Simple buildable mask calculation (approximate, no spatial join for performance)
+            buildable_pixels = int((width * height) / (pixel_size ** 2))
+            buildable_mask = np.ones((res, res), dtype=bool)  # Simplified
+            buildable_mask[:] = False
+            center_i, center_j = res // 2, res // 2
+            size_i = int(height / pixel_size) // 2
+            size_j = int(width / pixel_size) // 2
+            buildable_mask[max(0, center_i-size_i):min(res, center_i+size_i), 
+                          max(0, center_j-size_j):min(res, center_j+size_j)] = True
+            
+            # Get max height from input (convert to floors)
+            max_height_floors = max_height_input if max_height_input else ENCODING_CONFIG['z_length']
+            
+            # Calculate dynamic ranges in physical units
+            dynamic_ranges = calculate_dynamic_ranges_physical(buildable_mask, max_height_floors)
+        except Exception as e:
+            print(f"Warning: Could not calculate dynamic ranges: {e}")
+            dynamic_ranges = None
 
     for i, index in enumerate(sorted_indices):
         label = labels[i]
-        default_range = DOMAIN_CONFIG['feat_ranges'][index]
-        min_val, max_val = default_range[0], default_range[1]
+        unit = get_unit_label(index, lang)
+        
+        # Use dynamic ranges if available, otherwise fall back to default
+        if dynamic_ranges is not None:
+            min_val, max_val = dynamic_ranges[index]
+        else:
+            default_range = DOMAIN_CONFIG['feat_ranges'][index]
+            min_val, max_val = default_range[0], default_range[1]
+        
+        # Add unit to label
+        label_with_unit = f"{label} ({unit})" if unit else label
         
         slider_div = None
-        if index == num_buildings_original_index:
+        # Integer sliders for count-based features
+        if index == num_buildings_original_index:  # Number of Buildings
             min_v = int(np.floor(min_val))
             max_v = int(np.ceil(max_val))
             if min_v == max_v: max_v += 1
             slider_div = html.Div([
-                dbc.Label(label),
+                dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
                     min=min_v, max=max_v, step=1, value=[min_v, max_v],
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
-        else:
-            min_v = round(min_val, 2)
-            max_v = round(max_val, 2)
-            if min_v == max_v: max_v += 0.01
+        # Normalized sliders for position features (0-1)
+        elif index in [6, 7]:  # Building Mass X/Y
+            min_v = 0.0
+            max_v = 1.0
             slider_div = html.Div([
-                dbc.Label(label),
+                dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=min_v, max=max_v, step=0.01, value=[min_v, max_v],
+                    min=min_v, max=max_v, step=0.01, value=[0.0, 1.0],
+                    tooltip={"placement": "bottom", "always_visible": True}, marks=None
+                )
+            ], className="mb-3")
+        # Physical unit sliders for area/distance/height features
+        else:
+            min_v = round(min_val, 1)
+            max_v = round(max_val, 1)
+            if min_v == max_v: max_v = min_v + 1.0
+            
+            # Determine appropriate step size based on magnitude
+            if max_v - min_v > 100:
+                step = 1.0  # Large ranges (areas, distances)
+            elif max_v - min_v > 10:
+                step = 0.5  # Medium ranges
+            else:
+                step = 0.1  # Small ranges (heights)
+            
+            slider_div = html.Div([
+                dbc.Label(label_with_unit),
+                dcc.RangeSlider(
+                    id={'type': 'feature-range-slider', 'index': index},
+                    min=min_v, max=max_v, step=step, value=[min_v, max_v],
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")

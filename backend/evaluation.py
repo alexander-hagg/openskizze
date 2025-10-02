@@ -54,40 +54,69 @@ def compute_fitness(heightmap_3d: np.ndarray, wind_direction: int) -> float:
     return np.clip(porosity, 0.0, 1.0)
 
 def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, buildable_area_in_sq_meters: float) -> np.ndarray:
+    """
+    Calculate all 8 features in PHYSICAL UNITS.
+    
+    Returns:
+        Array of features in physical units:
+        [0] Built Area (m²)
+        [1] Average Height (m)
+        [2] Height Variability (m)
+        [3] Number of Buildings (count)
+        [4] Average Distance (m)
+        [5] Gross Floor Area (m²)
+        [6] Building Mass X (normalized 0-1)
+        [7] Building Mass Y (normalized 0-1)
+    """
     grid_res_y, grid_res_x = heightmap.shape
     occupied = heightmap > 0
     buildable_pixels = np.sum(buildable_mask)
+    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+    pixel_area = pixel_size ** 2
+    meters_per_floor = 3.0  # Approximate 3m per floor
     
-    building_coverage = np.sum(occupied) / buildable_pixels if buildable_pixels > 0 else 0.0
+    # [0] Built Area - in m² (not ratio)
+    occupied_pixels = np.sum(occupied)
+    built_area_m2 = occupied_pixels * pixel_area
     
     building_heights = heightmap[occupied]
     if not building_heights.any():
-        return np.zeros(len(DOMAIN_CONFIG['labels']))
+        return np.zeros(8)  # Return zeros for all 8 features
         
-    avg_height = np.mean(building_heights)
-    height_variability = np.std(building_heights)
+    # [1] Average Height - in meters (not floors)
+    avg_height_floors = np.mean(building_heights)
+    avg_height_meters = avg_height_floors * meters_per_floor
+    
+    # [2] Height Variability - in meters (not floors)
+    height_variability_floors = np.std(building_heights)
+    height_variability_meters = height_variability_floors * meters_per_floor
+    
+    # [3] Number of Buildings - already a count
     _, num_buildings = label(occupied)
     
+    # [4] Average Building Distance - in meters (not normalized)
     if num_buildings > 1:
         centroids = np.array(center_of_mass(occupied, label(occupied)[0], range(1, num_buildings + 1)))
         diff = centroids[:, None, :] - centroids[None, :, :]
         dists = np.sqrt(np.sum(diff**2, axis=-1))
         avg_spacing_pixels = np.mean(dists[np.triu_indices(num_buildings, k=1)])
-        max_dist = np.sqrt(grid_res_x**2 + grid_res_y**2)
-        avg_spacing = avg_spacing_pixels / max_dist if max_dist > 0 else 0.0
-    else: avg_spacing = 0.0
+        avg_spacing_meters = avg_spacing_pixels * pixel_size
+    else:
+        avg_spacing_meters = 0.0
     
-    pixel_area = DOMAIN_CONFIG['pixel_size_in_meters'] ** 2
-    total_floor_area_sq_meters = np.sum(heightmap) * pixel_area
-    floor_space_ratio = total_floor_area_sq_meters / buildable_area_in_sq_meters if buildable_area_in_sq_meters > 0 else 0.0
+    # [5] Gross Floor Area - in m² (not FSR ratio)
+    total_floor_area_m2 = np.sum(heightmap) * pixel_area
     
+    # [6] Building Mass X - normalized position (0-1)
     center_y_px, center_x_px = center_of_mass(heightmap)
     center_x = center_x_px / grid_res_x if grid_res_x > 0 else 0.0
+    
+    # [7] Building Mass Y - normalized position (0-1)
     center_y = center_y_px / grid_res_y if grid_res_y > 0 else 0.0
 
     return np.array([
-        building_coverage, avg_height, height_variability, num_buildings,
-        avg_spacing, floor_space_ratio, center_x, center_y
+        built_area_m2, avg_height_meters, height_variability_meters, num_buildings,
+        avg_spacing_meters, total_floor_area_m2, center_x, center_y
     ])
 
 def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndarray:

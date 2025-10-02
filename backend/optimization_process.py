@@ -15,8 +15,19 @@ from rasterio.transform import from_origin
 import json
 
 
-def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict):
-
+def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None):
+    """
+    Create the optimization environment with proper physical unit ranges.
+    
+    Args:
+        user_polygon_geojson: GeoJSON of the buildable area
+        selected_features: List of feature indices to optimize
+        user_feature_ranges: User-defined ranges for features (in physical units)
+        hard_constraints: Dict with 'max_height' (in voxels) and 'min_distance' (in meters)
+    """
+    if hard_constraints is None:
+        hard_constraints = {}
+        
     if not user_polygon_geojson or not user_polygon_geojson.get('features'):
         raise ValueError("User polygon is empty or invalid.")
         
@@ -88,8 +99,12 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     env_3d_fixed[buildable_mask, :] = 0
     
     # --- Use the user-defined ranges to construct the final list of ranges for the optimizer ---
-    # Get dynamic ranges for all 8 features first
-    dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask)
+    # Extract max height from constraints (convert voxels to floors: divide by 3)
+    max_height_voxels = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'] * 3)
+    max_height_floors = max_height_voxels // 3  # Convert to floors
+    
+    # Get dynamic ranges for all 8 features (now in physical units!)
+    dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask, max_height_floors)
     
     # Build the final ranges list: only for selected features
     final_feat_ranges = []
@@ -121,25 +136,55 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     }
 
 
-def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray):
+def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_floors: int = None):
+    """
+    Calculate dynamic feature ranges in PHYSICAL UNITS based on site properties.
+    
+    Args:
+        buildable_mask: Boolean array of buildable pixels
+        max_height_floors: Maximum building height in floors (from hard constraints)
+    
+    Returns:
+        Tuple of (ranges_list, buildable_area_m2)
+        Ranges are in physical units: [m²], [m], [m], [count], [m], [m²], [0-1], [0-1]
+    """
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
     z_len = ENCODING_CONFIG['z_length']
+    meters_per_floor = 3.0
+    
+    # Use constraint-based max height if provided, otherwise use default
+    if max_height_floors is None:
+        max_height_floors = z_len
+    
     buildable_pixels = np.sum(buildable_mask)
     if buildable_pixels == 0:
         return DOMAIN_CONFIG['feat_ranges'], 0.0
-    buildable_area_sq_meters = buildable_pixels * (pixel_size ** 2)
+        
+    buildable_area_m2 = buildable_pixels * (pixel_size ** 2)
     grid_res = buildable_mask.shape[0]
+    max_dist_pixels = np.sqrt(2) * grid_res  # Diagonal distance
+    max_dist_meters = max_dist_pixels * pixel_size
+    
+    # Maximum possible floor area depends on max height constraint
+    max_possible_floor_area_m2 = buildable_area_m2 * max_height_floors
+    
     new_ranges = [
-        [0.0, 1.0], [0.0, z_len], [0.0, z_len / 2],
-        [0.0, ENCODING_CONFIG['max_num_buildings']],
-        [0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.0, 1.0],
+        [0.0, buildable_area_m2],                      # 0: Built Area (m²)
+        [0.0, max_height_floors * meters_per_floor],   # 1: Avg Height (m)
+        [0.0, max_height_floors * meters_per_floor / 2], # 2: Height Variability (m)
+        [0.0, ENCODING_CONFIG['max_num_buildings']],   # 3: Number of Buildings (count)
+        [0.0, max_dist_meters],                        # 4: Avg Distance (m)
+        [0.0, max_possible_floor_area_m2],             # 5: Gross Floor Area (m²)
+        [0.0, 1.0],                                    # 6: Building Mass X (normalized)
+        [0.0, 1.0],                                    # 7: Building Mass Y (normalized)
     ]
-    return new_ranges, buildable_area_sq_meters
+    return new_ranges, buildable_area_m2
 
 
 def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, progress_callback=None):
     progress_callback(5, "Creating environment...")
-    env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges)
+    # Pass hard_constraints to create_environment so it can calculate proper ranges
+    env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges, hard_constraints)
     env_config['wind_direction'] = wind_direction
     env_config['hard_constraints'] = hard_constraints
     

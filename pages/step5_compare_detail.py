@@ -90,18 +90,34 @@ def display_comparison(selected_ids, results_data, lang):
             id={'type': 'compare-map', 'index': i}
         )
         
-        # Translate feature labels based on current language
+        # Translate feature labels and format values with units
         from backend.translation import translate_feature_labels
+        from backend.units import format_value_with_unit
         feature_indices = results_data.get('selected_features_indices', [])
         labels = translate_feature_labels(feature_indices, lang)
         
-        metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: labels, T[lang]['STEP6_VALUE_LABEL']: [f"{v:.3f}" for v in sol['measures']]}
+        # Format values with physical units
+        formatted_values = []
+        for j, value in enumerate(sol['measures']):
+            if j < len(feature_indices):
+                feature_idx = feature_indices[j]
+                formatted_values.append(format_value_with_unit(value, feature_idx, lang))
+            else:
+                formatted_values.append(f"{value:.3f}")  # Fallback
+        
+        metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: labels, T[lang]['STEP6_VALUE_LABEL']: formatted_values}
         metrics_df = pd.DataFrame(metrics_data)
         table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True)
         
+        # Format objective with unit - pass raw value to format string, then append unit
+        objective_unit = T[lang].get('OBJECTIVE_UNIT', '')
+        objective_formatted = T[lang]['STEP6_OBJECTIVE_LABEL'].format(value=sol['objective'])
+        if objective_unit:
+            objective_formatted = f"{objective_formatted} {objective_unit}"
+        
         col = dbc.Col([
             html.H4(T[lang]['STEP6_DESIGN_TITLE'].format(num=i+1)),
-            html.B(T[lang]['STEP6_OBJECTIVE_LABEL'].format(value=sol['objective'])),
+            html.B(objective_formatted),
             map_component,
             html.H5(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
             table
