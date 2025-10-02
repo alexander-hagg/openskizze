@@ -104,11 +104,9 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         if user_range:
             # Use user's custom range
             final_feat_ranges.append(user_range)
-            print(f"[INFO] Using user-defined range for feature {feature_index} ({DOMAIN_CONFIG['labels'][feature_index]}): {user_range}")
         else:
             # Use dynamic range from calculations
             final_feat_ranges.append(dynamic_ranges[feature_index])
-            print(f"[INFO] Using dynamic range for feature {feature_index} ({DOMAIN_CONFIG['labels'][feature_index]}): {dynamic_ranges[feature_index]}")
     
     grid_geojson = json.loads(grid_poly_web.to_json())
 
@@ -139,16 +137,22 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray):
     return new_ranges, buildable_area_sq_meters
 
 
-def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, progress_callback=None):
+def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, progress_callback=None):
     progress_callback(5, "Creating environment...")
     env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges)
     env_config['wind_direction'] = wind_direction
     env_config['hard_constraints'] = hard_constraints
+    
+    # Merge user-defined QD hyperparameters with defaults
+    qd_config = QD_CONFIG.copy()
+    if qd_hyperparams:
+        qd_config.update(qd_hyperparams)
+    
     encoding_obj = ParametricEncoding(ENCODING_CONFIG)
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     create_debug_plots(env_config, sample_genome, encoding_obj)
     progress_callback(10, "Starting optimization...")
     archive = run_qd_optimization(
-        encoding_obj, env_config, QD_CONFIG, progress_callback)
+        encoding_obj, env_config, qd_config, progress_callback)
     progress_callback(100, "Optimization complete.")
     return archive, env_config['labels'], env_config

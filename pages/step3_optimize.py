@@ -108,6 +108,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
     selected_features = session_data.get('selected_features', list(range(8)))
     user_feature_ranges = session_data.get('feature_ranges', {})
     hard_constraints = session_data.get('hard_constraints', {})
+    qd_hyperparams = session_data.get('qd_hyperparams', {})
 
     def progress_callback(progress, text, archive=None):
         set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
@@ -127,6 +128,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             selected_features,
             user_feature_ranges,
             hard_constraints,
+            qd_hyperparams,
             progress_callback=progress_callback
         )
         

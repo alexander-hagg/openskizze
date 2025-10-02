@@ -4,7 +4,7 @@
 from dash import dcc, html, Input, Output, State, callback, no_update, ALL
 import dash_bootstrap_components as dbc
 from backend.translation import T
-from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG
+from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG, QD_CONFIG
 import numpy as np
 
 MEASURES_OPTIONS = [{'label': label, 'value': i} for i, label in enumerate(DOMAIN_CONFIG['labels'])]
@@ -66,14 +66,15 @@ def layout(lang='DE'):
                     value=DOMAIN_CONFIG['features'],
                     id='measures-checklist',
                     switch=True,
-                ), body=True)
+                ), body=True),
+                html.H5(T[lang]['STEP2_TARGET_RANGES_HEADER']),
+                html.P(T[lang]['STEP2_TARGET_RANGES_INFO'], className="text-muted small"),
+                dcc.Loading(html.Div(id='feature-range-sliders-container')),
+                
             ], md=6),
             dbc.Col([
                 html.H5(T[lang]['STEP2_OBJECTIVE_INFO_LABEL']),
                 dbc.Alert(T[lang]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
-                html.H5(T[lang]['STEP2_TARGET_RANGES_HEADER']),
-                html.P(T[lang]['STEP2_TARGET_RANGES_INFO'], className="text-muted small"),
-                dcc.Loading(html.Div(id='feature-range-sliders-container')),
                 # --- NEW: Hard Constraints Section ---
                 html.H5(T[lang]['STEP2_HARD_CONSTRAINTS_HEADER'], className="mt-4"),
                 dbc.Card(dbc.CardBody([
@@ -81,6 +82,32 @@ def layout(lang='DE'):
                     dbc.Input(id='max-height-constraint', type="number", placeholder=T[lang]['STEP2_MAX_HEIGHT_PLACEHOLDER'], min=1, step=1, value=ENCODING_CONFIG['z_length']),
                     dbc.Label(T[lang]['STEP2_MIN_DISTANCE_LABEL'], className="mt-2"),
                     dbc.Input(id='min-distance-constraint', type="number", placeholder=T[lang]['STEP2_MIN_DISTANCE_PLACEHOLDER'], min=0, step=1, value=0),
+                ]), color="light"),
+                
+                # --- NEW: QD Hyperparameters Section ---
+                html.H5(T[lang]['STEP2_QD_HYPERPARAMS_HEADER'], className="mt-4"),
+                dbc.Card(dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_GENERATIONS_LABEL']),
+                            dbc.Input(id='qd-generations-input', type="number", min=100, max=10000, step=100, value=QD_CONFIG['num_generations']),
+                        ], md=6),
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_EMITTERS_LABEL']),
+                            dbc.Input(id='qd-emitters-input', type="number", min=1, max=20, step=1, value=QD_CONFIG['num_emitters']),
+                        ], md=6),
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_NICHES_LABEL']),
+                            dbc.Input(id='qd-niches-input', type="number", min=3, max=20, step=1, value=QD_CONFIG['num_niches']),
+                        ], md=6),
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_BATCH_SIZE_LABEL']),
+                            dbc.Input(id='qd-batch-size-input', type="number", min=8, max=128, step=8, value=QD_CONFIG['batch_size']),
+                        ], md=6),
+                    ], className="mt-2"),
+                    html.Small(T[lang]['STEP2_QD_HYPERPARAMS_INFO'], className="text-muted mt-2 d-block")
                 ]), color="light")
             ], md=6),
         ])
@@ -195,54 +222,75 @@ def create_range_sliders(selected_indices):
     Output('measures-checklist', 'value', allow_duplicate=True),
     Output('max-height-constraint', 'value', allow_duplicate=True),
     Output('min-distance-constraint', 'value', allow_duplicate=True),
+    Output('qd-generations-input', 'value', allow_duplicate=True),
+    Output('qd-emitters-input', 'value', allow_duplicate=True),
+    Output('qd-niches-input', 'value', allow_duplicate=True),
+    Output('qd-batch-size-input', 'value', allow_duplicate=True),
     Input('session-store', 'data'),
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
 def restore_step2_from_session(session_data, pathname):
     if pathname != '/step2' or not session_data:
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update, no_update, no_update, no_update, no_update
     
     selected_features = session_data.get('selected_features')
     hard_constraints = session_data.get('hard_constraints', {})
+    qd_params = session_data.get('qd_hyperparams', {})
     
     max_height = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'] * 3) / 3
     min_distance = hard_constraints.get('min_distance', 0)
     
-    if selected_features is not None:
-        return selected_features, int(max_height), min_distance
+    qd_generations = qd_params.get('num_generations', QD_CONFIG['num_generations'])
+    qd_emitters = qd_params.get('num_emitters', QD_CONFIG['num_emitters'])
+    qd_niches = qd_params.get('num_niches', QD_CONFIG['num_niches'])
+    qd_batch_size = qd_params.get('batch_size', QD_CONFIG['batch_size'])
     
-    return no_update, int(max_height), min_distance
+    if selected_features is not None:
+        return selected_features, int(max_height), min_distance, qd_generations, qd_emitters, qd_niches, qd_batch_size
+    
+    return no_update, int(max_height), min_distance, qd_generations, qd_emitters, qd_niches, qd_batch_size
 
-# --- UPDATED: Callback to save both selections and ranges to the session ---
+# --- UPDATED: Callback to save selections, ranges, constraints, and QD hyperparameters to the session ---
 @callback(
     Output('session-store', 'data', allow_duplicate=True),
     Input('measures-checklist', 'value'),
     Input({'type': 'feature-range-slider', 'index': ALL}, 'value'),
-    Input('max-height-constraint', 'value'), # New Input
-    Input('min-distance-constraint', 'value'), # New Input
+    Input('max-height-constraint', 'value'),
+    Input('min-distance-constraint', 'value'),
+    Input('qd-generations-input', 'value'),
+    Input('qd-emitters-input', 'value'),
+    Input('qd-niches-input', 'value'),
+    Input('qd-batch-size-input', 'value'),
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
 def update_session_with_features_and_ranges(
-    selected_indices, slider_values, max_height, min_distance, 
+    selected_indices, slider_values, max_height, min_distance,
+    qd_generations, qd_emitters, qd_niches, qd_batch_size,
     slider_ids, session_data
 ):
     session_data = session_data or {}
     
-    # Save feature selections and ranges (unchanged)
+    # Save feature selections and ranges
     session_data['selected_features'] = selected_indices
     session_data['feature_ranges'] = {
         str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
     }
 
-    # --- NEW: Save hard constraints ---
+    # Save hard constraints
     session_data['hard_constraints'] = {
-        'max_height': 3*max_height,
-        'min_distance': min_distance
+        'max_height': 3*max_height if max_height else ENCODING_CONFIG['z_length'] * 3,
+        'min_distance': min_distance if min_distance else 0
     }
     
-    print(f"[INFO] User defined hard constraints: {session_data['hard_constraints']}")
+    # Save QD hyperparameters
+    session_data['qd_hyperparams'] = {
+        'num_generations': qd_generations if qd_generations else QD_CONFIG['num_generations'],
+        'num_emitters': qd_emitters if qd_emitters else QD_CONFIG['num_emitters'],
+        'num_niches': qd_niches if qd_niches else QD_CONFIG['num_niches'],
+        'batch_size': qd_batch_size if qd_batch_size else QD_CONFIG['batch_size'],
+    }
     
     return session_data
