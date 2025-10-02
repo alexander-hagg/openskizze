@@ -3,11 +3,15 @@
 #
 from dash import dcc, html, Input, Output, State, callback, no_update, ALL
 import dash_bootstrap_components as dbc
-from backend.translation import T
+from backend.translation import T, translate_feature_labels
 from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG, QD_CONFIG
 import numpy as np
 
-MEASURES_OPTIONS = [{'label': label, 'value': i} for i, label in enumerate(DOMAIN_CONFIG['labels'])]
+def get_measures_options(lang='DE'):
+    """Generate measures options with translated labels"""
+    feature_indices = list(range(8))  # All 8 features
+    labels = translate_feature_labels(feature_indices, lang)
+    return [{'label': label, 'value': i} for i, label in enumerate(labels)]
 
 def get_presets(lang):
     return {
@@ -37,6 +41,7 @@ def get_presets(lang):
 
 def layout(lang='DE'):
     PRESETS = get_presets(lang)
+    MEASURES_OPTIONS = get_measures_options(lang)
     return dbc.Container([
         html.H2(T[lang]['STEP2_TITLE']),
         dbc.Row([
@@ -84,9 +89,23 @@ def layout(lang='DE'):
                     dbc.Input(id='min-distance-constraint', type="number", placeholder=T[lang]['STEP2_MIN_DISTANCE_PLACEHOLDER'], min=0, step=1, value=0),
                 ]), color="light"),
                 
-                # --- NEW: QD Hyperparameters Section ---
-                html.H5(T[lang]['STEP2_QD_HYPERPARAMS_HEADER'], className="mt-4"),
-                dbc.Card(dbc.CardBody([
+                # --- Advanced Mode Toggle ---
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Checklist(
+                            options=[{"label": T[lang]['STEP2_ADVANCED_MODE'], "value": 1}],
+                            value=[],
+                            id="advanced-mode-toggle",
+                            switch=True,
+                            className="mt-3"
+                        ),
+                    ]),
+                ]),
+                
+                # --- NEW: QD Hyperparameters Section (shown only in advanced mode) ---
+                html.Div(id='qd-hyperparams-container', children=[
+                    html.H5(T[lang]['STEP2_QD_HYPERPARAMS_HEADER'], className="mt-4"),
+                    dbc.Card(dbc.CardBody([
                     dbc.Row([
                         dbc.Col([
                             dbc.Label(T[lang]['STEP2_QD_GENERATIONS_LABEL']),
@@ -108,7 +127,8 @@ def layout(lang='DE'):
                         ], md=6),
                     ], className="mt-2"),
                     html.Small(T[lang]['STEP2_QD_HYPERPARAMS_INFO'], className="text-muted mt-2 d-block")
-                ]), color="light")
+                    ]), color="light")
+                ], style={'display': 'none'}),  # Hidden by default
             ], md=6),
         ])
     ], fluid=True)
@@ -133,8 +153,12 @@ def apply_preset(preset_key, lang):
     sliders = []
     num_buildings_original_index = 3  # The original index for 'Anzahl der Gebäude'
     
-    for index in sorted(selected_indices):
-        label = DOMAIN_CONFIG['labels'][index]
+    # Get translated labels for sorted indices
+    sorted_indices = sorted(selected_indices)
+    labels = translate_feature_labels(sorted_indices, lang)
+    
+    for i, index in enumerate(sorted_indices):
+        label = labels[i]
         # Use preset range if available, otherwise use default from config
         preset_range = preset['ranges'].get(str(index), DOMAIN_CONFIG['feat_ranges'][index])
         min_val, max_val = preset_range[0], preset_range[1]
@@ -173,17 +197,24 @@ def apply_preset(preset_key, lang):
 @callback(
     Output('feature-range-sliders-container', 'children'),
     Input('measures-checklist', 'value'),
+    State('language-store', 'data'),
     prevent_initial_call=True
 )
-def create_range_sliders(selected_indices):
+def create_range_sliders(selected_indices, lang):
+    if lang is None: lang = 'DE'
+    
     if not selected_indices:
-        return dbc.Alert("Bitte mindestens ein Merkmal auswählen.", color="info")
+        return dbc.Alert(T[lang]['STEP2_NO_FEATURES_SELECTED'] if 'STEP2_NO_FEATURES_SELECTED' in T[lang] else "Bitte mindestens ein Merkmal auswählen.", color="info")
 
     sliders = []
     num_buildings_original_index = 3 # The original index for 'Anzahl der Gebäude'
 
-    for index in sorted(selected_indices):
-        label = DOMAIN_CONFIG['labels'][index]
+    # Get translated labels for sorted indices
+    sorted_indices = sorted(selected_indices)
+    labels = translate_feature_labels(sorted_indices, lang)
+
+    for i, index in enumerate(sorted_indices):
+        label = labels[i]
         default_range = DOMAIN_CONFIG['feat_ranges'][index]
         min_val, max_val = default_range[0], default_range[1]
         
@@ -216,6 +247,16 @@ def create_range_sliders(selected_indices):
         sliders.append(slider_div)
         
     return sliders
+
+# Callback to toggle advanced mode visibility
+@callback(
+    Output('qd-hyperparams-container', 'style'),
+    Input('advanced-mode-toggle', 'value'),
+)
+def toggle_advanced_mode(advanced_mode):
+    if advanced_mode and 1 in advanced_mode:
+        return {'display': 'block'}
+    return {'display': 'none'}
 
 # Callback to restore settings from loaded session data
 @callback(

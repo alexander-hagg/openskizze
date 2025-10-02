@@ -34,6 +34,8 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     pool = multiprocessing.Pool(processes=nb_cpus)
     
     print("Starting QD Optimization...")
+    live_update_interval = qd_config.get('live_update_interval', 50)  # Default to every 50 generations
+    
     for gen in range(1, qd_config['num_generations'] + 1):
         try:
             genomes = scheduler.ask()
@@ -42,15 +44,19 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
             features = results[:, 1:len(env_config['labels']) + 1]            
             scheduler.tell(objectives, features)
             
+            # Print stats at regular intervals (for console output)
             if gen % qd_config['output_inv_frequency'] == 0:
                 stats = archive.stats
                 print(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
-                if progress_callback:
-                    # Pass the archive object itself for live updates
+            
+            # Call progress callback with archive at user-defined generation intervals
+            if progress_callback:
+                if gen % live_update_interval == 0 or gen == qd_config['num_generations']:
+                    # Pass the archive object for live updates
                     progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', archive)
-
-            elif progress_callback and qd_config['output_inv_frequency'] > qd_config['num_generations']:
-                progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', None)
+                elif qd_config['output_inv_frequency'] > qd_config['num_generations']:
+                    # Just update progress without archive
+                    progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', None)
         
         except Exception as e:
             print(f"!!!!!! ERROR during optimization loop at generation {gen} !!!!!!")

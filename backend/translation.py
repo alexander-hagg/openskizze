@@ -42,15 +42,17 @@ T = {
         'STEP2_PRESET_DENSE': "Dichte Stadt (dense urban)",
         'STEP2_TARGET_RANGES_HEADER': "Zielbereiche für Merkmale festlegen",
         'STEP2_TARGET_RANGES_INFO': "Definieren Sie die Wertebereiche, in denen der Optimierer nach diversen Lösungen suchen soll.",
+        'STEP2_NO_FEATURES_SELECTED': "Bitte mindestens ein Merkmal auswählen.",
         'STEP2_HARD_CONSTRAINTS_HEADER': "Harte Randbedingungen",
         'STEP2_MAX_HEIGHT_LABEL': "Maximale Bauhöhe (in Geschossen, ca. 3m pro Geschoss):",
         'STEP2_MAX_HEIGHT_PLACEHOLDER': "z.B. 7 (= 21m)",
         'STEP2_MIN_DISTANCE_LABEL': "Minimaler Gebäudeabstand (m):",
         'STEP2_MIN_DISTANCE_PLACEHOLDER': "z.B. 6",
+                'STEP2_ADVANCED_MODE': "Erweiterte Optionen anzeigen",
         'STEP2_QD_HYPERPARAMS_HEADER': "Optimierungsparameter (Quality-Diversity)",
         'STEP2_QD_GENERATIONS_LABEL': "Anzahl Generationen:",
         'STEP2_QD_EMITTERS_LABEL': "Anzahl Emitter:",
-        'STEP2_QD_NICHES_LABEL': "Archivgröße (Nischen pro Dimension):",
+        'STEP2_QD_NICHES_LABEL': "Anzahl Nischen (Rasterauflösung):",
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch-Größe:",
         'STEP2_QD_HYPERPARAMS_INFO': "Höhere Werte = längere Laufzeit, mehr Lösungen. Standard: 1000 Generationen, 5 Emitter.",
 
@@ -70,6 +72,12 @@ T = {
         'STEP3_NO_AREA': "Bitte definieren Sie einen Geltungsbereich in Schritt 1.",
         'STEP3_FAILED': "Optimierung fehlgeschlagen:",
         'STEP3_NO_SOLUTIONS': "Optimierung fehlgeschlagen oder es wurden keine Lösungen gefunden.",
+        'STEP3_UPDATE_INTERVAL_LABEL': "Live-Update Intervall (Generationen):",
+        'STEP3_ARCHIVE_VIS_HEADER': "Lösungsarchiv (Live-Visualisierung während Optimierung)",
+        'STEP3_X_AXIS_LABEL': "X-Achse auswählen:",
+        'STEP3_Y_AXIS_LABEL': "Y-Achse auswählen:",
+        'STEP3_SOLUTION_GRID_HEADER': "Lösungsarchiv (Bester Entwurf pro Nische)",
+        'STEP3_PARALLEL_COORDS_HEADER': "Parallel-Koordinaten-Diagramm",
 
         # Step 4
         'STEP4_TITLE': "Schritt 4: Lösungsraum analysieren",
@@ -81,9 +89,18 @@ T = {
         'STEP4_NO_DESIGN': "Kein Entwurf",
         
         # Step 5
-        'STEP5_TITLE': "Schritt 5: Varianten vergleichen und Anforderungen exportieren",
+        'STEP5_TITLE': "Schritt 4: Varianten vergleichen und Anforderungen exportieren",
         'STEP5_EXPORT_BUTTON': "Planungsanforderungen für Wettbewerb exportieren",
         'STEP5_EXPORT_FILENAME': "planungsanforderungen.txt",
+        'STEP5_CORRELATION_HEADER': "Korrelation der Merkmale und Zielfunktion",
+        'STEP5_CORRELATION_LABEL': "Korrelation",
+        'STEP5_NO_RESULTS_TITLE': "Keine Optimierungsergebnisse gefunden",
+        'STEP5_NO_RESULTS_TEXT': "Keine Optimierungsergebnisse gefunden.<br>Bitte führen Sie zuerst eine Optimierung in Schritt 3 durch.",
+        'STEP5_FILE_NOT_FOUND': "Ergebnisdatei nicht gefunden.<br>Bitte führen Sie die Optimierung erneut aus.",
+        'STEP5_LOAD_ERROR': "Fehler beim Laden der Ergebnisdatei:<br>{error}",
+        'STEP5_NO_LABELS': "Keine Feature-Labels in den Ergebnissen gefunden.",
+        'STEP5_CORRELATION_ERROR': "Fehler beim Berechnen der Korrelationsmatrix:<br>{error}",
+        'STEP5_CORRELATION_LEGEND': "Werte nahe +1 = starke positive Korrelation | Werte nahe -1 = starke negative Korrelation | Werte nahe 0 = keine Korrelation",
         'STEP5_FILTER_HEADER': "Designs filtern und analysieren",
         'STEP5_FILTER_DESC': "Filtern Sie die Lösungen nach ihren Merkmalen und passen Sie die Clustering-Parameter an, um Entwurfstypen zu identifizieren.",
         'STEP5_ANALYSIS_HEADER': "Analyse der Entwurfstypen (Cluster)",
@@ -115,8 +132,8 @@ T = {
         'STEP5_SELECT_FOR_COMPARISON': "Zum Vergleich auswählen",
         
         # Step 6
-        'STEP6_TITLE': "Detailvergleich der ausgewählten Entwürfe",
-        'STEP6_NO_SELECTION': "Keine Entwürfe zum Vergleich ausgewählt. Bitte gehen Sie zu Schritt 5 zurück und wählen Sie mindestens einen Entwurf aus.",
+        'STEP6_TITLE': "Schritt 5: Detailvergleich der ausgewählten Entwürfe",
+        'STEP6_NO_SELECTION': "Keine Entwürfe zum Vergleich ausgewählt. Bitte gehen Sie zu Schritt 4 zurück und wählen Sie mindestens einen Entwurf aus.",
         'STEP6_NO_DATA': "Die Ergebnisdaten konnten nicht geladen werden.",
         'STEP6_NO_FILE': "Ergebnisdatei oder Georeferenzierung nicht gefunden.",
         'STEP6_IDS_NOT_FOUND': "Fehler: Die ausgewählten Entwurfs-IDs wurden in der aktuellen Ergebnisdatei nicht gefunden. Dies kann passieren, wenn nach der Auswahl eine neue Optimierung gestartet wurde. Bitte gehen Sie zu Schritt 5 zurück und treffen Sie eine neue Auswahl.",
@@ -175,11 +192,13 @@ T = {
         'STEP2_PRESET_DENSE': "Dense Urban",
         'STEP2_TARGET_RANGES_HEADER': "Define Target Ranges for Metrics",
         'STEP2_TARGET_RANGES_INFO': "Define the value ranges in which the optimizer should search for diverse solutions.",
+        'STEP2_NO_FEATURES_SELECTED': "Please select at least one feature.",
         'STEP2_HARD_CONSTRAINTS_HEADER': "Hard Constraints",
         'STEP2_MAX_HEIGHT_LABEL': "Maximum Building Height (in floors, approx. 3m per floor):",
         'STEP2_MAX_HEIGHT_PLACEHOLDER': "e.g. 7 (= 21m)",
         'STEP2_MIN_DISTANCE_LABEL': "Minimum Building Distance (m):",
         'STEP2_MIN_DISTANCE_PLACEHOLDER': "e.g. 6",
+        'STEP2_ADVANCED_MODE': "Show Advanced Options",
         'STEP2_QD_HYPERPARAMS_HEADER': "Optimization Parameters (Quality-Diversity)",
         'STEP2_QD_GENERATIONS_LABEL': "Number of Generations:",
         'STEP2_QD_EMITTERS_LABEL': "Number of Emitters:",
@@ -203,20 +222,26 @@ T = {
         'STEP3_NO_AREA': "Please define a scope in Step 1.",
         'STEP3_FAILED': "Optimization failed:",
         'STEP3_NO_SOLUTIONS': "Optimization failed or no solutions were found.",
+        'STEP3_UPDATE_INTERVAL_LABEL': "Live Update Interval (generations):",
+        'STEP3_ARCHIVE_VIS_HEADER': "Solution Archive (Live Visualization During Optimization)",
+        'STEP3_X_AXIS_LABEL': "Select X-Axis:",
+        'STEP3_Y_AXIS_LABEL': "Select Y-Axis:",
+        'STEP3_SOLUTION_GRID_HEADER': "Solution Archive (Best Design per Niche)",
+        'STEP3_PARALLEL_COORDS_HEADER': "Parallel Coordinates Plot",
 
-        # Step 4
-        'STEP4_TITLE': "Step 4: Analyze Solution Space",
-        'STEP4_X_AXIS_LABEL': "Select X-Axis:",
-        'STEP4_Y_AXIS_LABEL': "Select Y-Axis:",
-        'STEP4_GRID_HEADER': "Solution Archive (Best Design per Niche)",
-        'STEP4_NO_RESULTS': "Optimization results not found or axes not selected.",
-        'STEP4_NO_FILE': "Error: Large results file or georeferencing not found.",
-        'STEP4_NO_DESIGN': "No Design",
-        
         # Step 5
-        'STEP5_TITLE': "Step 5: Compare Variants and Export Requirements",
+        'STEP5_TITLE': "Step 4: Compare Variants and Export Requirements",
         'STEP5_EXPORT_BUTTON': "Export Planning Requirements for Competition",
         'STEP5_EXPORT_FILENAME': "planning_requirements.txt",
+        'STEP5_CORRELATION_HEADER': "Feature and Objective Correlation",
+        'STEP5_CORRELATION_LABEL': "Correlation",
+        'STEP5_NO_RESULTS_TITLE': "No optimization results found",
+        'STEP5_NO_RESULTS_TEXT': "No optimization results found.<br>Please run an optimization in Step 3 first.",
+        'STEP5_FILE_NOT_FOUND': "Results file not found.<br>Please run the optimization again.",
+        'STEP5_LOAD_ERROR': "Error loading results file:<br>{error}",
+        'STEP5_NO_LABELS': "No feature labels found in results.",
+        'STEP5_CORRELATION_ERROR': "Error calculating correlation matrix:<br>{error}",
+        'STEP5_CORRELATION_LEGEND': "Values near +1 = strong positive correlation | Values near -1 = strong negative correlation | Values near 0 = no correlation",
         'STEP5_FILTER_HEADER': "Filter and Analyze Designs",
         'STEP5_FILTER_DESC': "Filter solutions by their metrics and adjust clustering parameters to identify design types.",
         'STEP5_ANALYSIS_HEADER': "Analysis of Design Types (Clusters)",
@@ -247,9 +272,9 @@ T = {
         'STEP5_NO_RESULTS_ERROR': "Results file or georeferencing not found.",
         'STEP5_SELECT_FOR_COMPARISON': "Select for Comparison",
         
-        # Step 6
-        'STEP6_TITLE': "Detailed Comparison of Selected Designs",
-        'STEP6_NO_SELECTION': "No designs selected for comparison. Please return to Step 5 and select at least one design.",
+        # Step 5
+        'STEP6_TITLE': "Step 5: Detailed Comparison of Selected Designs",
+        'STEP6_NO_SELECTION': "No designs selected for comparison. Please return to Step 4 and select at least one design.",
         'STEP6_NO_DATA': "The results data could not be loaded.",
         'STEP6_NO_FILE': "Results file or georeferencing not found.",
         'STEP6_IDS_NOT_FOUND': "Error: The selected design IDs were not found in the current results file. This can happen if a new optimization was started after selection. Please return to Step 5 and make a new selection.",
@@ -272,3 +297,17 @@ T = {
 def get_translation(lang='DE'):
     """Helper function to get translations for a specific language"""
     return T.get(lang, T['DE'])
+
+def translate_feature_labels(feature_indices, lang='DE'):
+    """
+    Translate feature indices to labels based on language.
+    
+    Args:
+        feature_indices: List of feature indices (0-7)
+        lang: Language code ('DE' or 'EN')
+    
+    Returns:
+        List of translated feature labels
+    """
+    translations = T.get(lang, T['DE'])
+    return [translations[f'MEASURE_{idx}'] for idx in feature_indices]

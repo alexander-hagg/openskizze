@@ -74,7 +74,7 @@ app.layout = html.Div([
 ])
 
 # Register page layouts
-from pages import step1_scope, step2_constraints, step3_optimize, step4_explore, step5_compare, step6_compare_detail
+from pages import step1_scope, step2_constraints, step3_optimize, step4_compare, step5_compare_detail
 
 # Callback to handle project file upload and load state
 @app.callback(
@@ -177,10 +177,8 @@ def display_page(pathname, lang):
     elif pathname == '/step3':
         return step3_optimize.layout(lang)
     elif pathname == '/step4':
-        return step4_explore.layout(lang)
+        return step4_compare.layout(lang)
     elif pathname == '/step5':
-        return step5_compare.layout(lang)
-    elif pathname == '/step6':
-        return step6_compare_detail.layout(lang)
+        return step5_compare_detail.layout(lang)
     else:
         return step1_scope.layout(lang)

@@ -33,7 +33,7 @@ def layout(lang='DE'):
     dcc.Location(id='url-s6', refresh=False),
     html.H2(T[lang]['STEP6_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step5', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step4', color="secondary")),
             dbc.Col([
                 dbc.Button(T[lang]['STEP6_EXPORT_PDF'], id="export-pdf-btn-s6", color="info"),
                 dcc.Download(id="download-pdf-s6")
@@ -90,7 +90,12 @@ def display_comparison(selected_ids, results_data, lang):
             id={'type': 'compare-map', 'index': i}
         )
         
-        metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: results_data['labels'], T[lang]['STEP6_VALUE_LABEL']: [f"{v:.3f}" for v in sol['measures']]}
+        # Translate feature labels based on current language
+        from backend.translation import translate_feature_labels
+        feature_indices = results_data.get('selected_features_indices', [])
+        labels = translate_feature_labels(feature_indices, lang)
+        
+        metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: labels, T[lang]['STEP6_VALUE_LABEL']: [f"{v:.3f}" for v in sol['measures']]}
         metrics_df = pd.DataFrame(metrics_data)
         table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True)
         
@@ -128,10 +133,15 @@ def export_pdf_report_s6(n_clicks, selected_ids, results_data):
     if not solutions_to_compare:
         return dict(content="Error: Selected solutions not found in results.", filename="error.txt")
 
+    # Translate feature labels (use German for PDF report - could be made configurable)
+    from backend.translation import translate_feature_labels
+    feature_indices = results_data.get('selected_features_indices', [])
+    labels = translate_feature_labels(feature_indices, 'DE')  # PDF in German
+
     pdf_content = generate_pdf_report(
         solutions_to_compare,
         list_of_elites, # Pass all elites for correlation analysis
-        results_data['labels'],
+        labels,
         results_data['grid_geojson'],
         results_data['xy_length']
     )
