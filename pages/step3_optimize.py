@@ -344,6 +344,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
     user_feature_ranges = session_data.get('feature_ranges', {})
     hard_constraints = session_data.get('hard_constraints', {})
     qd_hyperparams = session_data.get('qd_hyperparams', {})
+    objective_function = session_data.get('objective_function', 'simple_porosity')
 
     # Simplified progress callback without live updates
     def progress_callback(progress, text, archive=None):
@@ -361,6 +362,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             user_feature_ranges,
             hard_constraints,
             qd_hyperparams,
+            objective_function,
             progress_callback=progress_callback
         )
         
@@ -426,10 +428,27 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             # Visualization is now handled by separate callbacks for parallel-coords-plot-s3 and solution-map-grid-container-s3
             return results_summary_to_store
         
+    except ValueError as e:
+        # User-friendly error for constraint/parcel issues
+        import traceback
+        print("!!!!!! OPTIMIZATION FAILED - User Error !!!!!!")
+        print(str(e))
+        traceback.print_exc()
+        set_progress((0, "Error", str(e), {'visibility': 'visible', 'color': 'red'}))
+        return None
+    except RuntimeError as e:
+        # Runtime error (e.g., empty archive)
+        import traceback
+        print("!!!!!! OPTIMIZATION FAILED - Empty Archive !!!!!!")
+        print(str(e))
+        traceback.print_exc()
+        set_progress((0, "Error", str(e), {'visibility': 'visible', 'color': 'red'}))
+        return None
     except Exception as e:
         import traceback
-        print("!!!!!! OPTIMIZATION FAILED in UI callback !!!!!!")
+        print("!!!!!! OPTIMIZATION FAILED - Unexpected Error !!!!!!")
         traceback.print_exc()
+        set_progress((0, "Error", f"Unexpected error: {str(e)}", {'visibility': 'visible', 'color': 'red'}))
         return None
     
     return None

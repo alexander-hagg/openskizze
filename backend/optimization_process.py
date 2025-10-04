@@ -2,8 +2,10 @@
 # backend/optimization_process.py (Final Corrected Version with Shape Filtering and Rasterio)
 #
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
+from scipy.ndimage import rotate
 from backend.config import QD_CONFIG, ENCODING_CONFIG, DOMAIN_CONFIG
 from backend.data_io import fetch_existing_buildings_data
 from backend.encoding import ParametricEncoding
@@ -123,6 +125,21 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after geometric filter")
         
         if not gdf_building_polygons.empty:
+            # Extract real building heights from NRW data
+            # Try 'hoehe' (height in meters) or 'geschosszahl' (number of floors)
+            if 'hoehe' in gdf_building_polygons.columns:
+                # Direct height in meters
+                heights_meters = gdf_building_polygons['hoehe'].fillna(9.0)  # Default 3 floors = 9m
+            elif 'geschosszahl' in gdf_building_polygons.columns:
+                # Convert floors to meters (3m per floor)
+                heights_meters = gdf_building_polygons['geschosszahl'].fillna(3.0) * 3.0
+            else:
+                # Fallback: assume 3 floors = 9m
+                heights_meters = pd.Series([9.0] * len(gdf_building_polygons))
+            
+            # Clip heights to reasonable range (1m to 90m = 1-30 floors)
+            heights_meters = heights_meters.clip(1.0, 90.0)
+            
             # Create a mapping array to store building function for each pixel
             # We'll encode each unique function as a number
             if 'funktion' in gdf_building_polygons.columns:
@@ -147,20 +164,58 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             )
             building_function_map_exp = np.flipud(building_function_map_exp)
             
-            # Create boolean footprint and 3D array
-            building_footprints_2d_exp = building_function_map_exp > 0
-            env_3d_expanded[building_footprints_2d_exp, :3] = 1
+            # Rasterize heights to EXPANDED grid - create 2D heightmap
+            shapes_with_heights = [(geom, height) for geom, height in 
+                                   zip(gdf_building_polygons.geometry, heights_meters)]
+            building_heights_2d_exp = features.rasterize(
+                shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
+                fill=0, dtype='float32'
+            )
+            building_heights_2d_exp = np.flipud(building_heights_2d_exp)
+            
+            # Create 3D array with actual heights (each voxel = 1 meter)
+            # Calculate how many voxel layers needed for each position
+            max_height_voxels = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
+            max_height_voxels = max(max_height_voxels, ENCODING_CONFIG['z_length'])  # At least z_length
+            
+            # Resize env_3d_expanded if needed to accommodate real heights
+            if env_3d_expanded.shape[2] < max_height_voxels:
+                new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_voxels), dtype=np.int8)
+                new_env_3d_expanded[:, :, :env_3d_expanded.shape[2]] = env_3d_expanded
+                env_3d_expanded = new_env_3d_expanded
+            
+            # Fill voxels up to building height
+            for r in range(expanded_res):
+                for c in range(expanded_res):
+                    height_m = building_heights_2d_exp[r, c]
+                    if height_m > 0:
+                        height_voxels = int(np.round(height_m))  # Round to nearest meter
+                        env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
             
             # Also rasterize to ORIGINAL grid for optimization
             cell_size = grid_side_length / res
             transform = from_origin(grid_min_x, grid_max_y, cell_size, cell_size)
             
-            building_footprints_2d = features.rasterize(
-                shapes=gdf_building_polygons.geometry, out_shape=(res, res), transform=transform,
-                fill=0, default_value=1, dtype='uint8'
-            ).astype(bool)
-            building_footprints_2d = np.flipud(building_footprints_2d)
-            env_3d_fixed[building_footprints_2d, :3] = 1
+            # Rasterize heights to original grid
+            building_heights_2d = features.rasterize(
+                shapes=shapes_with_heights, out_shape=(res, res), transform=transform,
+                fill=0, dtype='float32'
+            )
+            building_heights_2d = np.flipud(building_heights_2d)
+            
+            # Resize env_3d_fixed if needed
+            if env_3d_fixed.shape[2] < max_height_voxels:
+                new_env_3d_fixed = np.zeros((res, res, max_height_voxels), dtype=np.int8)
+                new_env_3d_fixed[:, :, :env_3d_fixed.shape[2]] = env_3d_fixed
+                env_3d_fixed = new_env_3d_fixed
+            
+            # Fill voxels up to building height for optimization grid
+            for r in range(res):
+                for c in range(res):
+                    height_m = building_heights_2d[r, c]
+                    if height_m > 0:
+                        height_voxels = int(np.round(height_m))
+                        env_3d_fixed[r, c, :min(height_voxels, env_3d_fixed.shape[2])] = 1
         else:
             building_function_map_exp = None
             id_to_function = {}
@@ -273,12 +328,46 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_floors
     return new_ranges, buildable_area_m2
 
 
-def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, progress_callback=None):
+def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, objective_function: str = 'simple_porosity', progress_callback=None):
     progress_callback(5, "Creating environment...")
     # Pass hard_constraints to create_environment so it can calculate proper ranges
     env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges, hard_constraints)
     env_config['wind_direction'] = wind_direction
     env_config['hard_constraints'] = hard_constraints
+    env_config['objective_function'] = objective_function
+    
+    # --- PRE-ROTATE ENVIRONMENT HEIGHTMAP (ONCE) ---
+    # Extract 2D heightmap from 3D environment (max height at each position)
+    env_heightmap_2d = np.max(env_config['env_3d_fixed'], axis=2)
+    # Rotate to wind direction once (instead of rotating 80,000 times during optimization)
+    rotation_angle = (wind_direction + 90) % 360
+    env_heightmap_2d_rotated = rotate(env_heightmap_2d, angle=rotation_angle, reshape=False, order=0)
+    env_config['env_heightmap_2d_rotated'] = env_heightmap_2d_rotated
+    
+    # Safety checks before optimization
+    buildable_area_m2 = env_config['buildable_area_in_sq_meters']
+    buildable_mask = env_config['buildable_mask']
+    buildable_pixels = np.sum(buildable_mask)
+    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+    
+    # Check 1: Minimum buildable area
+    if buildable_area_m2 < 50:
+        raise ValueError(f"Buildable area is too small ({buildable_area_m2:.1f} m²). Minimum required: 50 m². Please select a larger parcel.")
+    
+    # Check 2: Minimum buildable pixels
+    if buildable_pixels < 10:
+        raise ValueError(f"Too few buildable pixels ({buildable_pixels}). Minimum required: 10 pixels. Consider increasing pixel size or selecting a larger parcel.")
+    
+    # Check 3: Min distance constraint feasibility
+    min_distance_meters = hard_constraints.get('min_distance', 0)
+    if min_distance_meters > 0:
+        min_distance_pixels = min_distance_meters / pixel_size
+        # Rough heuristic: if min_distance is more than 1/4 of the parcel's smallest dimension, it's likely too large
+        rows_occupied = np.any(buildable_mask, axis=1).sum()
+        cols_occupied = np.any(buildable_mask, axis=0).sum()
+        min_dimension = min(rows_occupied, cols_occupied)
+        if min_distance_pixels > min_dimension / 4:
+            raise ValueError(f"Min distance constraint ({min_distance_meters}m = {min_distance_pixels:.1f} pixels) is too large for parcel size (smallest dimension: {min_dimension} pixels). Reduce min_distance or select a larger parcel.")
     
     # Merge user-defined QD hyperparameters with defaults
     qd_config = QD_CONFIG.copy()
@@ -292,4 +381,17 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
     archive = run_qd_optimization(
         encoding_obj, env_config, qd_config, progress_callback)
     progress_callback(100, "Optimization complete.")
+    
+    # Final check: If archive is still empty, provide detailed error
+    if archive.stats.num_elites == 0:
+        raise RuntimeError(
+            "Optimization completed but archive is empty. No valid solutions were found. "
+            "This typically indicates that the constraints are too restrictive for the selected parcel. "
+            "Try:\n"
+            "  1. Reducing the min_distance constraint\n"
+            "  2. Increasing the max_height constraint\n"
+            "  3. Selecting a larger or more regular-shaped parcel\n"
+            "  4. Running the diagnostic page to identify specific issues"
+        )
+    
     return archive, env_config['labels'], env_config

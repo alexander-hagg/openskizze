@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<schema targetNamespace="http://repository.gdi-de.org/schemas/adv/produkt/alkis-vereinfacht/2.0" xmlns="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" xmlns:gml="http://www.opengis.net/gml" xmlns:ave="http://repository.gdi-de.org/schemas/adv/produkt/alkis-vereinfacht/2.0">
+<import namespace="http://www.opengis.net/gml" schemaLocation="http://3a-idmz.nrw.de/aaa-suite/schema/ogc/gml/3.1.1/base/gml.xsd"/>
+<element name="GebaeudeBauwerk" substitutionGroup="gml:_Feature" type="ave:GebaeudeBauwerkType"/>
+<complexType name="GebaeudeBauwerkType">
+<complexContent>
+<extension base="gml:AbstractFeatureType">
+<sequence>
+<element name="oid" type="string"/>
+<element name="aktualit" type="date"/>
+<element name="geometrie" type="gml:MultiSurfacePropertyType"/>
+<element name="gebnutzbez" type="string"/>
+<element name="funktion" type="string"/>
+<element minOccurs="0" name="gfkzshh" type="string"/>
+<element minOccurs="0" name="rellage" type="string"/>
+<element minOccurs="0" name="name" type="string"/>
+<element minOccurs="0" name="anzahlgs" type="integer"/>
+<element minOccurs="0" name="gmdschl" type="string"/>
+<element minOccurs="0" name="lagebeztxt" type="string"/>
+</sequence>
+</extension>
+</complexContent>
+</complexType>
+</schema>

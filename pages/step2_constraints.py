@@ -89,6 +89,35 @@ def layout(lang='DE'):
                     dbc.Input(id='min-distance-constraint', type="number", placeholder=T[lang]['STEP2_MIN_DISTANCE_PLACEHOLDER'], min=0, step=1, value=0),
                 ]), color="light"),
                 
+                # --- NEW: Objective Function Selection ---
+                html.H5(T[lang].get('STEP2_OBJECTIVE_FUNCTION_HEADER', 'Optimization Criteria'), className="mt-4"),
+                dbc.Card(dbc.CardBody([
+                    dbc.Label(T[lang].get('STEP2_OBJECTIVE_FUNCTION_LABEL', 'Wind Flow Objective')),
+                    dbc.RadioItems(
+                        id='objective-function-selector',
+                        options=[
+                            {
+                                'label': html.Div([
+                                    html.Strong('Simple Wind Porosity'),
+                                    html.Br(),
+                                    html.Small('Counts completely open vertical passages. Best for sparse environments.', className='text-muted')
+                                ]),
+                                'value': 'simple_porosity'
+                            },
+                            {
+                                'label': html.Div([
+                                    html.Strong('Street Canyon Ventilation'),
+                                    html.Br(),
+                                    html.Small('Considers horizontal gaps, lateral flow, and partial penetration. Better for dense urban contexts.', className='text-muted')
+                                ]),
+                                'value': 'street_canyon'
+                            }
+                        ],
+                        value='simple_porosity',
+                        className='mt-2'
+                    ),
+                ]), color="light"),
+                
                 # --- Advanced Mode Toggle ---
                 dbc.Row([
                     dbc.Col([
@@ -406,7 +435,7 @@ def restore_step2_from_session(session_data, pathname):
     
     return no_update, int(max_height), min_distance, qd_generations, qd_emitters, qd_niches, qd_batch_size
 
-# --- UPDATED: Callback to save selections, ranges, constraints, and QD hyperparameters to the session ---
+# --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters, and objective function to the session ---
 @callback(
     Output('session-store', 'data', allow_duplicate=True),
     Input('measures-checklist', 'value'),
@@ -417,6 +446,7 @@ def restore_step2_from_session(session_data, pathname):
     Input('qd-emitters-input', 'value'),
     Input('qd-niches-input', 'value'),
     Input('qd-batch-size-input', 'value'),
+    Input('objective-function-selector', 'value'),
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     prevent_initial_call=True
@@ -424,6 +454,7 @@ def restore_step2_from_session(session_data, pathname):
 def update_session_with_features_and_ranges(
     selected_indices, slider_values, max_height, min_distance,
     qd_generations, qd_emitters, qd_niches, qd_batch_size,
+    objective_function,
     slider_ids, session_data
 ):
     session_data = session_data or {}
@@ -447,5 +478,8 @@ def update_session_with_features_and_ranges(
         'num_niches': qd_niches if qd_niches else QD_CONFIG['num_niches'],
         'batch_size': qd_batch_size if qd_batch_size else QD_CONFIG['batch_size'],
     }
+    
+    # Save objective function selection
+    session_data['objective_function'] = objective_function if objective_function else 'simple_porosity'
     
     return session_data

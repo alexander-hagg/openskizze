@@ -36,7 +36,7 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     Create a 3D visualization of the building design as voxel blocks in geographic coordinates
     
     Args:
-        heightmap: 2D numpy array of building heights (in meters/voxels)
+        heightmap: 2D numpy array of building heights (in floors/voxels, 0-3)
         grid_bounds_native: (min_x, min_y, max_x, max_y) in EPSG:25832 for design area
         env_3d_fixed: 3D array of existing buildings (optional, may be larger than design grid)
         height_exaggeration: Factor to exaggerate building heights for visualization
@@ -45,8 +45,8 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         expanded_bounds_native: (min_x, min_y, max_x, max_y) for expanded visualization area (optional)
         design_offset: (row_offset, col_offset) for design placement within expanded grid (optional)
     """
-    # Heightmap for generated designs is in floors, convert to meters
-    # 1 floor = 3 meters, so multiply by 3
+    # Heightmap values represent number of floors (0-3), convert to meters (each floor = 3m)
+    # This ensures design buildings match the real heights from NRW open data portal
     heightmap_meters = heightmap * 3.0 * height_exaggeration
     
     # Get grid dimensions for design
@@ -161,6 +161,14 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                 vertex_count += 8
         
         if vertex_count > 0:
+            # Safety check: ensure all lists have consistent lengths to avoid JavaScript zip errors
+            if not (len(x_coords_list) == len(y_coords_list) == len(z_coords_list)):
+                print(f"WARNING: Coordinate list length mismatch in add_voxel_blocks")
+                return
+            if not (len(i_indices) == len(j_indices) == len(k_indices)):
+                print(f"WARNING: Index list length mismatch in add_voxel_blocks")
+                return
+            
             # Use a single mesh trace with all building blocks combined
             fig.add_trace(go.Mesh3d(
                 x=x_coords_list,
@@ -283,7 +291,7 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
             up=dict(x=0, y=0, z=1)
         )
     
-    # Update layout with geographic coordinate system
+    # Update layout with geographic coordinate system - HORIZONTAL orientation
     fig.update_layout(
         scene=dict(
             xaxis=dict(title='Easting (m)', range=x_range, showgrid=True),
@@ -300,10 +308,18 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
             # Add sun-like lighting effect with sky blue background
             bgcolor='rgb(230, 240, 255)',  # Light sky blue background
         ),
-        height=600,
-        margin=dict(l=0, r=0, t=30, b=0),
+        height=500,  # Shorter height for horizontal layout
+        width=1400,  # Wide horizontal format
+        margin=dict(l=0, r=0, t=30, b=80),  # More bottom margin for legend
         hovermode='closest',
-        legend=dict(x=1.02, y=1, xanchor='left', yanchor='top')
+        # Legend at bottom center, horizontal orientation
+        legend=dict(
+            orientation='h',
+            yanchor='top',
+            y=-0.15,
+            xanchor='center',
+            x=0.5
+        )
     )
     
     return fig
