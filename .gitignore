@@ -2,3 +2,19 @@ static/vendor/*
 node_modules/*
 *.pyc
 results/
+
+# Temporary optimization results
+temp_results/
+
+# Debug plots
+debug_plots/
+
+# Cache files
+cache/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Profiling data
+*.prof

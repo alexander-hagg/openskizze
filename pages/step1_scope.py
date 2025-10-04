@@ -45,7 +45,10 @@ def create_compass_component():
 def layout(lang='DE'):
     return dbc.Container([
         html.H2(T[lang]['STEP1_TITLE']),
-        dbc.Button(T[lang]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4"),
+        dbc.Row([
+            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4")),
+            dbc.Col(dbc.Button("🔍 Run Diagnostic", href='/diagnostic', color="info", outline=True, className="mt-4"), width="auto"),
+        ]),
         html.P(T[lang]['STEP1_DATA_SOURCE_INFO'], className="text-muted mb-3"),
         dcc.Store(id='loaded-parcels-store'),
         dcc.Store(id='selected-parcels-store', data=[]),

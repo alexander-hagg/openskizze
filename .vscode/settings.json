@@ -1,0 +1,9 @@
+{
+    "python.analysis.extraPaths": [
+        "./qd/util",
+        "./qd/domain/nsg_cppn",
+        "./qd/domain/utils",
+        "./qd/templates",
+        "./qd/domain/cppn"
+    ]
+}
