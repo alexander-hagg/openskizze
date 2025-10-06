@@ -51,7 +51,7 @@ def compute_fitness(heightmap_3d: np.ndarray, wind_direction: int) -> float:
     Fitness = 1.0 for empty environment, 0.0 if all paths blocked.
     """
     # Rotate environment so wind direction aligns with axis 1 (Y-axis)
-    rotation_angle = wind_direction % 360
+    rotation_angle = (wind_direction+90) % 360
     rotated_env = rotate(heightmap_3d, angle=rotation_angle, axes=(0, 1), reshape=False, order=0)
     
     # For each (x, z) position, check if there's any obstruction along the entire Y-axis (wind path)
