@@ -23,6 +23,8 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
     heightmap_2d = encoding_obj.express(env_config['buildable_mask'], genome)
     
     # Step 2: Create 3D design array
+    # CRITICAL: ALL Z-axes are now in FLOORS throughout the application
+    # heightmap_2d is in FLOORS, env_3d_fixed is in FLOORS (1 voxel = 1 floor)
     max_height = env_config['env_3d_fixed'].shape[2]
     z_indices = np.arange(max_height)
     design_3d = (z_indices < heightmap_2d.astype(int)[:, :, np.newaxis]).astype(np.int8)
@@ -32,23 +34,46 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
     
     # Step 4: Compute fitness with BOTH methods
     wind_direction = env_config.get('wind_direction', 0)
-    rotation_angle = (wind_direction + 90) % 360
     
-    # Rotate environment (shared for both methods)
-    rotated_env = rotate(combined_env_3d, angle=rotation_angle, axes=(0, 1), reshape=False, order=0)
+    # === METHOD 1: Simple Wind Porosity (CORRECTED) ===
+    # Rotate so wind direction aligns with Y-axis
+    rotation_angle_simple = wind_direction % 360
+    rotated_env_simple = rotate(combined_env_3d, angle=rotation_angle_simple, axes=(0, 1), reshape=False, order=0)
     
-    # === METHOD 1: Simple Wind Porosity ===
-    projection = np.sum(rotated_env, axis=1)
-    open_columns = np.sum(projection == 0)
-    total_columns = projection.shape[0] * projection.shape[1]
-    porosity = open_columns / total_columns if total_columns > 0 else 0.0
+    # For each (x, z) position, check if there's any obstruction along the entire Y-axis (wind path)
+    # Use max instead of sum: if max == 0, the entire horizontal path is clear
+    max_along_wind = np.max(rotated_env_simple, axis=1)  # Shape: (X, Z)
+    open_paths = np.sum(max_along_wind == 0)
+    total_paths = max_along_wind.shape[0] * max_along_wind.shape[1]
+    porosity = open_paths / total_paths if total_paths > 0 else 0.0
     fitness_simple = np.clip(porosity, 0.0, 1.0)
     
+    # For visualization: Create intuitive top-down view
+    # Show buildings from above with wind flow direction marked
+    building_footprint = np.max(rotated_env_simple, axis=2)  # Max height at each (X, Y)
+    
+    # Create wind flow openness map based on the corrected method
+    # max_along_wind has shape (X, Z) - shows if path is open at each (x, z) position
+    # For top-down visualization, we need to aggregate across Z (height) dimension
+    # to show ground-level openness at each (X, Y) position
+    openness_per_xz = (max_along_wind == 0).astype(float)  # 1 if path is open, 0 if blocked
+    
+    # Aggregate across Z to show if ANY height level has an open path at each X position
+    # Alternative: use mean to show percentage of heights with open paths
+    openness_per_x = np.mean(openness_per_xz, axis=1)  # Average openness across heights for each X
+    
+    # For top-down view: show building footprint colored by wind openness
+    # Use building_footprint shape, but color by openness_per_x at each X position
+    wind_flow_map = np.tile(openness_per_x[:, np.newaxis], (1, building_footprint.shape[1]))
+    
     # === METHOD 2: Street Canyon Ventilation (OPTIMIZED - vectorized) ===
-    rows, cols, height = rotated_env.shape
+    # Uses different rotation angle (+90 degrees)
+    rotation_angle_street = (wind_direction + 90) % 360
+    rotated_env_street = rotate(combined_env_3d, angle=rotation_angle_street, axes=(0, 1), reshape=False, order=0)
+    rows, cols, height = rotated_env_street.shape
     
     # Component 1: Ground-level street canyons (VECTORIZED with continuity weighting)
-    ground_level = rotated_env[:, :, :2]
+    ground_level = rotated_env_street[:, :, :2]
     ground_occupied = np.any(ground_level > 0, axis=2).astype(np.int8)
     ground_open = 1 - ground_occupied
     
@@ -63,7 +88,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
     corridor_score_map = ground_open.astype(float)
     
     # Component 2: Lateral ventilation (VECTORIZED)
-    open_per_col = np.sum(rotated_env == 0, axis=(0, 2))
+    open_per_col = np.sum(rotated_env_street == 0, axis=(0, 2))
     total_per_col = rows * height
     lateral_openness_per_col = open_per_col / total_per_col
     # Broadcast to 2D map for visualization
@@ -71,13 +96,14 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
     lateral_ventilation_score = np.mean(lateral_openness_per_col)
     
     # Component 3: Height variation (VECTORIZED)
-    max_heights = np.max(rotated_env, axis=2)
-    height_std = np.std(max_heights)
+    max_heights_street = np.max(rotated_env_street, axis=2)
+    height_std = np.std(max_heights_street)
     max_possible_std = height / 2.0
     height_variation_score = min(height_std / max_possible_std, 1.0) if max_possible_std > 0 else 0.0
     
     # Component 4: Partial penetration (VECTORIZED)
-    penetration_per_column = 1.0 - np.clip(projection / height, 0.0, 1.0)
+    projection_street = np.sum(rotated_env_street, axis=1)
+    penetration_per_column = 1.0 - np.clip(projection_street / height, 0.0, 1.0)
     penetration_score = np.mean(penetration_per_column)
     
     # Compute final Street Canyon fitness (matches evaluation.py)
@@ -115,33 +141,109 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         xaxis_title='X', yaxis_title='Y'
     )
     
-    # 3. Rotated environment (show middle slice)
-    middle_slice = rotated_env.shape[2] // 2
-    rotated_slice = rotated_env[:, :, middle_slice]
+    # 3. Rotated environment for simple porosity (show max projection to see all buildings)
+    # Use max projection instead of single slice to ensure all buildings are visible
+    rotated_max_z = np.max(rotated_env_simple, axis=2)
     fig3 = go.Figure(data=go.Heatmap(
-        z=rotated_slice,
+        z=rotated_max_z,
         colorscale='Reds',
         colorbar=dict(title='Occupied')
     ))
     fig3.update_layout(
-        title=f'Step 3: Rotated {rotation_angle}° (mid-height slice)',
+        title=f'Step 3: Rotated {rotation_angle_simple}° (Simple Porosity)',
         width=300, height=300,
         xaxis_title='X', yaxis_title='Y'
     )
     
-    # 4. Wind projection (Simple Porosity method)
+    # 4a. Top-down view showing buildings (Simple Porosity method)
+    # Shows building footprints from above - wind flows from bottom to top (along Y-axis)
     fig4 = go.Figure(data=go.Heatmap(
-        z=projection,
-        colorscale='RdYlGn_r',
-        colorbar=dict(title='Depth (voxels)')
+        z=building_footprint,
+        colorscale='Greys',
+        colorbar=dict(title='Height')
     ))
+    # Add arrow annotation to show wind direction
+    fig4.add_annotation(
+        x=building_footprint.shape[1] / 2,
+        y=building_footprint.shape[0] + 2,
+        text="Wind Direction ↑",
+        showarrow=False,
+        font=dict(size=10, color="blue"),
+        yanchor='bottom'
+    )
     fig4.update_layout(
-        title='Step 4a: Simple Porosity - Projection',
+        title=f'Step 4a: Building Footprints (Wind ↑)',
         width=300, height=300,
-        xaxis_title='X', yaxis_title='Z'
+        xaxis_title='X (perpendicular to wind)', yaxis_title='Y (wind direction)',
+        yaxis=dict(scaleanchor='x', scaleratio=1)
     )
     
-    # === NEW: Street Canyon Visualizations ===
+    # 4b. Horizontal wind path openness map (CORRECTED)
+    # Shows ground-level footprint colored by wind path openness
+    # For each X position, shows if horizontal wind paths at ANY height are completely unobstructed
+    # Note: Horizontal stripes are expected - each X position has same openness regardless of Y,
+    # because we're checking if wind can flow THROUGH the entire Y-axis at that X position
+    # IMPORTANT: Transpose to match the rotated environment's orientation
+    fig4b = go.Figure(data=go.Heatmap(
+        z=wind_flow_map.T,  # Transpose to match plotly's convention (row=Y, col=X)
+        colorscale='RdYlGn',
+        colorbar=dict(title='Avg Path<br>Openness<br>(across heights)')
+    ))
+    fig4b.add_annotation(
+        x=wind_flow_map.shape[0] / 2,  # Now X is first dimension
+        y=wind_flow_map.shape[1] + 2,   # Y is second dimension
+        text="Wind Direction ↑",
+        showarrow=False,
+        font=dict(size=10, color="blue"),
+        yanchor='bottom'
+    )
+    fig4b.update_layout(
+        title=f'Step 4b: Wind Path Openness (Porosity: {fitness_simple:.2%})',
+        width=300, height=300,
+        xaxis_title='X (perpendicular to wind)', 
+        yaxis_title='Y (wind direction)',
+        annotations=[
+            dict(text=f'Vertical stripes show wind openness<br>at each X position (averaged across heights)',
+                 xref='paper', yref='paper', x=0.5, y=-0.25, 
+                 showarrow=False, font=dict(size=8, color='gray'),
+                 xanchor='center', yanchor='top')
+        ],
+        yaxis=dict(scaleanchor='x', scaleratio=1)
+    )
+    
+    # 4c. Side view of wind paths (X vs Z) - MORE INTUITIVE!
+    # This directly shows the max_along_wind array: which (X, Z) positions are completely open
+    # Green = wind can flow through entire Y-depth unobstructed at this (X, Z)
+    # Red = wind is blocked somewhere along Y-depth at this (X, Z)
+    # IMPORTANT: This includes BOTH your design AND existing buildings!
+    fig4c = go.Figure(data=go.Heatmap(
+        z=openness_per_xz.T,  # Transpose so Z is vertical axis
+        colorscale='RdYlGn',
+        colorbar=dict(title='Open (1)<br>or<br>Blocked (0)'),
+        zmin=0, zmax=1
+    ))
+    fig4c.add_annotation(
+        x=openness_per_xz.shape[0] / 2,
+        y=-2,
+        text="◀─ Wind flows INTO page (along Y) ─▶",
+        showarrow=False,
+        font=dict(size=10, color="blue"),
+        yanchor='top'
+    )
+    fig4c.update_layout(
+        title=f'Step 4c: Wind Paths (Design + Existing Buildings)',
+        width=300, height=300,
+        xaxis_title='X (perpendicular to wind)',
+        yaxis_title='Z (Height in floors)',
+        annotations=[
+            dict(text=f'Green = open path | Red = blocked by design OR existing buildings<br>1 floor ≈ 3 meters',
+                 xref='paper', yref='paper', x=0.5, y=-0.25, 
+                 showarrow=False, font=dict(size=8, color='gray'),
+                 xanchor='center', yanchor='top')
+        ]
+    )
+    
+    # === Street Canyon Method Visualizations (Alternative Method) ===
     
     # 5. Ground-level street canyons (Component 1)
     fig5 = go.Figure(data=go.Heatmap(
@@ -150,9 +252,11 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         colorbar=dict(title='Open (ground)')
     ))
     fig5.update_layout(
-        title=f'Step 4b: Street Canyons (Score: {street_canyon_score:.3f})',
+        title=f'Step 5a: Street Canyons (Score: {street_canyon_score:.3f})',
         width=300, height=300,
-        xaxis_title='X (wind direction →)', yaxis_title='Y'
+        xaxis_title='X', yaxis_title='Y',
+        annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
+                         x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
     
     # 6. Lateral ventilation (Component 2)
@@ -162,21 +266,25 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         colorbar=dict(title='Openness')
     ))
     fig6.update_layout(
-        title=f'Step 4c: Lateral Ventilation (Score: {lateral_ventilation_score:.3f})',
+        title=f'Step 5b: Lateral Ventilation (Score: {lateral_ventilation_score:.3f})',
         width=300, height=300,
-        xaxis_title='X', yaxis_title='Y'
+        xaxis_title='X', yaxis_title='Y',
+        annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
+                         x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
     
     # 7. Height variation (Component 3)
     fig7 = go.Figure(data=go.Heatmap(
-        z=max_heights,
+        z=max_heights_street,
         colorscale='Viridis',
         colorbar=dict(title='Max Height')
     ))
     fig7.update_layout(
-        title=f'Step 4d: Height Variation (Score: {height_variation_score:.3f})',
+        title=f'Step 5c: Height Variation (Score: {height_variation_score:.3f})',
         width=300, height=300,
-        xaxis_title='X', yaxis_title='Y'
+        xaxis_title='X', yaxis_title='Y',
+        annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
+                         x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
     
     # 8. Partial penetration (Component 4)
@@ -186,9 +294,11 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         colorbar=dict(title='Penetration')
     ))
     fig8.update_layout(
-        title=f'Step 4e: Partial Penetration (Score: {penetration_score:.3f})',
+        title=f'Step 5d: Partial Penetration (Score: {penetration_score:.3f})',
         width=300, height=300,
-        xaxis_title='X', yaxis_title='Z'
+        xaxis_title='X', yaxis_title='Z',
+        annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
+                         x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
     
     # Statistics comparing both methods
@@ -205,9 +315,10 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
             'total_voxels': int(np.sum(combined_env_3d > 0))
         },
         'wind_stats': {
-            'rotation_angle': rotation_angle,
-            'open_columns': int(open_columns),
-            'total_columns': int(total_columns),
+            'rotation_angle_simple': rotation_angle_simple,
+            'rotation_angle_street': rotation_angle_street,
+            'open_paths': int(open_paths),
+            'total_paths': int(total_paths),
             'porosity': float(porosity),
             'fitness_simple_porosity': float(fitness_simple),
             'fitness_street_canyon': float(fitness_street_canyon)
@@ -225,6 +336,8 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         'fig2': fig2,
         'fig3': fig3,
         'fig4': fig4,
+        'fig4b': fig4b,
+        'fig4c': fig4c,
         'fig5': fig5,
         'fig6': fig6,
         'fig7': fig7,
@@ -638,8 +751,8 @@ def run_diagnostic(n_clicks, session_data):
                         dbc.Col([
                             html.H6("Wind Analysis:"),
                             html.Ul([
-                                html.Li(f"Wind direction: {stats['wind_stats']['rotation_angle']}°"),
-                                html.Li(f"Open columns: {stats['wind_stats']['open_columns']} / {stats['wind_stats']['total_columns']}"),
+                                html.Li(f"Wind direction: {stats['wind_stats']['rotation_angle_simple']}°"),
+                                html.Li(f"Open paths: {stats['wind_stats']['open_paths']} / {stats['wind_stats']['total_paths']}"),
                                 html.Li(f"Porosity: {stats['wind_stats']['porosity']:.4f}"),
                             ])
                         ], md=4),
@@ -675,7 +788,7 @@ def run_diagnostic(n_clicks, session_data):
                     html.P([
                         html.B("Step 1: "), "Generated building heights. ",
                         html.B("Step 2: "), "Combined with existing buildings. ",
-                        html.B("Step 3: "), f"Rotated {stats['wind_stats']['rotation_angle']}° to align with wind direction."
+                        html.B("Step 3: "), f"Rotated {stats['wind_stats']['rotation_angle_simple']}° to align with wind direction."
                     ], className="mt-2", style={'fontSize': '0.9em'}),
                     
                     html.Hr(),
@@ -683,12 +796,17 @@ def run_diagnostic(n_clicks, session_data):
                     # === Simple Wind Porosity Visualization ===
                     html.H6("🏙️ Simple Wind Porosity Method:"),
                     dbc.Row([
-                        dbc.Col(dcc.Graph(figure=viz['fig4'], config={'displayModeBar': False}), md=12),
+                        dbc.Col(dcc.Graph(figure=viz['fig4'], config={'displayModeBar': False}), md=4),
+                        dbc.Col(dcc.Graph(figure=viz['fig4b'], config={'displayModeBar': False}), md=4),
+                        dbc.Col(dcc.Graph(figure=viz['fig4c'], config={'displayModeBar': False}), md=4),
                     ]),
                     html.P([
-                        html.B("Step 4a: "), "Projects along wind axis. ",
-                        html.Span("Green = open passage, Red = blocked. ", style={'fontWeight': 'bold'}),
-                        html.Span(f"Result: {stats['wind_stats']['open_columns']} / {stats['wind_stats']['total_columns']} columns completely open. ", 
+                        html.B("Step 4a: "), "Building footprints (top view). ",
+                        html.B("Step 4b: "), "Top view colored by wind openness (vertical stripes show openness at each X position). ",
+                        html.B("Step 4c: "), "Side view showing which (X,Z) positions have unobstructed wind paths. ",
+                        html.B("⚠️ Note: "), "Red areas in 4c may include blocking from existing buildings, not just your design! ",
+                        html.Br(),
+                        html.Span(f"Result: {stats['wind_stats']['open_paths']} / {stats['wind_stats']['total_paths']} paths completely open. ", 
                                  style={'color': 'red' if stats['wind_stats']['fitness_simple_porosity'] == 0 else 'green'}),
                         html.B(f"Fitness = {stats['wind_stats']['fitness_simple_porosity']:.4f}")
                     ], className="mt-2", style={'fontSize': '0.9em'}),
@@ -746,7 +864,7 @@ def run_diagnostic(n_clicks, session_data):
                     ], className="mt-2", style={'fontSize': '0.9em'}),
                     html.Div([
                         html.B("Problem: ", style={'color': 'red'}),
-                        "If all columns in Step 4 have non-zero values (shown in red/yellow), it means buildings completely block the wind, resulting in zero fitness."
+                        "If Step 4b shows all red/yellow (no green), it means there are NO completely unobstructed horizontal wind paths through the site, resulting in zero fitness."
                     ] if stats['wind_stats']['fitness_simple_porosity'] == 0 else [], className="alert alert-danger mt-2")
                 ])
             ], className="mb-3"))
@@ -776,16 +894,16 @@ def run_diagnostic(n_clicks, session_data):
                     html.H5("🚨 Critical Issue Identified", className="alert-heading"),
                     html.P("All sample solutions have ZERO fitness on BOTH objectives because:"),
                     html.Ul([
-                        html.Li("Buildings (design + existing) completely block wind in the current direction"),
-                        html.Li("No open passages (vertical columns with no obstacles) exist in the rotated view"),
-                        html.Li("The projection (Step 4) shows NO cells with value = 0"),
+                        html.Li("Buildings (design + existing) completely block horizontal wind paths in the current direction"),
+                        html.Li("No completely unobstructed horizontal passages exist through the entire site depth"),
+                        html.Li("Step 4b shows NO green areas (all paths are blocked somewhere along their length)"),
                     ]),
                     html.H6("Solutions:"),
                     html.Ol([
                         html.Li([html.B("Change objective function"), " - Instead of wind porosity, optimize for building coverage, height diversity, or gross floor area"]),
-                        html.Li([html.B("Try different wind direction"), f" - Current: {test_results['fitness_visualizations'][0]['stats']['wind_stats']['rotation_angle']}°, try 0°, 90°, 180°, 270°"]),
+                        html.Li([html.B("Try different wind direction"), f" - Current: {test_results['fitness_visualizations'][0]['stats']['wind_stats']['rotation_angle_simple']}°, try 0°, 90°, 180°, 270°"]),
                         html.Li([html.B("Reduce existing building density"), " - If env is too dense, no design can create porosity"]),
-                        html.Li([html.B("Modify fitness calculation"), " - Use partial blockage or weighted porosity instead of strict open columns"]),
+                        html.Li([html.B("Modify fitness calculation"), " - Use partial blockage or weighted porosity instead of strict open paths"]),
                     ])
                 ], color="warning"))
         

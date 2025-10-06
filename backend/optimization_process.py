@@ -126,19 +126,20 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         
         if not gdf_building_polygons.empty:
             # Extract real building heights from NRW data
+            # CRITICAL: Convert everything to FLOORS for internal representation
             # Try 'hoehe' (height in meters) or 'geschosszahl' (number of floors)
             if 'hoehe' in gdf_building_polygons.columns:
-                # Direct height in meters
-                heights_meters = gdf_building_polygons['hoehe'].fillna(9.0)  # Default 3 floors = 9m
+                # Height in meters - convert to floors (1 floor = 3m)
+                heights_floors = gdf_building_polygons['hoehe'].fillna(9.0) / 3.0  # Default 3 floors
             elif 'geschosszahl' in gdf_building_polygons.columns:
-                # Convert floors to meters (3m per floor)
-                heights_meters = gdf_building_polygons['geschosszahl'].fillna(3.0) * 3.0
+                # Already in floors
+                heights_floors = gdf_building_polygons['geschosszahl'].fillna(3.0)
             else:
-                # Fallback: assume 3 floors = 9m
-                heights_meters = pd.Series([9.0] * len(gdf_building_polygons))
+                # Fallback: assume 3 floors
+                heights_floors = pd.Series([3.0] * len(gdf_building_polygons))
             
-            # Clip heights to reasonable range (1m to 90m = 1-30 floors)
-            heights_meters = heights_meters.clip(1.0, 90.0)
+            # Clip heights to reasonable range (1-30 floors)
+            heights_floors = heights_floors.clip(1.0, 30.0)
             
             # Create a mapping array to store building function for each pixel
             # We'll encode each unique function as a number
@@ -164,39 +165,39 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             )
             building_function_map_exp = np.flipud(building_function_map_exp)
             
-            # Rasterize heights to EXPANDED grid - create 2D heightmap
+            # Rasterize heights to EXPANDED grid - create 2D heightmap in FLOORS
             shapes_with_heights = [(geom, height) for geom, height in 
-                                   zip(gdf_building_polygons.geometry, heights_meters)]
+                                   zip(gdf_building_polygons.geometry, heights_floors)]
             building_heights_2d_exp = features.rasterize(
                 shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
                 fill=0, dtype='float32'
             )
             building_heights_2d_exp = np.flipud(building_heights_2d_exp)
             
-            # Create 3D array with actual heights (each voxel = 1 meter)
+            # Create 3D array with actual heights (each voxel = 1 FLOOR)
             # Calculate how many voxel layers needed for each position
-            max_height_voxels = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
-            max_height_voxels = max(max_height_voxels, ENCODING_CONFIG['z_length'])  # At least z_length
+            max_height_floors = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
+            max_height_floors = max(max_height_floors, ENCODING_CONFIG['z_length'])  # At least z_length
             
             # Resize env_3d_expanded if needed to accommodate real heights
-            if env_3d_expanded.shape[2] < max_height_voxels:
-                new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_voxels), dtype=np.int8)
+            if env_3d_expanded.shape[2] < max_height_floors:
+                new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_floors), dtype=np.int8)
                 new_env_3d_expanded[:, :, :env_3d_expanded.shape[2]] = env_3d_expanded
                 env_3d_expanded = new_env_3d_expanded
             
-            # Fill voxels up to building height
+            # Fill voxels up to building height (in floors)
             for r in range(expanded_res):
                 for c in range(expanded_res):
-                    height_m = building_heights_2d_exp[r, c]
-                    if height_m > 0:
-                        height_voxels = int(np.round(height_m))  # Round to nearest meter
+                    height_floors = building_heights_2d_exp[r, c]
+                    if height_floors > 0:
+                        height_voxels = int(np.round(height_floors))  # Round to nearest floor
                         env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
             
             # Also rasterize to ORIGINAL grid for optimization
             cell_size = grid_side_length / res
             transform = from_origin(grid_min_x, grid_max_y, cell_size, cell_size)
             
-            # Rasterize heights to original grid
+            # Rasterize heights to original grid (in FLOORS)
             building_heights_2d = features.rasterize(
                 shapes=shapes_with_heights, out_shape=(res, res), transform=transform,
                 fill=0, dtype='float32'
@@ -204,17 +205,17 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             building_heights_2d = np.flipud(building_heights_2d)
             
             # Resize env_3d_fixed if needed
-            if env_3d_fixed.shape[2] < max_height_voxels:
-                new_env_3d_fixed = np.zeros((res, res, max_height_voxels), dtype=np.int8)
+            if env_3d_fixed.shape[2] < max_height_floors:
+                new_env_3d_fixed = np.zeros((res, res, max_height_floors), dtype=np.int8)
                 new_env_3d_fixed[:, :, :env_3d_fixed.shape[2]] = env_3d_fixed
                 env_3d_fixed = new_env_3d_fixed
             
-            # Fill voxels up to building height for optimization grid
+            # Fill voxels up to building height for optimization grid (in floors)
             for r in range(res):
                 for c in range(res):
-                    height_m = building_heights_2d[r, c]
-                    if height_m > 0:
-                        height_voxels = int(np.round(height_m))
+                    height_floors = building_heights_2d[r, c]
+                    if height_floors > 0:
+                        height_voxels = int(np.round(height_floors))
                         env_3d_fixed[r, c, :min(height_voxels, env_3d_fixed.shape[2])] = 1
         else:
             building_function_map_exp = None

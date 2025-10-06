@@ -46,15 +46,23 @@ def check_constraints(heightmap: np.ndarray, constraints: dict):
 
 def compute_fitness(heightmap_3d: np.ndarray, wind_direction: int) -> float:
     """
-    Simple wind porosity - counts completely open vertical passages.
-    Good for sparse environments, but returns 0 for dense urban contexts.
+    Horizontal wind porosity - counts completely open horizontal paths in wind direction.
+    Returns percentage (0.0-1.0) of unblocked straight horizontal wind corridors.
+    Fitness = 1.0 for empty environment, 0.0 if all paths blocked.
     """
-    rotation_angle = (wind_direction + 90) % 360
+    # Rotate environment so wind direction aligns with axis 1 (Y-axis)
+    rotation_angle = wind_direction % 360
     rotated_env = rotate(heightmap_3d, angle=rotation_angle, axes=(0, 1), reshape=False, order=0)
-    projection = np.sum(rotated_env, axis=1)
-    open_columns = np.sum(projection == 0)
-    total_columns = projection.shape[0] * projection.shape[1]
-    porosity = open_columns / total_columns if total_columns > 0 else 0.0
+    
+    # For each (x, z) position, check if there's any obstruction along the entire Y-axis (wind path)
+    # Use max instead of sum: if max == 0, the entire horizontal path is clear
+    max_along_wind = np.max(rotated_env, axis=1)  # Shape: (rows, height)
+    
+    # Count positions where the entire wind path is open (max == 0)
+    open_paths = np.sum(max_along_wind == 0)
+    total_paths = max_along_wind.shape[0] * max_along_wind.shape[1]
+    
+    porosity = open_paths / total_paths if total_paths > 0 else 0.0
     return np.clip(porosity, 0.0, 1.0)
 
 def compute_fitness_street_canyon(heightmap_3d: np.ndarray, wind_direction: int) -> float:
@@ -207,9 +215,11 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
     
     # --- OPTIMIZED 3D MESH GENERATION ---
     # Create an array of z-axis indices: [0, 1, 2, ..., max_height-1]
+    # CRITICAL: ALL Z-axes are now in FLOORS throughout the application
+    # heightmap_2d_solution is in FLOORS, env_3d_fixed is in FLOORS (1 voxel = 1 floor)
     max_height = env_config['env_3d_fixed'].shape[2]
     z_indices = np.arange(max_height)
-
+    
     # Use NumPy broadcasting to compare the height at each (r, c) with the z_indices.
     design_3d = (z_indices < heightmap_2d_solution.astype(int)[:, :, np.newaxis]).astype(np.int8)
     

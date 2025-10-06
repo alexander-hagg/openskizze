@@ -20,6 +20,8 @@ def create_debug_plots(env_config: dict, sample_genome: np.ndarray, encoding_obj
     zone_map[~buildable_mask] = 2
     zone_map[buildable_mask] = 3
     
+    # CRITICAL: ALL Z-axes are now in FLOORS throughout the application
+    # sample_design_2d is in FLOORS, env_3d_fixed is in FLOORS (1 voxel = 1 floor)
     design_3d = np.zeros_like(env_3d_fixed)
     for r in range(sample_design_2d.shape[0]):
         for c in range(sample_design_2d.shape[1]):
