@@ -16,6 +16,7 @@ import pickle
 import uuid
 import os
 import numpy as np
+import base64
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
 from backend.encoding import ParametricEncoding
@@ -345,6 +346,17 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
     hard_constraints = session_data.get('hard_constraints', {})
     qd_hyperparams = session_data.get('qd_hyperparams', {})
     objective_function = session_data.get('objective_function', 'simple_porosity')
+    
+    # Retrieve and deserialize cached building data from Step 1 (if available)
+    cached_building_data = None
+    serialized_building_data = session_data.get('building_data', None)
+    if serialized_building_data:
+        try:
+            cached_building_data = pickle.loads(base64.b64decode(serialized_building_data))
+            print("[run_optimization] ✓ Deserialized cached building data from session")
+        except Exception as e:
+            print(f"[run_optimization] ✗ Error deserializing building data: {e}")
+            cached_building_data = None
 
     # Simplified progress callback without live updates
     def progress_callback(progress, text, archive=None):
@@ -354,7 +366,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
         # profiler = cProfile.Profile()
         # profiler.enable()
         
-        # Start optimization
+        # Start optimization with cached building data
         archive, labels, env_config = start_optimization(
             session_data['site_polygon'],
             session_data['wind_direction'],
@@ -363,7 +375,8 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             hard_constraints,
             qd_hyperparams,
             objective_function,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            cached_building_data=cached_building_data
         )
         
         if archive and not archive.empty:

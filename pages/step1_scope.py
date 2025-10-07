@@ -7,13 +7,14 @@ import dash_bootstrap_components as dbc
 import dash_leaflet as dl
 from dash_extensions.javascript import assign
 from backend.translation import T
-from backend.data_io import fetch_flurstuecke_data
+from backend.data_io import fetch_flurstuecke_data, fetch_and_process_buildings_for_area
 from shapely.geometry import shape, mapping, Polygon, MultiPolygon
 from shapely.ops import unary_union
 import math
 import json
 import base64
 import io
+import pickle
 
 # Client-side styling for the selectable parcel layer
 style_handle = assign("""
@@ -317,5 +318,46 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
 
     session_data['site_polygon'] = final_geojson
     session_data['wind_direction'] = wind_direction
+    
+    # =========================================================================
+    # Fetch and cache building data when area is selected/modified
+    # =========================================================================
+    # Only fetch building data when the polygon actually changed (not just wind direction)
+    if triggered_id in ['parcels-layer', 'edit-control', 'upload-geojson']:
+        if final_geojson and final_geojson.get('features'):
+            # Fetch and process building data for the selected area
+            print(f"[fetch_buildings] → Fetching building data for selected area from NRW API...")
+            try:
+                building_data = fetch_and_process_buildings_for_area(
+                    user_polygon_geojson=final_geojson
+                )
+                
+                if building_data:
+                    # Serialize the building data for storage in session
+                    # We need to handle NumPy arrays - use pickle + base64 encoding
+                    serialized_data = base64.b64encode(pickle.dumps(building_data)).decode('utf-8')
+                    session_data['building_data'] = serialized_data
+                    
+                    # Count buildings from the GeoDataFrame
+                    num_buildings = len(building_data.get('gdf_buildings_filtered', []))
+                    print(f"[fetch_buildings] ✓ Cached building data: {num_buildings} buildings processed")
+                else:
+                    print("[fetch_buildings] ✗ No building data returned")
+                    # Clear cache if fetch returned None
+                    if 'building_data' in session_data:
+                        del session_data['building_data']
+                    
+            except Exception as e:
+                print(f"[fetch_buildings] ✗ Error fetching building data: {e}")
+                import traceback
+                traceback.print_exc()
+                # Don't fail - optimization will fall back to fetching directly
+                if 'building_data' in session_data:
+                    del session_data['building_data']
+        else:
+            # No polygon selected, clear cached building data
+            if 'building_data' in session_data:
+                del session_data['building_data']
+                print("[fetch_buildings] ✗ No polygon selected - cleared building cache")
 
     return session_data, final_geojson, new_selected_ids, hideout

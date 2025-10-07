@@ -34,7 +34,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     pool = multiprocessing.Pool(processes=nb_cpus)
     
     print("Starting QD Optimization...")
-    live_update_interval = qd_config.get('live_update_interval', 50)  # Default to every 50 generations
+    live_update_interval = qd_config.get('live_update_interval', 100)  # Default to every 50 generations
     
     for gen in range(1, qd_config['num_generations'] + 1):
         try:

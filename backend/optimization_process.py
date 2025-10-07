@@ -17,7 +17,7 @@ from rasterio.transform import from_origin
 import json
 
 
-def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None):
+def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None):
     """
     Create the optimization environment with proper physical unit ranges.
     
@@ -26,6 +26,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         selected_features: List of feature indices to optimize
         user_feature_ranges: User-defined ranges for features (in physical units)
         hard_constraints: Dict with 'max_height' (in voxels) and 'min_distance' (in meters)
+        cached_building_data: Optional pre-fetched building data from Step 1 (for performance)
     """
     if hard_constraints is None:
         hard_constraints = {}
@@ -89,142 +90,190 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     grid_poly_native = gpd.GeoSeries([Polygon.from_bounds(grid_min_x, grid_min_y, grid_max_x, grid_max_y)], crs="EPSG:25832")
     grid_poly_web = grid_poly_native.to_crs("EPSG:4326")
     
-    # Use expanded bounds for fetching buildings
-    fetch_poly_native = gpd.GeoSeries([Polygon.from_bounds(expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y)], crs="EPSG:25832")
-    fetch_poly_web = fetch_poly_native.to_crs("EPSG:4326")
-    b_min_lon, b_min_lat, b_max_lon, b_max_lat = fetch_poly_web.total_bounds
+    # ============================================================================
+    # Check if we have cached building data from Step 1
+    # ============================================================================
+    building_function_map_exp = None
+    id_to_function = {}
+    gdf_building_polygons = None
     
-    gdf_buildings_native = fetch_existing_buildings_data((b_min_lon, b_min_lat, b_max_lon, b_max_lat))
-    
-    if gdf_buildings_native is not None:
-        # Filter by geometry type
-        geom_types = gdf_buildings_native.geometry.type
-        polygon_mask = geom_types.isin(['Polygon', 'MultiPolygon'])
-        gdf_polygons = gdf_buildings_native[polygon_mask].copy()
-
-        # Filter by function to exclude non-building structures
-        if 'funktion' in gdf_polygons.columns:
-            # Exclude structures that are not actual buildings:
-            # - "Überdachung" = canopy/roofing (like market coverings)
-            # - "Tiefgarage" = underground garage (not visible above ground)
-            exclude_types = ['Überdachung', 'Tiefgarage']
-            
-            # Keep everything except the excluded types
-            function_mask = ~gdf_polygons['funktion'].isin(exclude_types)
-            gdf_building_polygons = gdf_polygons[function_mask]
-            
-            print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after excluding {exclude_types}")
-        else:
-            # Fallback if no function attribute
-            perimeter = gdf_polygons.geometry.length
-            area = gdf_polygons.geometry.area
-            perimeter[perimeter == 0] = 1e-9
-            compactness = 4 * math.pi * area / (perimeter**2)
-            compact_mask = compactness > 0.1
-            gdf_building_polygons = gdf_polygons[compact_mask]
-            print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after geometric filter")
+    if cached_building_data is not None:
+        print("[create_environment] ✓ Using cached building data from Step 1")
         
-        if not gdf_building_polygons.empty:
-            # Extract real building heights from NRW data
-            # CRITICAL: Convert everything to FLOORS for internal representation
-            # Try 'hoehe' (height in meters) or 'geschosszahl' (number of floors)
-            if 'hoehe' in gdf_building_polygons.columns:
-                # Height in meters - convert to floors (1 floor = 3m)
-                heights_floors = gdf_building_polygons['hoehe'].fillna(9.0) / 3.0  # Default 3 floors
-            elif 'geschosszahl' in gdf_building_polygons.columns:
-                # Already in floors
-                heights_floors = gdf_building_polygons['geschosszahl'].fillna(3.0)
-            else:
-                # Fallback: assume 3 floors
-                heights_floors = pd.Series([3.0] * len(gdf_building_polygons))
-            
-            # Clip heights to reasonable range (1-30 floors)
-            heights_floors = heights_floors.clip(1.0, 30.0)
-            
-            # Create a mapping array to store building function for each pixel
-            # We'll encode each unique function as a number
-            if 'funktion' in gdf_building_polygons.columns:
-                unique_functions = gdf_building_polygons['funktion'].unique()
-                function_to_id = {func: idx + 1 for idx, func in enumerate(unique_functions)}
-                id_to_function = {idx + 1: func for idx, func in enumerate(unique_functions)}
-                
-                # Rasterize with building IDs
-                shapes_with_ids = [(geom, function_to_id[func]) for geom, func in 
-                                   zip(gdf_building_polygons.geometry, gdf_building_polygons['funktion'])]
-            else:
-                shapes_with_ids = [(geom, 1) for geom in gdf_building_polygons.geometry]
-                id_to_function = {1: 'Gebäude'}
-            
-            # Rasterize to EXPANDED grid for visualization
-            cell_size_exp = expanded_grid_side / expanded_res
-            transform_exp = from_origin(expanded_min_x, expanded_max_y, cell_size_exp, cell_size_exp)
-            
-            building_function_map_exp = features.rasterize(
-                shapes=shapes_with_ids, out_shape=(expanded_res, expanded_res), transform=transform_exp,
-                fill=0, dtype='uint8'
-            )
-            building_function_map_exp = np.flipud(building_function_map_exp)
-            
-            # Rasterize heights to EXPANDED grid - create 2D heightmap in FLOORS
-            shapes_with_heights = [(geom, height) for geom, height in 
-                                   zip(gdf_building_polygons.geometry, heights_floors)]
-            building_heights_2d_exp = features.rasterize(
-                shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
-                fill=0, dtype='float32'
-            )
-            building_heights_2d_exp = np.flipud(building_heights_2d_exp)
-            
-            # Create 3D array with actual heights (each voxel = 1 FLOOR)
-            # Calculate how many voxel layers needed for each position
-            max_height_floors = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
-            max_height_floors = max(max_height_floors, ENCODING_CONFIG['z_length'])  # At least z_length
-            
-            # Resize env_3d_expanded if needed to accommodate real heights
-            if env_3d_expanded.shape[2] < max_height_floors:
-                new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_floors), dtype=np.int8)
-                new_env_3d_expanded[:, :, :env_3d_expanded.shape[2]] = env_3d_expanded
-                env_3d_expanded = new_env_3d_expanded
-            
-            # Fill voxels up to building height (in floors)
-            for r in range(expanded_res):
-                for c in range(expanded_res):
-                    height_floors = building_heights_2d_exp[r, c]
-                    if height_floors > 0:
-                        height_voxels = int(np.round(height_floors))  # Round to nearest floor
-                        env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
-            
-            # Also rasterize to ORIGINAL grid for optimization
-            cell_size = grid_side_length / res
-            transform = from_origin(grid_min_x, grid_max_y, cell_size, cell_size)
-            
-            # Rasterize heights to original grid (in FLOORS)
-            building_heights_2d = features.rasterize(
-                shapes=shapes_with_heights, out_shape=(res, res), transform=transform,
-                fill=0, dtype='float32'
-            )
-            building_heights_2d = np.flipud(building_heights_2d)
-            
-            # Resize env_3d_fixed if needed
-            if env_3d_fixed.shape[2] < max_height_floors:
-                new_env_3d_fixed = np.zeros((res, res, max_height_floors), dtype=np.int8)
-                new_env_3d_fixed[:, :, :env_3d_fixed.shape[2]] = env_3d_fixed
-                env_3d_fixed = new_env_3d_fixed
-            
-            # Fill voxels up to building height for optimization grid (in floors)
-            for r in range(res):
-                for c in range(res):
-                    height_floors = building_heights_2d[r, c]
-                    if height_floors > 0:
-                        height_voxels = int(np.round(height_floors))
-                        env_3d_fixed[r, c, :min(height_voxels, env_3d_fixed.shape[2])] = 1
+        # Extract cached data
+        cached_env_3d_expanded = cached_building_data.get('env_3d_expanded')
+        building_function_map_exp = cached_building_data.get('building_function_map')
+        id_to_function = cached_building_data.get('function_lookup', {})
+        gdf_building_polygons = cached_building_data.get('gdf_buildings_filtered')
+        
+        # Validate that cached data matches our grid resolution
+        if cached_env_3d_expanded is None or cached_env_3d_expanded.shape[0] != expanded_res or cached_env_3d_expanded.shape[1] != expanded_res:
+            print(f"[create_environment] ⚠ Cached data resolution mismatch or invalid")
+            print("[create_environment] Falling back to fetching buildings from API")
+            cached_building_data = None  # Invalidate cache and fetch fresh data
         else:
-            building_function_map_exp = None
-            id_to_function = {}
+            # Cache is valid, use it
+            env_3d_expanded = cached_env_3d_expanded
+            print(f"[create_environment] ✓ Using cached building data with {len(gdf_building_polygons) if gdf_building_polygons is not None else 0} buildings")
+    
+    # ============================================================================
+    # If no cache or cache invalid, fetch buildings from NRW API
+    # ============================================================================
+    if cached_building_data is None:
+        print("[create_environment] Fetching building data from NRW API...")
+        
+        # Use expanded bounds for fetching buildings
+        fetch_poly_native = gpd.GeoSeries([Polygon.from_bounds(expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y)], crs="EPSG:25832")
+        fetch_poly_web = fetch_poly_native.to_crs("EPSG:4326")
+        b_min_lon, b_min_lat, b_max_lon, b_max_lat = fetch_poly_web.total_bounds
+        
+        gdf_buildings_native = fetch_existing_buildings_data((b_min_lon, b_min_lat, b_max_lon, b_max_lat))
+        
+        # Process the fetched building data
+        if gdf_buildings_native is not None:
+            # Filter by geometry type
+            geom_types = gdf_buildings_native.geometry.type
+            polygon_mask = geom_types.isin(['Polygon', 'MultiPolygon'])
+            gdf_polygons = gdf_buildings_native[polygon_mask].copy()
 
-    # Initialize these in case no buildings were found
-    if gdf_buildings_native is None or gdf_building_polygons.empty:
-        building_function_map_exp = None
-        id_to_function = {}
+            # Filter by function to exclude non-building structures
+            if 'funktion' in gdf_polygons.columns:
+                # Exclude structures that are not actual buildings:
+                # - "Überdachung" = canopy/roofing (like market coverings)
+                # - "Tiefgarage" = underground garage (not visible above ground)
+                exclude_types = ['Überdachung', 'Tiefgarage']
+                
+                # Keep everything except the excluded types
+                function_mask = ~gdf_polygons['funktion'].isin(exclude_types)
+                gdf_building_polygons = gdf_polygons[function_mask]
+                
+                print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after excluding {exclude_types}")
+            else:
+                # Fallback if no function attribute
+                perimeter = gdf_polygons.geometry.length
+                area = gdf_polygons.geometry.area
+                perimeter[perimeter == 0] = 1e-9
+                compactness = 4 * math.pi * area / (perimeter**2)
+                compact_mask = compactness > 0.1
+                gdf_building_polygons = gdf_polygons[compact_mask]
+                print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after geometric filter")
+            
+            if not gdf_building_polygons.empty:
+                # Extract real building heights from NRW data
+                # CRITICAL: Convert everything to FLOORS for internal representation
+                # Try 'hoehe' (height in meters) or 'geschosszahl' (number of floors)
+                if 'hoehe' in gdf_building_polygons.columns:
+                    # Height in meters - convert to floors (1 floor = 3m)
+                    heights_floors = gdf_building_polygons['hoehe'].fillna(9.0) / 3.0  # Default 3 floors
+                elif 'geschosszahl' in gdf_building_polygons.columns:
+                    # Already in floors
+                    heights_floors = gdf_building_polygons['geschosszahl'].fillna(3.0)
+                else:
+                    # Fallback: assume 3 floors
+                    heights_floors = pd.Series([3.0] * len(gdf_building_polygons))
+                
+                # Clip heights to reasonable range (1-30 floors)
+                heights_floors = heights_floors.clip(1.0, 30.0)
+                
+                # Create a mapping array to store building function for each pixel
+                # We'll encode each unique function as a number
+                if 'funktion' in gdf_building_polygons.columns:
+                    unique_functions = gdf_building_polygons['funktion'].unique()
+                    function_to_id = {func: idx + 1 for idx, func in enumerate(unique_functions)}
+                    id_to_function = {idx + 1: func for idx, func in enumerate(unique_functions)}
+                    
+                    # Rasterize with building IDs
+                    shapes_with_ids = [(geom, function_to_id[func]) for geom, func in 
+                                       zip(gdf_building_polygons.geometry, gdf_building_polygons['funktion'])]
+                else:
+                    shapes_with_ids = [(geom, 1) for geom in gdf_building_polygons.geometry]
+                    id_to_function = {1: 'Gebäude'}
+                
+                # Rasterize to EXPANDED grid for visualization
+                cell_size_exp = expanded_grid_side / expanded_res
+                transform_exp = from_origin(expanded_min_x, expanded_max_y, cell_size_exp, cell_size_exp)
+                
+                building_function_map_exp = features.rasterize(
+                    shapes=shapes_with_ids, out_shape=(expanded_res, expanded_res), transform=transform_exp,
+                    fill=0, dtype='uint8'
+                )
+                building_function_map_exp = np.flipud(building_function_map_exp)
+                
+                # Rasterize heights to EXPANDED grid - create 2D heightmap in FLOORS
+                shapes_with_heights = [(geom, height) for geom, height in 
+                                       zip(gdf_building_polygons.geometry, heights_floors)]
+                building_heights_2d_exp = features.rasterize(
+                    shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
+                    fill=0, dtype='float32'
+                )
+                building_heights_2d_exp = np.flipud(building_heights_2d_exp)
+                
+                # Create 3D array with actual heights (each voxel = 1 FLOOR)
+                # Calculate how many voxel layers needed for each position
+                max_height_floors = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
+                max_height_floors = max(max_height_floors, ENCODING_CONFIG['z_length'])  # At least z_length
+                
+                # Resize env_3d_expanded if needed to accommodate real heights
+                if env_3d_expanded.shape[2] < max_height_floors:
+                    new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_floors), dtype=np.int8)
+                    new_env_3d_expanded[:, :, :env_3d_expanded.shape[2]] = env_3d_expanded
+                    env_3d_expanded = new_env_3d_expanded
+                
+                # Fill voxels up to building height (in floors)
+                for r in range(expanded_res):
+                    for c in range(expanded_res):
+                        height_floors = building_heights_2d_exp[r, c]
+                        if height_floors > 0:
+                            height_voxels = int(np.round(height_floors))  # Round to nearest floor
+                            env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
+                
+                # Also rasterize to ORIGINAL grid for optimization
+                cell_size = grid_side_length / res
+                transform = from_origin(grid_min_x, grid_max_y, cell_size, cell_size)
+                
+                # Rasterize heights to original grid (in FLOORS)
+                building_heights_2d = features.rasterize(
+                    shapes=shapes_with_heights, out_shape=(res, res), transform=transform,
+                    fill=0, dtype='float32'
+                )
+                building_heights_2d = np.flipud(building_heights_2d)
+                
+                # Resize env_3d_fixed if needed
+                if env_3d_fixed.shape[2] < max_height_floors:
+                    new_env_3d_fixed = np.zeros((res, res, max_height_floors), dtype=np.int8)
+                    new_env_3d_fixed[:, :, :env_3d_fixed.shape[2]] = env_3d_fixed
+                    env_3d_fixed = new_env_3d_fixed
+                
+                # Fill voxels up to building height for optimization grid (in floors)
+                for r in range(res):
+                    for c in range(res):
+                        height_floors = building_heights_2d[r, c]
+                        if height_floors > 0:
+                            height_voxels = int(np.round(height_floors))
+                            env_3d_fixed[r, c, :min(height_voxels, env_3d_fixed.shape[2])] = 1
+            else:
+                building_function_map_exp = None
+                id_to_function = {}
+
+            # Initialize these in case no buildings were found
+            if gdf_buildings_native is None or gdf_building_polygons.empty:
+                building_function_map_exp = None
+                id_to_function = {}
+    
+    # ============================================================================
+    # Create env_3d_fixed from expanded array (extract design area)
+    # This is needed whether we used cache or fetched fresh data
+    # ============================================================================
+    # Extract the design area from the expanded array
+    end_idx = start_idx + res
+    env_3d_fixed_from_expanded = env_3d_expanded[start_idx:end_idx, start_idx:end_idx, :]
+    
+    # Ensure env_3d_fixed has the right size
+    if env_3d_fixed.shape[2] < env_3d_fixed_from_expanded.shape[2]:
+        env_3d_fixed = np.zeros((res, res, env_3d_fixed_from_expanded.shape[2]), dtype=np.int8)
+    
+    # Copy the extracted data
+    env_3d_fixed[:, :, :env_3d_fixed_from_expanded.shape[2]] = env_3d_fixed_from_expanded
     
     # Clear buildings in the buildable area for both arrays
     env_3d_fixed[buildable_mask, :] = 0
@@ -329,10 +378,10 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_floors
     return new_ranges, buildable_area_m2
 
 
-def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, objective_function: str = 'simple_porosity', progress_callback=None):
+def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, objective_function: str = 'simple_porosity', cached_building_data: dict = None, progress_callback=None):
     progress_callback(5, "Creating environment...")
-    # Pass hard_constraints to create_environment so it can calculate proper ranges
-    env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges, hard_constraints)
+    # Pass hard_constraints and cached_building_data to create_environment
+    env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges, hard_constraints, cached_building_data)
     env_config['wind_direction'] = wind_direction
     env_config['hard_constraints'] = hard_constraints
     env_config['objective_function'] = objective_function

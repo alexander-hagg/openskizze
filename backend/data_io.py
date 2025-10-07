@@ -282,3 +282,192 @@ def fetch_existing_buildings_data(bbox: tuple):
     except Exception as e:
         print(f"An error occurred during building fetching: {e}")
         return None
+
+
+def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_floors: int = None):
+    """
+    Fetches building data from NRW API for a user-selected polygon and processes it
+    into the format needed for optimization and visualization.
+    
+    This function is designed to be called in Step 1 when the user selects an area,
+    allowing the building data to be fetched once and cached in the session store.
+    
+    Args:
+        user_polygon_geojson: GeoJSON dict of the user-selected buildable area
+        max_height_floors: Maximum building height in floors (for array sizing)
+    
+    Returns:
+        dict containing:
+            - 'gdf_buildings_filtered': GeoDataFrame of filtered buildings (EPSG:25832)
+            - 'env_3d_expanded': 3D array of existing buildings (expanded for visualization)
+            - 'building_function_map': 2D array mapping pixels to building functions
+            - 'function_lookup': Dict mapping function IDs to names
+            - 'expanded_bounds_native': Tuple of (min_x, min_y, max_x, max_y) for expanded area
+            - 'design_offset': Tuple of (start_idx_row, start_idx_col) for design grid position
+            - 'expanded_res': Resolution of expanded grid
+            - 'design_res': Resolution of design grid
+            - 'pixel_size': Size of each pixel in meters
+        Or None if fetching fails
+    """
+    import geopandas as gpd
+    import math
+    import pandas as pd
+    from rasterio import features
+    from rasterio.transform import from_origin
+    from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG
+    
+    try:
+        if not user_polygon_geojson or not user_polygon_geojson.get('features'):
+            print("[fetch_buildings] Invalid polygon provided")
+            return None
+        
+        # Convert user polygon to native CRS and calculate bounds
+        gdf_user_poly = gpd.GeoDataFrame.from_features(user_polygon_geojson, crs="EPSG:4326")
+        gdf_user_poly_native = gdf_user_poly.to_crs("EPSG:25832")
+        min_x, min_y, max_x, max_y = gdf_user_poly_native.total_bounds
+        
+        width = max_x - min_x
+        height = max_y - min_y
+        square_size = max(width, height)
+        center_x = (min_x + max_x) / 2
+        center_y = (min_y + max_y) / 2
+        square_min_x = center_x - square_size / 2
+        square_min_y = center_y - square_size / 2
+        
+        border = square_size * (DOMAIN_CONFIG['environment_border_size'] - 1.0) / 2.0
+        grid_side_length = square_size + (2 * border)
+        grid_min_x = square_min_x - border
+        grid_min_y = square_min_y - border
+        grid_max_x = grid_min_x + grid_side_length
+        grid_max_y = grid_min_y + grid_side_length
+        
+        pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+        res = math.ceil(grid_side_length / pixel_size)
+        
+        # Calculate expanded area for neighborhood context
+        neighborhood_expansion = 1.0  # 3x area total
+        expanded_grid_side = grid_side_length * (1 + 2 * neighborhood_expansion)
+        expanded_res = int(res * (1 + 2 * neighborhood_expansion))
+        expanded_min_x = grid_min_x - (neighborhood_expansion * grid_side_length)
+        expanded_min_y = grid_min_y - (neighborhood_expansion * grid_side_length)
+        expanded_max_x = grid_max_x + (neighborhood_expansion * grid_side_length)
+        expanded_max_y = grid_max_y + (neighborhood_expansion * grid_side_length)
+        
+        # Calculate design grid offset within expanded grid
+        start_idx = int(res * neighborhood_expansion)
+        
+        # Fetch buildings from NRW API
+        fetch_poly_native = gpd.GeoSeries([Polygon.from_bounds(expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y)], crs="EPSG:25832")
+        fetch_poly_web = fetch_poly_native.to_crs("EPSG:4326")
+        b_min_lon, b_min_lat, b_max_lon, b_max_lat = fetch_poly_web.total_bounds
+        
+        print(f"[fetch_buildings] Fetching buildings for expanded area ({expanded_res}x{expanded_res} pixels)")
+        gdf_buildings_native = fetch_existing_buildings_data((b_min_lon, b_min_lat, b_max_lon, b_max_lat))
+        
+        if gdf_buildings_native is None or gdf_buildings_native.empty:
+            print("[fetch_buildings] No buildings found in area")
+            return None
+        
+        # Filter by geometry type
+        geom_types = gdf_buildings_native.geometry.type
+        polygon_mask = geom_types.isin(['Polygon', 'MultiPolygon'])
+        gdf_polygons = gdf_buildings_native[polygon_mask].copy()
+        
+        # Filter by function to exclude non-building structures
+        if 'funktion' in gdf_polygons.columns:
+            exclude_types = ['Überdachung', 'Tiefgarage']
+            function_mask = ~gdf_polygons['funktion'].isin(exclude_types)
+            gdf_building_polygons = gdf_polygons[function_mask]
+            print(f"[fetch_buildings] Filtered: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} buildings (excluded {exclude_types})")
+        else:
+            # Fallback geometric filter
+            perimeter = gdf_polygons.geometry.length
+            area = gdf_polygons.geometry.area
+            perimeter[perimeter == 0] = 1e-9
+            compactness = 4 * math.pi * area / (perimeter**2)
+            compact_mask = compactness > 0.1
+            gdf_building_polygons = gdf_polygons[compact_mask]
+            print(f"[fetch_buildings] Geometric filter: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} buildings")
+        
+        if gdf_building_polygons.empty:
+            print("[fetch_buildings] No buildings after filtering")
+            return None
+        
+        # Extract heights
+        if 'hoehe' in gdf_building_polygons.columns:
+            heights_floors = gdf_building_polygons['hoehe'].fillna(9.0) / 3.0
+        elif 'geschosszahl' in gdf_building_polygons.columns:
+            heights_floors = gdf_building_polygons['geschosszahl'].fillna(3.0)
+        else:
+            heights_floors = pd.Series([3.0] * len(gdf_building_polygons))
+        
+        heights_floors = heights_floors.clip(1.0, 30.0)
+        
+        # Create function mapping
+        if 'funktion' in gdf_building_polygons.columns:
+            unique_functions = gdf_building_polygons['funktion'].unique()
+            function_to_id = {func: idx + 1 for idx, func in enumerate(unique_functions)}
+            id_to_function = {idx + 1: func for idx, func in enumerate(unique_functions)}
+            shapes_with_ids = [(geom, function_to_id[func]) for geom, func in 
+                               zip(gdf_building_polygons.geometry, gdf_building_polygons['funktion'])]
+        else:
+            shapes_with_ids = [(geom, 1) for geom in gdf_building_polygons.geometry]
+            id_to_function = {1: 'Gebäude'}
+        
+        # Rasterize to expanded grid
+        cell_size_exp = expanded_grid_side / expanded_res
+        transform_exp = from_origin(expanded_min_x, expanded_max_y, cell_size_exp, cell_size_exp)
+        
+        # Rasterize building functions
+        building_function_map_exp = features.rasterize(
+            shapes=shapes_with_ids, out_shape=(expanded_res, expanded_res), transform=transform_exp,
+            fill=0, dtype='uint8'
+        )
+        building_function_map_exp = np.flipud(building_function_map_exp)
+        
+        # Rasterize heights
+        shapes_with_heights = [(geom, height) for geom, height in 
+                               zip(gdf_building_polygons.geometry, heights_floors)]
+        building_heights_2d_exp = features.rasterize(
+            shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
+            fill=0, dtype='float32'
+        )
+        building_heights_2d_exp = np.flipud(building_heights_2d_exp)
+        
+        # Create 3D array
+        max_height_needed = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
+        if max_height_floors:
+            max_height_needed = max(max_height_needed, max_height_floors)
+        else:
+            max_height_needed = max(max_height_needed, ENCODING_CONFIG['z_length'])
+        
+        env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_needed), dtype=np.int8)
+        
+        # Fill voxels up to building height
+        for r in range(expanded_res):
+            for c in range(expanded_res):
+                height_floors = building_heights_2d_exp[r, c]
+                if height_floors > 0:
+                    height_voxels = int(np.round(height_floors))
+                    env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
+        
+        print(f"[fetch_buildings] Successfully processed {len(gdf_building_polygons)} buildings into {expanded_res}x{expanded_res}x{max_height_needed} grid")
+        
+        return {
+            'gdf_buildings_filtered': gdf_building_polygons,
+            'env_3d_expanded': env_3d_expanded,
+            'building_function_map': building_function_map_exp,
+            'function_lookup': id_to_function,
+            'expanded_bounds_native': (expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y),
+            'design_bounds_native': (grid_min_x, grid_min_y, grid_max_x, grid_max_y),
+            'design_offset': (start_idx, start_idx),
+            'expanded_res': expanded_res,
+            'design_res': res,
+            'pixel_size': pixel_size,
+        }
+        
+    except Exception as e:
+        print(f"[fetch_buildings] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
