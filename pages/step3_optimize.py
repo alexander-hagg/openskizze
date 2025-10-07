@@ -379,18 +379,34 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             grid_indices = archive.index_of(measures)
             grid_indices = archive.int_to_grid_index(grid_indices)
             
+            # Filter solutions to ensure they respect user-defined feature constraints
+            # This is needed because the archive might contain solutions slightly outside bounds
             full_list_of_elites = []
             for i in range(len(objectives)):
                 genome = solutions[i]
                 heightmap = encoding_obj.express(env_config['buildable_mask'], genome)
-
-                full_list_of_elites.append({
-                    "id": i,
-                    "objective": objectives[i],
-                    "measures": measures[i].tolist(),
-                    "grid_indices": grid_indices[i].tolist(),
-                    "heightmap": heightmap.flatten().tolist() # Store the regenerated map
-                })
+                
+                # Check if this solution respects all feature constraints
+                is_valid = True
+                if user_feature_ranges:
+                    for feat_idx_str, (min_val, max_val) in user_feature_ranges.items():
+                        feat_idx = int(feat_idx_str)
+                        # Find the position of this feature in selected_features
+                        if feat_idx in selected_features:
+                            pos = selected_features.index(feat_idx)
+                            measure_value = measures[i][pos]
+                            if not (min_val <= measure_value <= max_val):
+                                is_valid = False
+                                break
+                
+                if is_valid:
+                    full_list_of_elites.append({
+                        "id": len(full_list_of_elites),  # Re-index after filtering
+                        "objective": objectives[i],
+                        "measures": measures[i].tolist(),
+                        "grid_indices": grid_indices[i].tolist(),
+                        "heightmap": heightmap.flatten().tolist() # Store the regenerated map
+                    })
 
             session_id = str(uuid.uuid4())
             full_results_path = os.path.join(TEMP_RESULTS_DIR, f"{session_id}.pkl")
@@ -416,6 +432,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
                 'grid_geojson': env_config['grid_geojson'],
                 'xy_length': ENCODING_CONFIG['xy_length'],
                 'selected_features_indices': selected_features,
+                'feature_ranges': user_feature_ranges,  # Store feature constraints for filtering
                 'grid_bounds_native': env_config.get('grid_bounds_native'),  # Design area bounds
                 'expanded_bounds_native': env_config.get('expanded_bounds_native'),  # Expanded visualization bounds
                 'design_offset': env_config.get('design_offset'),  # Design position within expanded grid

@@ -61,6 +61,10 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
     Loads solutions, filters them, and clusters them using the selected algorithm.
     - algorithm: 'dbscan' or 'kmedoids'
     - params: dict of parameters for the chosen algorithm
+    - feature_filters: dict of feature_index -> [min_val, max_val] for additional filtering
+    
+    Note: Solutions should already be filtered during optimization, but this provides
+    an additional filtering layer for user exploration.
     """
     if not results_path or not os.path.exists(results_path):
         return []
@@ -68,7 +72,7 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # 1. Filtering
+    # 1. Filtering - solutions should already be filtered, but apply additional filters if specified
     filtered_elites = []
     if feature_filters:
         for elite in list_of_elites:

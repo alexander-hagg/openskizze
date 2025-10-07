@@ -252,17 +252,28 @@ def apply_preset(preset_key, lang):
 @callback(
     Output('feature-range-sliders-container', 'children'),
     Input('measures-checklist', 'value'),
+    Input('url', 'pathname'),
     State('language-store', 'data'),
     State('session-store', 'data'),
     State('max-height-constraint', 'value'),
     prevent_initial_call=True
 )
-def create_range_sliders(selected_indices, lang, session_data, max_height_input):
+def create_range_sliders(selected_indices, pathname, lang, session_data, max_height_input):
     from backend.units import calculate_dynamic_ranges_physical, get_unit_label
     import geopandas as gpd
     import math
+    from dash import ctx
     
     if lang is None: lang = 'DE'
+    
+    # If triggered by URL change, get selected_indices from session_data
+    if ctx.triggered_id == 'url':
+        if pathname != '/step2':
+            return no_update
+        if session_data and 'selected_features' in session_data:
+            selected_indices = session_data['selected_features']
+        else:
+            return no_update
     
     if not selected_indices:
         return dbc.Alert(T[lang]['STEP2_NO_FEATURES_SELECTED'] if 'STEP2_NO_FEATURES_SELECTED' in T[lang] else "Bitte mindestens ein Merkmal auswählen.", color="info")
@@ -315,6 +326,12 @@ def create_range_sliders(selected_indices, lang, session_data, max_height_input)
 
     # Get saved feature ranges from session if available
     saved_ranges = session_data.get('feature_ranges', {}) if session_data else {}
+    
+    # Debug: Print what we're restoring
+    if saved_ranges:
+        print(f"[DEBUG] Restoring feature ranges from session: {saved_ranges}")
+    else:
+        print(f"[DEBUG] No saved feature ranges found in session_data")
     
     for i, index in enumerate(sorted_indices):
         label = labels[i]
@@ -459,11 +476,18 @@ def update_session_with_features_and_ranges(
 ):
     session_data = session_data or {}
     
-    # Save feature selections and ranges
+    # Save feature selections
     session_data['selected_features'] = selected_indices
-    session_data['feature_ranges'] = {
-        str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
-    }
+    
+    # Only update feature_ranges if we have valid slider data
+    # This prevents overwriting saved ranges when sliders are being recreated
+    if slider_ids and slider_values:
+        new_feature_ranges = {
+            str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
+        }
+        # Only save if we have actual data (not empty dict)
+        if new_feature_ranges:
+            session_data['feature_ranges'] = new_feature_ranges
 
     # Save hard constraints
     session_data['hard_constraints'] = {
