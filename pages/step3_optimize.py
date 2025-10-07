@@ -90,6 +90,9 @@ def layout(lang='DE'):
         
         html.Hr(),
         
+        # Phenotype Info Display (shown after optimization)
+        html.Div(id='phenotype-info-display', className="mb-3"),
+        
         # Archive Visualization Section
         dbc.Card(dbc.CardBody([
             html.H4(T[lang]['STEP3_ARCHIVE_VIS_HEADER']),
@@ -127,6 +130,60 @@ def layout(lang='DE'):
 def generate_session_id(n_clicks):
     session_id = str(uuid.uuid4())
     return session_id
+
+# --- Display phenotype info after optimization ---
+@callback(
+    Output('phenotype-info-display', 'children'),
+    Input('results-store', 'data'),
+    Input('language-store', 'data'),
+)
+def display_phenotype_info(results_data, language):
+    """Display adaptive phenotype configuration information"""
+    if not results_data or 'phenotype_config' not in results_data:
+        return None
+    
+    phenotype = results_data.get('phenotype_config')
+    if not phenotype:
+        return None
+    
+    lang = language if language else 'DE'
+    
+    return dbc.Card([
+        dbc.CardHeader("🎯 Adaptive Phenotype Configuration", className="bg-info text-white"),
+        dbc.CardBody([
+            dbc.Row([
+                dbc.Col([
+                    html.P([
+                        html.Strong("Parcel Size: "),
+                        f"{phenotype['parcel_area_m2']:.0f} m²"
+                    ], className="mb-2"),
+                    html.P([
+                        html.Strong("Grid Resolution: "),
+                        f"{phenotype['xy_length']}×{phenotype['xy_length']} cells",
+                        html.Br(),
+                        html.Small(f"({phenotype['grid_size_meters']:.0f}m × {phenotype['grid_size_meters']:.0f}m, pixel size: {phenotype['pixel_size']}m)", className="text-muted")
+                    ], className="mb-2"),
+                ], md=6),
+                dbc.Col([
+                    html.P([
+                        html.Strong("Buildable Pixels: "),
+                        f"{phenotype['buildable_pixels']} ",
+                        html.Small(f"({phenotype['buildable_ratio']*100:.1f}% of grid)", className="text-muted")
+                    ], className="mb-2"),
+                    html.P([
+                        html.Strong("Genome Encoding: "),
+                        "Fixed - 10 buildings, 60 genes"
+                    ], className="mb-2 text-muted small"),
+                ], md=6),
+            ]),
+            html.Hr(),
+            html.P([
+                html.I(className="bi bi-info-circle me-2"),
+                "The phenotype (grid) adapts to parcel size, while genome encoding stays fixed. ",
+                "Building dimensions naturally scale with grid size."
+            ], className="text-muted small mb-0")
+        ])
+    ], className="mb-3")
 
 # --- Populate axis dropdowns from results ---
 @callback(
@@ -449,6 +506,7 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
                 'grid_bounds_native': env_config.get('grid_bounds_native'),  # Design area bounds
                 'expanded_bounds_native': env_config.get('expanded_bounds_native'),  # Expanded visualization bounds
                 'design_offset': env_config.get('design_offset'),  # Design position within expanded grid
+                'phenotype_config': env_config.get('phenotype_config'),  # NEW: Adaptive phenotype parameters
             }
 
             # profiler.disable()

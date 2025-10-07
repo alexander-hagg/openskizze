@@ -29,6 +29,40 @@ function(feature, context){
 }
 """)
 
+def generate_distinct_colors(n):
+    """
+    Generate n visually distinct colors using HSV color space.
+    Avoids blue (reserved for new design).
+    """
+    import colorsys
+    colors = []
+    # Skip blue range (180-240 degrees) as it's reserved for new design
+    hue_ranges = [(0, 0.45), (0.55, 1.0)]  # Red to cyan, then green to magenta (skip blue)
+    
+    total_range = sum(end - start for start, end in hue_ranges)
+    step = total_range / n if n > 0 else 0
+    
+    for i in range(n):
+        # Map to non-blue hue ranges
+        target_pos = (i * step) % total_range
+        
+        # Find which range this falls into
+        accumulated = 0
+        for start, end in hue_ranges:
+            range_size = end - start
+            if target_pos < accumulated + range_size:
+                hue = start + (target_pos - accumulated)
+                break
+            accumulated += range_size
+        else:
+            hue = hue_ranges[0][0]
+        
+        # Convert HSV to RGB (high saturation and value for distinct colors)
+        rgb = colorsys.hsv_to_rgb(hue, 0.7, 0.8)
+        colors.append(f'rgb({int(rgb[0]*255)}, {int(rgb[1]*255)}, {int(rgb[2]*255)})')
+    
+    return colors
+
 def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, height_exaggeration=1.0, 
                             camera_state=None, pixel_size_m=3.0, expanded_bounds_native=None, design_offset=None,
                             building_function_map=None, function_lookup=None):
@@ -47,7 +81,7 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     """
     # Heightmap values represent number of floors (0-3), convert to meters (each floor = 3m)
     # This ensures design buildings match the real heights from NRW open data portal
-    heightmap_meters = heightmap * 3.0 * height_exaggeration
+    heightmap_meters = heightmap * height_exaggeration
     
     # Get grid dimensions for design
     rows, cols = heightmap_meters.shape
@@ -216,7 +250,10 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
             
             # If we have building function data, create separate traces for each function type
             if building_function_map is not None and function_lookup:
-                for func_id, func_name in function_lookup.items():
+                # Generate distinct colors for each function type
+                func_colors = generate_distinct_colors(len(function_lookup))
+                
+                for idx, (func_id, func_name) in enumerate(sorted(function_lookup.items())):
                     # Create a mask for this function type
                     func_mask = building_function_map == func_id
                     # Create heightmap for only this function type
@@ -224,16 +261,17 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                     func_heightmap[~func_mask] = 0
                     
                     if func_heightmap.max() > 0:
-                        add_voxel_blocks(func_heightmap, 'rgb(100, 100, 100)', f'Bestand: {func_name}', 
+                        func_color = func_colors[idx] if idx < len(func_colors) else 'rgb(140, 140, 140)'
+                        add_voxel_blocks(func_heightmap, func_color, f'Bestand: {func_name}', 
                                        opacity=1.0, show_in_legend=True, x_coords=x_coords_exp, y_coords=y_coords_exp)
             else:
                 # No function data, show all as one group
-                add_voxel_blocks(existing_heightmap, 'rgb(100, 100, 100)', 'Existing Buildings', 
+                add_voxel_blocks(existing_heightmap, 'rgb(140, 140, 140)', 'Bestand', 
                                opacity=1.0, show_in_legend=True, x_coords=x_coords_exp, y_coords=y_coords_exp)
     
     # Add new design buildings (in blue, fully opaque)
     if heightmap_meters.max() > 0:
-        add_voxel_blocks(heightmap_meters, 'rgb(50, 150, 200)', 'New Design', 
+        add_voxel_blocks(heightmap_meters, 'rgb(50, 150, 200)', 'Entwurf', 
                         opacity=1.0, show_in_legend=True)
     
     # Determine scene bounds - use expanded if available
@@ -275,10 +313,11 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     # Calculate center and extent for camera positioning
     center_x = (scene_min_x + scene_max_x) / 2
     center_y = (scene_min_y + scene_max_y) / 2
+    center_z = 0  # Center vertically on the buildings
     extent_x = scene_max_x - scene_min_x
     extent_y = scene_max_y - scene_min_y
     
-    # Set camera
+    # Set camera with rotation center at mesh center
     if camera_state:
         # Use provided camera state for syncing
         camera = camera_state
@@ -287,36 +326,30 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         # Camera eye in relative coordinates (will be scaled by scene)
         camera = dict(
             eye=dict(x=1.5, y=1.5, z=1.2),
-            center=dict(x=0.5, y=0.5, z=0.2),
+            center=dict(x=0, y=0, z=0),  # Center on mesh center in normalized coords
             up=dict(x=0, y=0, z=1)
         )
     
-    # Update layout with geographic coordinate system - HORIZONTAL orientation
+    # Update layout with geographic coordinate system - SQUARE viewport
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title='Easting (m)', range=x_range, showgrid=True),
-            yaxis=dict(title='Northing (m)', range=y_range, showgrid=True),
-            zaxis=dict(title='Height (m)', range=z_range, showgrid=True),
+            xaxis=dict(title='Ost (m)', range=x_range, showgrid=True),
+            yaxis=dict(title='Nord (m)', range=y_range, showgrid=True),
+            zaxis=dict(title='Höhe (m)', range=z_range, showgrid=True),
             camera=camera,
-            aspectmode='manual',
-            # Keep reasonable aspect ratio (z scaled down)
-            aspectratio=dict(
-                x=1.0, 
-                y=extent_y / extent_x if extent_x > 0 else 1.0, 
-                z=max(0.3, min(0.7, max_z / max(extent_x, extent_y)))
-            ),
+            aspectmode='cube',  # Force equal aspect ratio on all axes (1m = 1m in all directions)
             # Add sun-like lighting effect with sky blue background
             bgcolor='rgb(230, 240, 255)',  # Light sky blue background
         ),
-        height=500,  # Shorter height for horizontal layout
-        width=1400,  # Wide horizontal format
-        margin=dict(l=0, r=0, t=30, b=80),  # More bottom margin for legend
+        height=700,  # Square viewport
+        width=700,  # Square viewport
+        margin=dict(l=0, r=0, t=30, b=100),  # More bottom margin for legend
         hovermode='closest',
         # Legend at bottom center, horizontal orientation
         legend=dict(
             orientation='h',
             yanchor='top',
-            y=-0.15,
+            y=-0.12,
             xanchor='center',
             x=0.5
         )
@@ -502,12 +535,11 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
             dcc.Graph(
                 figure=fig_3d,
                 id={'type': '3d-plot', 'index': i},
-                config={'displayModeBar': True, 'displaylogo': False},
-                style={'height': '70vh', 'minHeight': '500px'}  # Increased height for better horizontal viewing
+                config={'displayModeBar': True, 'displaylogo': False}
             ),
             html.H6(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
             html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
-        ], md=6, lg=6, xl=6)  # 2 designs per row (12/6 = 2)
+        ], md=12, lg=6, xl=6, className="mb-4")  # 2 designs per row on large screens, 1 on medium
         cols.append(col)
     
     return dbc.Row(cols)

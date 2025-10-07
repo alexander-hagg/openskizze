@@ -291,7 +291,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         ], style={'height': '200px', 'width': '100%'})
 
         consensus_map_data = np.array(cluster['consensus_map']).reshape(heightmap_res, heightmap_res)
-        consensus_fig = px.imshow(consensus_map_data, color_continuous_scale='Blues', origin='lower', zmin=0, zmax=1)
+        consensus_fig = px.imshow(consensus_map_data, color_continuous_scale='Blues', origin='lower', zmin=0, zmax=1, aspect='equal')
         consensus_fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), coloraxis_showscale=False)
         consensus_fig.update_xaxes(showticklabels=False).update_yaxes(showticklabels=False)
         consensus_graph = dcc.Graph(figure=consensus_fig, style={'height': '200px', 'width': '100%'})

@@ -315,6 +315,28 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             final_feat_ranges.append(dynamic_ranges[feature_index])
     
     grid_geojson = json.loads(grid_poly_web.to_json())
+    
+    # Calculate and log adaptive phenotype configuration
+    from backend.config import calculate_adaptive_phenotype_config
+    
+    phenotype_config = calculate_adaptive_phenotype_config(
+        buildable_mask=buildable_mask,
+        buildable_area_m2=buildable_area_m2,
+        grid_res=res
+    )
+    
+    print(f"\n[ADAPTIVE PHENOTYPE] Parcel: {buildable_area_m2:.0f} m²")
+    print(f"  Grid: {res}×{res} cells ({res * pixel_size:.0f}m × {res * pixel_size:.0f}m)")
+    print(f"  Buildable pixels: {phenotype_config['buildable_pixels']} ({phenotype_config['buildable_ratio']*100:.1f}% of grid)")
+    print(f"[FIXED GENOME] Buildings: 10, Genome dimension: 60\n")
+    
+    # Warn about extreme cases
+    if buildable_area_m2 < 50:
+        print(f"[WARNING] Very small parcel ({buildable_area_m2:.1f} m²). Optimization may be challenging.")
+    if res > 100:
+        print(f"[WARNING] Large grid ({res}×{res}). Evaluations may be slower (~2x).")
+    if phenotype_config['buildable_ratio'] < 0.3:
+        print(f"[WARNING] Irregular parcel: only {phenotype_config['buildable_ratio']*100:.1f}% buildable.")
 
     return {
         'buildable_mask': buildable_mask, 
@@ -330,6 +352,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         'grid_bounds_native': (grid_min_x, grid_min_y, grid_max_x, grid_max_y),  # Design area bounds
         'expanded_bounds_native': (expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y),  # Expanded visualization bounds
         'design_offset': (start_idx, start_idx),  # Where design grid sits within expanded grid
+        'phenotype_config': phenotype_config,  # NEW: Adaptive phenotype parameters
     }
 
 
@@ -425,11 +448,16 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
         qd_config.update(qd_hyperparams)
     
     encoding_obj = ParametricEncoding(ENCODING_CONFIG)
+    
+    # Generate adaptive initial genome based on parcel size
+    x0_adaptive = encoding_obj.get_adaptive_initial_genome(buildable_mask)
+    print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {ENCODING_CONFIG['xy_length']}")
+    
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     create_debug_plots(env_config, sample_genome, encoding_obj)
     progress_callback(10, "Starting optimization...")
     archive = run_qd_optimization(
-        encoding_obj, env_config, qd_config, progress_callback)
+        encoding_obj, env_config, qd_config, x0_adaptive, progress_callback)
     progress_callback(100, "Optimization complete.")
     
     # Final check: If archive is still empty, provide detailed error

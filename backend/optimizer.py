@@ -7,9 +7,13 @@ import multiprocessing
 import psutil
 from backend.evaluation import eval_batch
 
-def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progress_callback=None):
+def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adaptive=None, progress_callback=None):
     solution_dim = encoding_obj.get_dimension()
-    print(f"[DEBUG] Starting QD setup. Solution dimension: {solution_dim}")
+    print(f"[QD-SETUP] Archive Configuration:")
+    print(f"  Solution Dimension: {solution_dim} (FIXED - always 60)")
+    print(f"  Features: {len(env_config['labels'])}")
+    print(f"  Niches per Feature: {qd_config['num_niches']}")
+    print(f"  Total Archive Size: {qd_config['num_niches'] ** len(env_config['labels'])}")
     
     archive = GridArchive(
         solution_dim=solution_dim,
@@ -20,7 +24,10 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, progres
     )
     
     bounds = np.array([[-5.0, 5.0]] * solution_dim)
-    x0 = np.zeros(solution_dim)
+    
+    # Use adaptive x0 if provided, otherwise zeros
+    x0 = x0_adaptive if x0_adaptive is not None else np.zeros(solution_dim)
+    print(f"  Initial genome: {'Adaptive (biased for parcel)' if x0_adaptive is not None else 'Zeros'}")
     
     emitters = [
         GaussianEmitter(
