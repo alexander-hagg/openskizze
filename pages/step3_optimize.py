@@ -82,7 +82,6 @@ def layout(lang='DE'):
             ], md=12),
         ]),
         
-        dcc.Store(id='opt-session-id', data=None),
         html.Div(id="progress-container", children=[
             dbc.Progress(id="progress-bar", label="0%", style={'height': '30px'}),
             html.Div(id="progress-text", className="text-center text-muted small mt-1")
@@ -90,10 +89,7 @@ def layout(lang='DE'):
         
         html.Hr(),
         
-        # Phenotype Info Display (shown after optimization)
-        html.Div(id='phenotype-info-display', className="mb-3"),
-        
-        # Archive Visualization Section
+        # Archive Visualization Section - Axis Selection Controls
         dbc.Card(dbc.CardBody([
             html.H4(T[lang]['STEP3_ARCHIVE_VIS_HEADER']),
             dbc.Row([
@@ -108,82 +104,25 @@ def layout(lang='DE'):
             ]),
         ]), className="mb-3"),
         
+        # Three visualizations in a row: Solution Archive (50%), Archive Heatmap (25%), Parallel Coords (25%)
         dbc.Row([
             dbc.Col([
                 html.H5(T[lang]['STEP3_SOLUTION_GRID_HEADER']),
                 dcc.Loading(html.Div(id='solution-map-grid-container-s3'))
             ], md=6),
             dbc.Col([
-                html.H5(T[lang]['STEP3_PARALLEL_COORDS_HEADER']),
-                dcc.Loading(dcc.Graph(id='parallel-coords-plot-s3'))
+                dbc.Row([
+                    html.H5("Archive Heatmap"),
+                    dcc.Loading(dcc.Graph(id='archive-heatmap-s3'))
+                ]),
+                dbc.Row([
+                    html.H5(T[lang]['STEP3_PARALLEL_COORDS_HEADER']),
+                    dcc.Loading(dcc.Graph(id='parallel-coords-plot-s3'))
+                ]),
             ], md=6),
         ]),
         
     ], fluid=True)
-
-# --- Generate session ID when optimization starts ---
-@callback(
-    Output('opt-session-id', 'data'),
-    Input('start-optimization-btn', 'n_clicks'),
-    prevent_initial_call=True
-)
-def generate_session_id(n_clicks):
-    session_id = str(uuid.uuid4())
-    return session_id
-
-# --- Display phenotype info after optimization ---
-@callback(
-    Output('phenotype-info-display', 'children'),
-    Input('results-store', 'data'),
-    Input('language-store', 'data'),
-)
-def display_phenotype_info(results_data, language):
-    """Display adaptive phenotype configuration information"""
-    if not results_data or 'phenotype_config' not in results_data:
-        return None
-    
-    phenotype = results_data.get('phenotype_config')
-    if not phenotype:
-        return None
-    
-    lang = language if language else 'DE'
-    
-    return dbc.Card([
-        dbc.CardHeader("🎯 Adaptive Phenotype Configuration", className="bg-info text-white"),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    html.P([
-                        html.Strong("Parcel Size: "),
-                        f"{phenotype['parcel_area_m2']:.0f} m²"
-                    ], className="mb-2"),
-                    html.P([
-                        html.Strong("Grid Resolution: "),
-                        f"{phenotype['xy_length']}×{phenotype['xy_length']} cells",
-                        html.Br(),
-                        html.Small(f"({phenotype['grid_size_meters']:.0f}m × {phenotype['grid_size_meters']:.0f}m, pixel size: {phenotype['pixel_size']}m)", className="text-muted")
-                    ], className="mb-2"),
-                ], md=6),
-                dbc.Col([
-                    html.P([
-                        html.Strong("Buildable Pixels: "),
-                        f"{phenotype['buildable_pixels']} ",
-                        html.Small(f"({phenotype['buildable_ratio']*100:.1f}% of grid)", className="text-muted")
-                    ], className="mb-2"),
-                    html.P([
-                        html.Strong("Genome Encoding: "),
-                        "Fixed - 10 buildings, 60 genes"
-                    ], className="mb-2 text-muted small"),
-                ], md=6),
-            ]),
-            html.Hr(),
-            html.P([
-                html.I(className="bi bi-info-circle me-2"),
-                "The phenotype (grid) adapts to parcel size, while genome encoding stays fixed. ",
-                "Building dimensions naturally scale with grid size."
-            ], className="text-muted small mb-0")
-        ])
-    ], className="mb-3")
 
 # --- Populate axis dropdowns from results ---
 @callback(
@@ -197,20 +136,125 @@ def display_phenotype_info(results_data, language):
 def populate_dropdowns_s3(results_data, language):
     from backend.translation import translate_feature_labels
     
+    # Get feature indices from final results only
     if not results_data or 'selected_features_indices' not in results_data:
         return [], [], None, None
+    
+    feature_indices = results_data['selected_features_indices']
     
     # Get current language (default to 'DE')
     lang = language if language else 'DE'
     
     # Translate feature labels based on current language
-    feature_indices = results_data['selected_features_indices']
     labels = translate_feature_labels(feature_indices, lang)
     
     options = [{'label': label, 'value': i} for i, label in enumerate(labels)]
     val1 = 0 if len(options) > 0 else None
     val2 = 1 if len(options) > 1 else None
     return options, options, val1, val2
+
+# --- Update archive heatmap ---
+@callback(
+    Output('archive-heatmap-s3', 'figure'),
+    Input('x-axis-dropdown-s3', 'value'),
+    Input('y-axis-dropdown-s3', 'value'),
+    Input('results-store', 'data'),
+)
+def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data):
+    """Create a heatmap of the archive showing objective values with proper axis labels and ranges"""
+    if not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
+        return px.imshow([[0]], title="Wählen Sie Achsen aus")
+    
+    # Load final results only
+    if not results_data:
+        return px.imshow([[0]], title="Keine Ergebnisse gefunden")
+    
+    results_path = results_data.get('full_results_path')
+    if not results_path or not os.path.exists(results_path):
+        return px.imshow([[0]], title="Keine Ergebnisse gefunden")
+    
+    with open(results_path, 'rb') as f:
+        list_of_elites = pickle.load(f)
+    
+    # Get dimensions and feature ranges from final results
+    grid_dims = results_data['archive_dims']
+    selected_features = results_data['selected_features_indices']
+    user_feature_ranges = results_data.get('feature_ranges', {})
+    
+    # Get the actual feature ranges used by the archive
+    from backend.config import DOMAIN_CONFIG
+    
+    # Build feature ranges for selected features
+    feat_ranges = []
+    for feature_index in selected_features:
+        user_range = user_feature_ranges.get(str(feature_index))
+        if user_range:
+            feat_ranges.append(user_range)
+        else:
+            # This shouldn't happen if optimization_process.py is working correctly
+            feat_ranges.append(DOMAIN_CONFIG['feat_ranges'][feature_index])
+    
+    grid_resolution_x = grid_dims[x_axis_idx]
+    grid_resolution_y = grid_dims[y_axis_idx]
+    
+    # Create grid for objectives
+    heatmap_grid = np.full((grid_resolution_y, grid_resolution_x), np.nan)
+    
+    for elite_dict in list_of_elites:
+        ix = elite_dict['grid_indices'][x_axis_idx]
+        iy = elite_dict['grid_indices'][y_axis_idx]
+        if np.isnan(heatmap_grid[iy, ix]) or elite_dict['objective'] > heatmap_grid[iy, ix]:
+            heatmap_grid[iy, ix] = elite_dict['objective']
+    
+    # Get feature labels
+    from backend.translation import translate_feature_labels
+    labels = translate_feature_labels(selected_features, 'DE')
+    
+    # Calculate axis tick positions and labels
+    x_range = feat_ranges[x_axis_idx]
+    y_range = feat_ranges[y_axis_idx]
+    
+    # Create tick positions (cell centers)
+    x_tick_positions = np.arange(grid_resolution_x)
+    y_tick_positions = np.arange(grid_resolution_y)
+    
+    # Create tick labels (feature values at cell centers)
+    x_tick_values = np.linspace(x_range[0], x_range[1], grid_resolution_x)
+    y_tick_values = np.linspace(y_range[0], y_range[1], grid_resolution_y)
+    
+    # Format tick labels
+    x_tick_labels = [f"{val:.1f}" for val in x_tick_values]
+    y_tick_labels = [f"{val:.1f}" for val in y_tick_values]
+    
+    # Create heatmap
+    fig = px.imshow(
+        heatmap_grid,
+        aspect='equal',
+        color_continuous_scale='Viridis',
+        labels={'x': labels[x_axis_idx], 'y': labels[y_axis_idx], 'color': 'Objective'},
+        title="Archive Coverage (Objective Values)",
+        zmin=0,  # Fixed color range from 0 to 1
+        zmax=0.3
+    )
+    
+    # Update axes with proper labels
+    fig.update_xaxes(
+        tickmode='array',
+        tickvals=x_tick_positions[::max(1, grid_resolution_x // 10)],  # Show ~10 ticks
+        ticktext=[x_tick_labels[i] for i in range(0, grid_resolution_x, max(1, grid_resolution_x // 10))],
+        title=labels[x_axis_idx]
+    )
+    
+    fig.update_yaxes(
+        tickmode='array',
+        tickvals=y_tick_positions[::max(1, grid_resolution_y // 10)],  # Show ~10 ticks
+        ticktext=[y_tick_labels[i] for i in range(0, grid_resolution_y, max(1, grid_resolution_y // 10))],
+        title=labels[y_axis_idx]
+    )
+    
+    fig.update_layout(height=500)
+    
+    return fig
 
 # --- Update solution grid visualization ---
 @callback(
@@ -220,25 +264,28 @@ def populate_dropdowns_s3(results_data, language):
     Input('results-store', 'data'),
 )
 def update_solution_map_grid_s3(x_axis_idx, y_axis_idx, results_data):
-    # Load final results only
-    if not results_data or not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
+    if not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
         return dbc.Alert("Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.", color="warning")
-
+    
+    # Load final results only
+    if not results_data:
+        return dbc.Alert("Optimierungsergebnisse nicht gefunden.", color="warning")
+    
     results_path = results_data.get('full_results_path')
     if not results_path or not os.path.exists(results_path):
         return dbc.Alert("Fehler: Große Ergebnisdatei nicht gefunden.", color="danger")
-
+    
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Common visualization code
+    # Get grid_geojson from results_data
     grid_geojson = results_data.get('grid_geojson')
-    if not grid_geojson:
-        return dbc.Alert("Fehler: Georeferenzierung nicht gefunden.", color="danger")
+    xy_length = results_data.get('xy_length', ENCODING_CONFIG.get('xy_length'))
     
-    if not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
-        return no_update
+    if not grid_geojson:
+        return dbc.Alert("Keine Grid-Daten verfügbar.", color="warning")
 
+    # Get dimensions from final results
     grid_dims = results_data['archive_dims']
     grid_resolution_x = grid_dims[x_axis_idx]
     grid_resolution_y = grid_dims[y_axis_idx]
@@ -252,7 +299,8 @@ def update_solution_map_grid_s3(x_axis_idx, y_axis_idx, results_data):
             vis_grid[iy, ix] = elite_dict
     
     grid_children = []
-    heightmap_res = results_data['xy_length']
+    # Get xy_length from the loaded metadata (already set earlier)
+    heightmap_res = xy_length
     
     lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
@@ -329,12 +377,14 @@ def update_parallel_coords_s3(results_data, language):
     results_path = results_data.get('full_results_path')
     if not results_path or not os.path.exists(results_path):
         return {}
-
+    
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Translate labels based on current language
+    # Get feature indices from final results
     feature_indices = results_data.get('selected_features_indices', [])
+    
+    # Translate labels based on current language
     labels = translate_feature_labels(feature_indices, lang)
     
     # Create parallel coordinates plot
@@ -367,7 +417,9 @@ def update_parallel_coords_s3(results_data, language):
     parallel_fig = px.parallel_coordinates(
         df_for_plot, dimensions=all_dims, color=objective_label,
         labels=dim_labels,
-        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER']
+        title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'],
+        color_continuous_scale='Viridis',
+        range_color=[0, 0.3]  # Fixed color range from 0 to 1 for objective
     )
     
     return parallel_fig
@@ -376,7 +428,6 @@ def update_parallel_coords_s3(results_data, language):
     Output('results-store', 'data', allow_duplicate=True),
     Input('start-optimization-btn', 'n_clicks'),
     State('session-store', 'data'),
-    State('opt-session-id', 'data'), # Get the session ID
     State('results-store', 'data'), # Check existing results
     background=True,
     manager=background_callback_manager,
@@ -388,7 +439,7 @@ def update_parallel_coords_s3(results_data, language):
         Output("progress-container", "style")
     ],
 )
-def run_optimization(set_progress, n_clicks, session_data, opt_session_id, existing_results):
+def run_optimization(set_progress, n_clicks, session_data, existing_results):
     if n_clicks:
         cleanup_old_files(TEMP_RESULTS_DIR)
         
@@ -415,9 +466,9 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
             print(f"[run_optimization] ✗ Error deserializing building data: {e}")
             cached_building_data = None
 
-    # Simplified progress callback without live updates
+    # Simple progress callback - only updates the progress bar
     def progress_callback(progress, text, archive=None):
-        set_progress((progress, f"{progress}%", text, {'visibility': 'visible'}))
+        set_progress((progress, f"{progress:.0f}%", text, {'visibility': 'visible'}))
 
     try:
         # profiler = cProfile.Profile()
@@ -540,6 +591,3 @@ def run_optimization(set_progress, n_clicks, session_data, opt_session_id, exist
         return None
     
     return None
-
-# Note: Live visualization is now handled by update_parallel_coords_s3 and update_solution_map_grid_s3 callbacks
-# which update parallel-coords-plot-s3 and solution-map-grid-container-s3 respectively

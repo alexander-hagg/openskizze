@@ -35,40 +35,36 @@ def layout(lang='DE'):
             dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step5', color="primary"), className="text-end")
         ], className="mt-4"),
 
-        # Reorganized layout with filter controls in own column
+        # Reorganized layout with filter controls in left column (20% width)
         dbc.Row([
-            # Left column: Filtering and Clustering Controls
+            # Left column: Filtering Controls (20% width)
             dbc.Col([
+                dbc.Card(dbc.CardBody([
+                    html.H4(T[lang]['STEP5_CORRELATION_HEADER']),
+                    dcc.Loading(dcc.Graph(id='correlation-heatmap'))
+                ]), className="mb-3"),
+                
                 dbc.Card(dbc.CardBody([
                     html.H4(T[lang]['STEP5_FILTER_HEADER']),
                     html.P(T[lang]['STEP5_FILTER_INFO'], className="text-muted"),
                     html.Div(id='feature-filter-controls'),
-                    
-                    html.Hr(),
-                    
-                    dbc.Label(T[lang]['STEP5_ALGORITHM_LABEL']),
+                ])),
+            ], md=5),
+            
+            # Right column: Clustering Controls and Results (80% width)
+            dbc.Col([
+                dbc.Card(dbc.CardBody([
+                    html.H4(T[lang]['STEP5_ALGORITHM_LABEL']),
                     dbc.RadioItems(
                         id='algorithm-selector',
                         options=[
-                            {'label': T[lang]['STEP5_ALG_KMEDOIDS'], 'value': 'kmedoids'},
                             {'label': T[lang]['STEP5_ALG_HDBSCAN'], 'value': 'hdbscan'},
-                            {'label': T[lang]['STEP5_ALG_DBSCAN'], 'value': 'dbscan'},
+                            {'label': T[lang]['STEP5_ALG_KMEDOIDS'], 'value': 'kmedoids'},
                         ],
-                        value='kmedoids',
+                        value='hdbscan',
                         inline=True,
                         className="mb-3"
                     ),
-                    
-                    html.Div(id='dbscan-params-div', children=[
-                        dbc.Row([
-                            dbc.Col(dbc.Label("DBSCAN eps (Nachbarschaftsradius):"), width='auto'),
-                            dbc.Col(dcc.Slider(id='dbscan-eps-slider', min=0.1, max=5, step=0.1, value=0.1, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
-                        ], className="align-items-center mt-2"),
-                        dbc.Row([
-                             dbc.Col(dbc.Label("DBSCAN min_samples (Min. Clustergröße):"), width='auto'),
-                             dbc.Col(dcc.Slider(id='dbscan-minsamples-slider', min=2, max=20, step=1, value=4, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
-                        ], className="align-items-center mt-2"),
-                    ]),
 
                     html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
                         dbc.Row([
@@ -77,60 +73,39 @@ def layout(lang='DE'):
                         ], className="align-items-center mt-2"),
                     ]),
 
-                    html.Div(id='hdbscan-params-div', style={'display': 'none'}, children=[
-                        dbc.Row([
-                            dbc.Col(dbc.Label(T[lang]['STEP5_HDBSCAN_MINCLUSTER']), width='auto'),
-                            dbc.Col(dcc.Slider(id='hdbscan-minsamples-slider', min=2, max=20, step=1, value=5, marks=None, tooltip={"placement": "bottom", "always_visible": True})),
-                        ], className="align-items-center mt-2"),
+                    html.Div(id='hdbscan-params-div', children=[
+                        html.P(T[lang]['STEP5_HDBSCAN_AUTO_NOTE'] if 'STEP5_HDBSCAN_AUTO_NOTE' in T[lang] else 
+                               "HDBSCAN uses a minimum cluster size of 5.",
+                               className="text-muted small mt-2")
                     ]),
 
-                    dbc.Button(T[lang]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3 w-100"),
+                    dbc.Button(T[lang]['STEP5_RUN_BUTTON'], id="run-analysis-btn", color="primary", className="mt-3"),
 
                     # Add a "Compare" button and link to comparison view
-                    dbc.Button(T[lang]['STEP5_COMPARE_BUTTON'], id="compare-btn", href="/step5", color="success", className="mt-3 w-100", style={'display': 'none'}),
+                    dbc.Button(T[lang]['STEP5_COMPARE_BUTTON'], id="compare-btn", href="/step5", color="success", className="mt-3 ms-2", style={'display': 'none'}),
+                ]), className="mb-3"),
+                
+                html.H4(T[lang]['STEP5_ANALYSIS_HEADER']),
+                dcc.Loading(html.Div(id='cluster-results-container', children=[
+                     dbc.Alert(T[lang]['STEP5_NO_SELECTION'], color="light")
                 ])),
-            ], md=4),
-            
-            # Right column: Correlation Heatmap
-            dbc.Col([
-                dbc.Card(dbc.CardBody([
-                    html.H4(T[lang]['STEP5_CORRELATION_HEADER']),
-                    dcc.Loading(dcc.Graph(id='correlation-heatmap'))
-                ])),
-            ], md=8),
+            ], md=7),
         ], className="mb-4"),
-        
-        html.Hr(),
-        
-        html.H4(T[lang]['STEP5_ANALYSIS_HEADER']),
-        dcc.Loading(html.Div(id='cluster-results-container', children=[
-             dbc.Alert(T[lang]['STEP5_NO_SELECTION'], color="light")
-        ])),
-        
-        # DEBUG: Display the content of the comparison-store
-        html.Div([
-            html.Hr(),
-            html.P("Debug: In-page comparison-store content:"),
-            html.Pre(id='debug-comparison-store-content-s5')
-        ])
         
     ], fluid=True)
 
 
 @callback(
     Output('hdbscan-params-div', 'style'),
-    Output('dbscan-params-div', 'style'),
     Output('kmedoids-params-div', 'style'),
     Input('algorithm-selector', 'value')
 )
 def toggle_parameter_sliders(selected_algorithm):
-    if selected_algorithm == 'dbscan':
-        return {'display': 'none'}, {'display': 'block'}, {'display': 'none'}
-    elif selected_algorithm == 'kmedoids':
-        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+    if selected_algorithm == 'kmedoids':
+        return {'display': 'none'}, {'display': 'block'}
     elif selected_algorithm == 'hdbscan':
-        return {'display': 'block'}, {'display': 'none'}, {'display': 'none'}
-    return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
+        return {'display': 'block'}, {'display': 'none'}
+    return {'display': 'none'}, {'display': 'none'}
 
 @callback(
     Output('feature-filter-controls', 'children'),
@@ -240,14 +215,12 @@ def create_filter_controls(results_data, language):
     State({'type': 'filter-slider', 'index': ALL}, 'value'),
     State({'type': 'filter-slider', 'index': ALL}, 'id'),
     State('algorithm-selector', 'value'),
-    State('dbscan-eps-slider', 'value'),
-    State('dbscan-minsamples-slider', 'value'),
     State('kmedoids-k-slider', 'value'),
     State('language-store', 'data'),
     prevent_initial_call=True
 )
 def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
-                             algorithm, eps, min_samples, k, lang):
+                             algorithm, k, lang):
     if not n_clicks: return no_update
     if lang is None: lang = 'DE'  # Default to German
 
@@ -259,10 +232,11 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     feature_filters = {s_id['index']: s_val for s_id, s_val in zip(slider_ids, slider_values)}
 
     params = {}
-    if algorithm == 'dbscan':
-        params = {'eps': eps, 'min_samples': min_samples}
-    elif algorithm == 'kmedoids':
+    if algorithm == 'kmedoids':
         params = {'n_clusters': k}
+    elif algorithm == 'hdbscan':
+        # Use fixed min_cluster_size of 5 to avoid classifying most samples as noise
+        params = {'min_cluster_size': 5}
 
     clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters)
 
@@ -273,6 +247,13 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     map_center = [(min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2]
     heightmap_res = results_data['xy_length']
+
+    # Calculate max count across all clusters for uniform y-axis scaling
+    max_count = 0
+    for cluster in clusters:
+        objective_values = cluster['objective_values']
+        hist, _ = np.histogram(objective_values, bins=20, range=(0, 1))
+        max_count = max(max_count, hist.max())
 
     cluster_cards = []
     for cluster in clusters:
@@ -303,6 +284,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         histogram_fig = px.histogram(
             x=objective_values,
             nbins=20,
+            range_x=[0, 1],  # Fixed range for objective function (0 to 1)
             labels={'x': objective_label, 'y': T[lang].get('COUNT', 'Count')},
             title=None
         )
@@ -312,6 +294,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
             height=200,
             xaxis_title=objective_label,
             yaxis_title=T[lang].get('COUNT', 'Count'),
+            yaxis_range=[0, max_count * 1.05],  # Uniform y-axis across all clusters with 5% padding
             bargap=0.1
         )
         histogram_fig.update_traces(marker_color='rgb(50, 150, 200)', marker_line_width=1, marker_line_color='white')

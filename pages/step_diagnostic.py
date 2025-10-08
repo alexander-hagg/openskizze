@@ -489,6 +489,9 @@ def layout(lang='DE'):
         html.H2("🔍 Diagnostic Page - Parcel & Constraint Validation"),
         html.P("Use this page to validate that your selected parcel and constraints are feasible for optimization."),
         
+        # Adaptive Phenotype Configuration (moved from Step 3)
+        html.Div(id='phenotype-info-display-diagnostic', className="mb-3"),
+        
         dbc.Card([
             dbc.CardHeader(html.H4("Parcel Analysis")),
             dbc.CardBody([
@@ -497,6 +500,61 @@ def layout(lang='DE'):
             ])
         ])
     ], fluid=True)
+
+
+# --- Display phenotype info after optimization (moved from step3) ---
+@callback(
+    Output('phenotype-info-display-diagnostic', 'children'),
+    Input('results-store', 'data'),
+    Input('language-store', 'data'),
+)
+def display_phenotype_info(results_data, language):
+    """Display adaptive phenotype configuration information"""
+    if not results_data or 'phenotype_config' not in results_data:
+        return None
+    
+    phenotype = results_data.get('phenotype_config')
+    if not phenotype:
+        return None
+    
+    lang = language if language else 'DE'
+    
+    return dbc.Card([
+        dbc.CardHeader("🎯 Adaptive Phenotype Configuration", className="bg-info text-white"),
+        dbc.CardBody([
+            dbc.Row([
+                dbc.Col([
+                    html.P([
+                        html.Strong("Parcel Size: "),
+                        f"{phenotype['parcel_area_m2']:.0f} m²"
+                    ], className="mb-2"),
+                    html.P([
+                        html.Strong("Grid Resolution: "),
+                        f"{phenotype['xy_length']}×{phenotype['xy_length']} cells",
+                        html.Br(),
+                        html.Small(f"({phenotype['grid_size_meters']:.0f}m × {phenotype['grid_size_meters']:.0f}m, pixel size: {phenotype['pixel_size']}m)", className="text-muted")
+                    ], className="mb-2"),
+                ], md=6),
+                dbc.Col([
+                    html.P([
+                        html.Strong("Buildable Pixels: "),
+                        f"{phenotype['buildable_pixels']} ",
+                        html.Small(f"({phenotype['buildable_ratio']*100:.1f}% of grid)", className="text-muted")
+                    ], className="mb-2"),
+                    html.P([
+                        html.Strong("Genome Encoding: "),
+                        "Fixed - 10 buildings, 60 genes"
+                    ], className="mb-2 text-muted small"),
+                ], md=6),
+            ]),
+            html.Hr(),
+            html.P([
+                html.I(className="bi bi-info-circle me-2"),
+                "The phenotype (grid) adapts to parcel size, while genome encoding stays fixed. ",
+                "Building dimensions naturally scale with grid size."
+            ], className="text-muted small mb-0")
+        ])
+    ], className="mb-3")
 
 
 @callback(
