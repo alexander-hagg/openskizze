@@ -234,7 +234,7 @@ def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data):
         labels={'x': labels[x_axis_idx], 'y': labels[y_axis_idx], 'color': 'Objective'},
         title="Archive Coverage (Objective Values)",
         zmin=0,  # Fixed color range from 0 to 1
-        zmax=0.3
+        zmax=1.0
     )
     
     # Update axes with proper labels
@@ -419,7 +419,7 @@ def update_parallel_coords_s3(results_data, language):
         labels=dim_labels,
         title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'],
         color_continuous_scale='Viridis',
-        range_color=[0, 0.3]  # Fixed color range from 0 to 1 for objective
+        range_color=[0, 1.0]  # Fixed color range from 0 to 1 for objective
     )
     
     return parallel_fig

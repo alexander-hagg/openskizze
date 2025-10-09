@@ -70,7 +70,7 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     Create a 3D visualization of the building design as voxel blocks in geographic coordinates
     
     Args:
-        heightmap: 2D numpy array of building heights (in floors/voxels, 0-3)
+        heightmap: 2D numpy array of building heights (in meters, 0-33)
         grid_bounds_native: (min_x, min_y, max_x, max_y) in EPSG:25832 for design area
         env_3d_fixed: 3D array of existing buildings (optional, may be larger than design grid)
         height_exaggeration: Factor to exaggerate building heights for visualization
@@ -79,8 +79,8 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         expanded_bounds_native: (min_x, min_y, max_x, max_y) for expanded visualization area (optional)
         design_offset: (row_offset, col_offset) for design placement within expanded grid (optional)
     """
-    # Heightmap values represent number of floors (0-3), convert to meters (each floor = 3m)
-    # This ensures design buildings match the real heights from NRW open data portal
+    # Heightmap values are already in METERS (not floors)
+    # This ensures design buildings match the real heights from NRW LOD2 data
     heightmap_meters = heightmap * height_exaggeration
     
     # Get grid dimensions for design
@@ -337,7 +337,7 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
             yaxis=dict(title='Nord (m)', range=y_range, showgrid=True),
             zaxis=dict(title='Höhe (m)', range=z_range, showgrid=True),
             camera=camera,
-            aspectmode='cube',  # Force equal aspect ratio on all axes (1m = 1m in all directions)
+            aspectmode='data',  # Force equal aspect ratio on all axes (1m = 1m in all directions)
             # Add sun-like lighting effect with sky blue background
             bgcolor='rgb(230, 240, 255)',  # Light sky blue background
         ),
@@ -438,7 +438,7 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
     from backend.config import DOMAIN_CONFIG
     
     heightmap_res = results_data['xy_length']
-    pixel_size = DOMAIN_CONFIG.get('pixel_size_in_meters', 3.0)  # Default 3m per pixel
+    pixel_size = DOMAIN_CONFIG.get('pixel_size_in_meters', 1.0)  # Default 1m per pixel
     
     # Get geographic bounds and existing buildings data
     grid_bounds_native = results_data.get('grid_bounds_native')

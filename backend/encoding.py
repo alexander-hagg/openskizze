@@ -80,7 +80,8 @@ class ParametricEncoding:
 
         w = (active_genes[:, 0] * (self.config['xy_length'] / 2)).astype(int)
         l = (active_genes[:, 1] * (self.config['xy_length'] / 2)).astype(int)
-        h = (active_genes[:, 2] * self.config['z_length']).astype(int) + 1
+        # Height gene: output in METERS (z_length is now in meters, e.g., 30m)
+        h = (active_genes[:, 2] * self.config['z_length']).astype(int)
         x_c = (active_genes[:, 3] * self.config['xy_length']).astype(int)
         y_c = (active_genes[:, 4] * self.config['xy_length']).astype(int)
         

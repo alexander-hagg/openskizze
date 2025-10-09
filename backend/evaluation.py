@@ -150,7 +150,6 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
     buildable_pixels = np.sum(buildable_mask)
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
     pixel_area = pixel_size ** 2
-    meters_per_floor = 3.0  # Approximate 3m per floor
     
     # [0] Built Area - in m² (not ratio)
     occupied_pixels = np.sum(occupied)
@@ -160,13 +159,11 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
     if not building_heights.any():
         return np.zeros(8)  # Return zeros for all 8 features
         
-    # [1] Average Height - in meters (not floors)
-    avg_height_floors = np.mean(building_heights)
-    avg_height_meters = avg_height_floors * meters_per_floor
+    # [1] Average Height - heightmap is already in METERS
+    avg_height_meters = np.mean(building_heights)
     
-    # [2] Height Variability - in meters (not floors)
-    height_variability_floors = np.std(building_heights)
-    height_variability_meters = height_variability_floors * meters_per_floor
+    # [2] Height Variability - heightmap is already in METERS
+    height_variability_meters = np.std(building_heights)
     
     # [3] Number of Buildings - already a count
     # Cache the labeled array to avoid calling label() twice
@@ -215,8 +212,8 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
     
     # --- OPTIMIZED 3D MESH GENERATION ---
     # Create an array of z-axis indices: [0, 1, 2, ..., max_height-1]
-    # CRITICAL: ALL Z-axes are now in FLOORS throughout the application
-    # heightmap_2d_solution is in FLOORS, env_3d_fixed is in FLOORS (1 voxel = 1 floor)
+    # CRITICAL: ALL Z-axes are now in METERS throughout the application
+    # heightmap_2d_solution is in METERS, env_3d_fixed is in METERS (1 voxel = 1 meter)
     max_height = env_config['env_3d_fixed'].shape[2]
     z_indices = np.arange(max_height)
     

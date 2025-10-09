@@ -23,8 +23,8 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
     heightmap_2d = encoding_obj.express(env_config['buildable_mask'], genome)
     
     # Step 2: Create 3D design array
-    # CRITICAL: ALL Z-axes are now in FLOORS throughout the application
-    # heightmap_2d is in FLOORS, env_3d_fixed is in FLOORS (1 voxel = 1 floor)
+    # CRITICAL: ALL Z-axes are now in METERS throughout the application
+    # heightmap_2d is in METERS, env_3d_fixed is in METERS (1 voxel = 1 meter)
     max_height = env_config['env_3d_fixed'].shape[2]
     z_indices = np.arange(max_height)
     design_3d = (z_indices < heightmap_2d.astype(int)[:, :, np.newaxis]).astype(np.int8)
@@ -120,7 +120,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
     fig1 = go.Figure(data=go.Heatmap(
         z=heightmap_2d,
         colorscale='Viridis',
-        colorbar=dict(title='Height (floors)')
+        colorbar=dict(title='Height (meters)')
     ))
     fig1.update_layout(
         title='Step 1: Generated Heightmap',
@@ -234,9 +234,9 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         title=f'Step 4c: Wind Paths (Design + Existing Buildings)',
         width=300, height=300,
         xaxis_title='X (perpendicular to wind)',
-        yaxis_title='Z (Height in floors)',
+        yaxis_title='Z (Height in meters)',
         annotations=[
-            dict(text=f'Green = open path | Red = blocked by design OR existing buildings<br>1 floor ≈ 3 meters',
+            dict(text=f'Green = open path | Red = blocked by design OR existing buildings<br>1 meter per voxel',
                  xref='paper', yref='paper', x=0.5, y=-0.25, 
                  showarrow=False, font=dict(size=8, color='gray'),
                  xanchor='center', yanchor='top')
@@ -489,9 +489,6 @@ def layout(lang='DE'):
         html.H2("🔍 Diagnostic Page - Parcel & Constraint Validation"),
         html.P("Use this page to validate that your selected parcel and constraints are feasible for optimization."),
         
-        # Adaptive Phenotype Configuration (moved from Step 3)
-        html.Div(id='phenotype-info-display-diagnostic', className="mb-3"),
-        
         dbc.Card([
             dbc.CardHeader(html.H4("Parcel Analysis")),
             dbc.CardBody([
@@ -603,9 +600,9 @@ def run_diagnostic(n_clicks, session_data):
         aspect_ratio = max(rows_occupied, cols_occupied) / min(rows_occupied, cols_occupied) if min(rows_occupied, cols_occupied) > 0 else float('inf')
         
         # Analyze constraints
-        max_height_voxels = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'] * 3)
-        max_height_floors = max_height_voxels // 3
-        max_height_meters = max_height_floors * 3
+        max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])
+        max_height_floors = max_height_meters / 3.0  # For display purposes
+        max_height_voxels = max_height_meters  # 1 voxel = 1 meter
         
         min_distance_meters = hard_constraints.get('min_distance', 0)
         min_distance_pixels = min_distance_meters / pixel_size if min_distance_meters > 0 else 0
@@ -793,8 +790,8 @@ def run_diagnostic(n_clicks, session_data):
                         dbc.Col([
                             html.H6("Heightmap Stats:"),
                             html.Ul([
-                                html.Li(f"Height range: {stats['heightmap_stats']['min']:.1f} - {stats['heightmap_stats']['max']:.1f} floors"),
-                                html.Li(f"Mean height: {stats['heightmap_stats']['mean']:.2f} floors"),
+                                html.Li(f"Height range: {stats['heightmap_stats']['min']:.1f} - {stats['heightmap_stats']['max']:.1f} meters"),
+                                html.Li(f"Mean height: {stats['heightmap_stats']['mean']:.2f} meters"),
                                 html.Li(f"Occupied cells: {stats['heightmap_stats']['non_zero']}"),
                             ])
                         ], md=4),

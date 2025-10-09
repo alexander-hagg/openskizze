@@ -14,7 +14,7 @@ QD_CONFIG = {
 ENCODING_CONFIG = {
     'max_num_buildings': 10,  # FIXED - always 10 buildings
     'xy_length': 32,  # Updated dynamically per parcel
-    'z_length': 3,    # Updated from constraints
+    'z_length': 30,   # Max height in METERS (default 30m, can be updated from user constraints)
 }
 
 DOMAIN_CONFIG = {

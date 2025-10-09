@@ -396,7 +396,7 @@ def fetch_existing_buildings_data(bbox: tuple):
         return None
 
 
-def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_floors: int = None):
+def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_meters: int = None):
     """
     Fetches building data from NRW API for a user-selected polygon and processes it
     into the format needed for optimization and visualization.
@@ -406,7 +406,7 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
     
     Args:
         user_polygon_geojson: GeoJSON dict of the user-selected buildable area
-        max_height_floors: Maximum building height in floors (for array sizing)
+        max_height_meters: Maximum building height in meters (for array sizing)
     
     Returns:
         dict containing:
@@ -505,23 +505,24 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
             print("[fetch_buildings] No buildings after filtering")
             return None
         
-        # Extract heights (LOD2 provides measuredHeight in meters)
+        # Extract heights - KEEP IN METERS for consistency
         if 'measuredHeight' in gdf_building_polygons.columns:
-            # LOD2 tiles: measuredHeight is in meters, convert to floors (3m per floor)
-            heights_floors = gdf_building_polygons['measuredHeight'].fillna(9.0) / 3.0
-            print(f"[fetch_buildings] Using measuredHeight from LOD2 tiles (range: {heights_floors.min():.1f}-{heights_floors.max():.1f} floors)")
+            # LOD2 tiles: measuredHeight is in meters - KEEP IN METERS
+            heights_meters = gdf_building_polygons['measuredHeight'].fillna(9.0)
+            print(f"[fetch_buildings] Using measuredHeight from LOD2 tiles (range: {heights_meters.min():.1f}-{heights_meters.max():.1f} meters)")
         elif 'hoehe' in gdf_building_polygons.columns:
-            # Legacy: hoehe is in meters
-            heights_floors = gdf_building_polygons['hoehe'].fillna(9.0) / 3.0
+            # Legacy: hoehe is in meters - KEEP IN METERS
+            heights_meters = gdf_building_polygons['hoehe'].fillna(9.0)
         elif 'geschosszahl' in gdf_building_polygons.columns:
-            # Legacy: geschosszahl is already in floors
-            heights_floors = gdf_building_polygons['geschosszahl'].fillna(3.0)
+            # Legacy: geschosszahl is in floors - CONVERT TO METERS
+            heights_meters = gdf_building_polygons['geschosszahl'].fillna(3.0) * 3.0
         else:
-            # Fallback: assume 3 floors (9m)
-            heights_floors = pd.Series([3.0] * len(gdf_building_polygons))
-            print("[fetch_buildings] Warning: No height data available, using default 3 floors")
+            # Fallback: assume 9 meters (3 floors)
+            heights_meters = pd.Series([9.0] * len(gdf_building_polygons))
+            print("[fetch_buildings] Warning: No height data available, using default 9 meters")
         
-        heights_floors = heights_floors.clip(1.0, 30.0)
+        # Clip to reasonable range (3m to 90m = 1 to 30 floors)
+        heights_meters = heights_meters.clip(3.0, 90.0)
         
         # Create function mapping
         if 'funktion' in gdf_building_polygons.columns:
@@ -547,28 +548,29 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         
         # Rasterize heights
         shapes_with_heights = [(geom, height) for geom, height in 
-                               zip(gdf_building_polygons.geometry, heights_floors)]
+                               zip(gdf_building_polygons.geometry, heights_meters)]
         building_heights_2d_exp = features.rasterize(
             shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
             fill=0, dtype='float32'
         )
         building_heights_2d_exp = np.flipud(building_heights_2d_exp)
         
-        # Create 3D array
+        # Create 3D array - each voxel represents 1 METER (not 1 floor)
         max_height_needed = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
-        if max_height_floors:
-            max_height_needed = max(max_height_needed, max_height_floors)
+        if max_height_meters:
+            # Use the constraint (already in meters)
+            max_height_needed = max(max_height_needed, int(max_height_meters))
         else:
             max_height_needed = max(max_height_needed, ENCODING_CONFIG['z_length'])
         
         env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_needed), dtype=np.int8)
         
-        # Fill voxels up to building height
+        # Fill voxels up to building height - each voxel = 1 METER
         for r in range(expanded_res):
             for c in range(expanded_res):
-                height_floors = building_heights_2d_exp[r, c]
-                if height_floors > 0:
-                    height_voxels = int(np.round(height_floors))
+                height_meters = building_heights_2d_exp[r, c]
+                if height_meters > 0:
+                    height_voxels = int(np.round(height_meters))  # 1 voxel = 1 meter
                     env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
         
         print(f"[fetch_buildings] Successfully processed {len(gdf_building_polygons)} buildings into {expanded_res}x{expanded_res}x{max_height_needed} grid")
