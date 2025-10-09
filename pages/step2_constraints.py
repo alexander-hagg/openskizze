@@ -49,47 +49,53 @@ def layout(lang='DE'):
             dbc.Col(dcc.Link(dbc.Button(T[lang]['NEXT_STEP'], color="primary"), href='/step3'), className="text-end")
         ], className="mt-4"),
 
-        dbc.Card(dbc.CardBody([
-            html.H5(T[lang]['STEP2_PRESETS_HEADER']),
-            dbc.Select(
-                id='presets-dropdown',
-                options=[
-                    {'label': T[lang]['STEP2_PRESET_CUSTOM'], 'value': 'custom'},
-                    {'label': PRESETS['suburban']['name'], 'value': 'suburban'},
-                    {'label': PRESETS['dense_urban']['name'], 'value': 'dense_urban'},
-                ],
-                value='custom'
-            )
-        ]), className="mb-4"),
+        #dbc.Card(dbc.CardBody([
+        #    html.H5(T[lang]['STEP2_PRESETS_HEADER']),
+        #    dbc.Select(
+        #        id='presets-dropdown',
+        #        options=[
+        #            {'label': T[lang]['STEP2_PRESET_CUSTOM'], 'value': 'custom'},
+        #            {'label': PRESETS['suburban']['name'], 'value': 'suburban'},
+        #            {'label': PRESETS['dense_urban']['name'], 'value': 'dense_urban'},
+        #        ],
+        #        value='custom'
+        #    )
+        #]), className="mb-4"),
 
         dbc.Row([
             dbc.Col([
-                html.H5(T[lang]['STEP2_OBJECTIVES_HEADER']),
-                dbc.Label(T[lang]['STEP2_MEASURES_LABEL']),
-                dbc.Card(dbc.Checklist(
-                    options=MEASURES_OPTIONS,
-                    value=DOMAIN_CONFIG['features'],
-                    id='measures-checklist',
-                    switch=True,
-                ), body=True),
+                html.H5(T[lang]['STEP2_HARD_CONSTRAINTS_HEADER'], className="mt-4"),
+                dbc.Card(dbc.CardBody([
+                    dbc.Label([T[lang]['STEP2_MAX_HEIGHT_LABEL'], html.Span(id='max-height-value', className='ms-2 text-primary fw-bold')]),
+                    dcc.Slider(
+                        id='max-height-constraint',
+                        min=3,
+                        max=30,
+                        step=3,
+                        value=ENCODING_CONFIG['z_length'],
+                        marks={3: '3m', 10: '10m', 20: '20m', 30: '30m'},
+                        tooltip={"placement": "bottom", "always_visible": False}
+                    ),
+                    dbc.Label([T[lang]['STEP2_MIN_DISTANCE_LABEL'], html.Span(id='min-distance-value', className='ms-2 text-primary fw-bold')], className="mt-3"),
+                    dcc.Slider(
+                        id='min-distance-constraint',
+                        min=0,
+                        max=30,
+                        step=1,
+                        value=0,
+                        marks={0: '0m', 10: '10m', 20: '20m', 30: '30m'},
+                        tooltip={"placement": "bottom", "always_visible": False}
+                    ),
+                ]), color="light"),
+                
                 html.H5(T[lang]['STEP2_TARGET_RANGES_HEADER']),
                 html.P(T[lang]['STEP2_TARGET_RANGES_INFO'], className="text-muted small"),
                 dcc.Loading(html.Div(id='feature-range-sliders-container')),
                 
+                
             ], md=6),
             dbc.Col([
-                html.H5(T[lang]['STEP2_OBJECTIVE_INFO_LABEL']),
-                dbc.Alert(T[lang]['STEP2_OBJECTIVE_INFO_TEXT'], color="info"),
-                # --- NEW: Hard Constraints Section ---
-                html.H5(T[lang]['STEP2_HARD_CONSTRAINTS_HEADER'], className="mt-4"),
-                dbc.Card(dbc.CardBody([
-                    dbc.Label(T[lang]['STEP2_MAX_HEIGHT_LABEL']),
-                    dbc.Input(id='max-height-constraint', type="number", placeholder=T[lang]['STEP2_MAX_HEIGHT_PLACEHOLDER'], min=1, step=1, value=ENCODING_CONFIG['z_length']),
-                    dbc.Label(T[lang]['STEP2_MIN_DISTANCE_LABEL'], className="mt-2"),
-                    dbc.Input(id='min-distance-constraint', type="number", placeholder=T[lang]['STEP2_MIN_DISTANCE_PLACEHOLDER'], min=0, step=1, value=0),
-                ]), color="light"),
                 
-                # --- NEW: Objective Function Selection ---
                 html.H5(T[lang].get('STEP2_OBJECTIVE_FUNCTION_HEADER', 'Optimization Criteria'), className="mt-4"),
                 dbc.Card(dbc.CardBody([
                     dbc.Label(T[lang].get('STEP2_OBJECTIVE_FUNCTION_LABEL', 'Wind Flow Objective')),
@@ -117,6 +123,14 @@ def layout(lang='DE'):
                         className='mt-2'
                     ),
                 ]), color="light"),
+
+                dbc.Label(T[lang]['STEP2_MEASURES_LABEL']),
+                dbc.Card(dbc.Checklist(
+                    options=MEASURES_OPTIONS,
+                    value=DOMAIN_CONFIG['features'],
+                    id='measures-checklist',
+                    switch=True,
+                ), body=True),
                 
                 # --- Advanced Mode Toggle ---
                 dbc.Row([
@@ -161,6 +175,26 @@ def layout(lang='DE'):
             ], md=6),
         ])
     ], fluid=True)
+
+@callback(
+    Output('max-height-value', 'children'),
+    Input('max-height-constraint', 'value')
+)
+def update_max_height_display(value):
+    """Update the displayed max height value"""
+    if value is None:
+        return ""
+    return f"({value}m)"
+
+@callback(
+    Output('min-distance-value', 'children'),
+    Input('min-distance-constraint', 'value')
+)
+def update_min_distance_display(value):
+    """Update the displayed min distance value"""
+    if value is None:
+        return ""
+    return f"({value}m)"
 
 @callback(
     Output('measures-checklist', 'value'),
@@ -253,12 +287,13 @@ def apply_preset(preset_key, lang):
     Output('feature-range-sliders-container', 'children'),
     Input('measures-checklist', 'value'),
     Input('url', 'pathname'),
+    Input('max-height-constraint', 'value'),
+    Input('min-distance-constraint', 'value'),
     State('language-store', 'data'),
     State('session-store', 'data'),
-    State('max-height-constraint', 'value'),
     prevent_initial_call=True
 )
-def create_range_sliders(selected_indices, pathname, lang, session_data, max_height_input):
+def create_range_sliders(selected_indices, pathname, max_height_input, min_distance_input, lang, session_data):
     from backend.units import calculate_dynamic_ranges_physical, get_unit_label
     import geopandas as gpd
     import math
@@ -291,6 +326,7 @@ def create_range_sliders(selected_indices, pathname, lang, session_data, max_hei
         try:
             # Recreate the buildable mask to calculate proper ranges
             from backend.config import ENCODING_CONFIG
+            from shapely.geometry import Point
             user_polygon_geojson = session_data['site_polygon']
             gdf_user_poly = gpd.GeoDataFrame.from_features(user_polygon_geojson, crs="EPSG:4326")
             gdf_user_poly_native = gdf_user_poly.to_crs("EPSG:25832")
@@ -305,21 +341,36 @@ def create_range_sliders(selected_indices, pathname, lang, session_data, max_hei
             pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
             res = math.ceil(grid_side_length / pixel_size)
             
-            # Simple buildable mask calculation (approximate, no spatial join for performance)
-            buildable_pixels = int((width * height) / (pixel_size ** 2))
-            buildable_mask = np.ones((res, res), dtype=bool)  # Simplified
-            buildable_mask[:] = False
-            center_i, center_j = res // 2, res // 2
-            size_i = int(height / pixel_size) // 2
-            size_j = int(width / pixel_size) // 2
-            buildable_mask[max(0, center_i-size_i):min(res, center_i+size_i), 
-                          max(0, center_j-size_j):min(res, center_j+size_j)] = True
+            # Calculate grid bounds (centered on parcel)
+            center_x = (min_x + max_x) / 2
+            center_y = (min_y + max_y) / 2
+            grid_min_x = center_x - grid_side_length / 2
+            grid_max_x = center_x + grid_side_length / 2
+            grid_min_y = center_y - grid_side_length / 2
+            grid_max_y = center_y + grid_side_length / 2
             
-            # Get max height from input (convert to floors)
-            max_height_floors = max_height_input if max_height_input else ENCODING_CONFIG['z_length']
+            # Create precise buildable mask using spatial join (same as optimization_process.py)
+            x = np.linspace(grid_min_x, grid_max_x, res)
+            y = np.linspace(grid_min_y, grid_max_y, res)
+            xv, yv = np.meshgrid(x, y)
+            points = [Point(px, py) for px, py in zip(xv.flatten(), yv.flatten())]
+            gdf_points = gpd.GeoDataFrame(geometry=points, crs="EPSG:25832")
             
-            # Calculate dynamic ranges in physical units
-            dynamic_ranges = calculate_dynamic_ranges_physical(buildable_mask, max_height_floors)
+            joined = gpd.sjoin(gdf_points, gdf_user_poly_native, how="inner", predicate="within")
+            buildable_mask = np.zeros((res, res), dtype=bool)
+            indices = joined.index.to_numpy()
+            rows, cols = np.unravel_index(indices, (res, res))
+            buildable_mask[rows, cols] = True
+            
+            # Count actual buildable pixels from precise mask
+            buildable_pixels = np.sum(buildable_mask)
+            
+            # Get constraints from inputs (already in meters)
+            max_height_meters = max_height_input if max_height_input else ENCODING_CONFIG['z_length']
+            min_distance_meters = min_distance_input if min_distance_input else 0.0
+            
+            # Calculate dynamic ranges in physical units, respecting hard constraints
+            dynamic_ranges = calculate_dynamic_ranges_physical(buildable_mask, max_height_meters, min_distance_meters)
         except Exception as e:
             print(f"Warning: Could not calculate dynamic ranges: {e}")
             dynamic_ranges = None
@@ -439,7 +490,7 @@ def restore_step2_from_session(session_data, pathname):
     hard_constraints = session_data.get('hard_constraints', {})
     qd_params = session_data.get('qd_hyperparams', {})
     
-    max_height = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'] * 3) / 3
+    max_height = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])  # Already in meters
     min_distance = hard_constraints.get('min_distance', 0)
     
     qd_generations = qd_params.get('num_generations', QD_CONFIG['num_generations'])
@@ -489,18 +540,21 @@ def update_session_with_features_and_ranges(
         if new_feature_ranges:
             session_data['feature_ranges'] = new_feature_ranges
 
-    # Save hard constraints
+    # Save hard constraints (max_height is already in meters, no conversion needed)
+    # Preserve existing values if new values are None
+    existing_constraints = session_data.get('hard_constraints', {})
     session_data['hard_constraints'] = {
-        'max_height': 3*max_height if max_height else ENCODING_CONFIG['z_length'] * 3,
-        'min_distance': min_distance if min_distance else 0
+        'max_height': max_height if max_height is not None else existing_constraints.get('max_height', ENCODING_CONFIG['z_length']),
+        'min_distance': min_distance if min_distance is not None else existing_constraints.get('min_distance', 0)
     }
     
-    # Save QD hyperparameters
+    # Save QD hyperparameters - preserve existing values if new values are None
+    existing_qd = session_data.get('qd_hyperparams', {})
     session_data['qd_hyperparams'] = {
-        'num_generations': qd_generations if qd_generations else QD_CONFIG['num_generations'],
-        'num_emitters': qd_emitters if qd_emitters else QD_CONFIG['num_emitters'],
-        'num_niches': qd_niches if qd_niches else QD_CONFIG['num_niches'],
-        'batch_size': qd_batch_size if qd_batch_size else QD_CONFIG['batch_size'],
+        'num_generations': qd_generations if qd_generations is not None else existing_qd.get('num_generations', QD_CONFIG['num_generations']),
+        'num_emitters': qd_emitters if qd_emitters is not None else existing_qd.get('num_emitters', QD_CONFIG['num_emitters']),
+        'num_niches': qd_niches if qd_niches is not None else existing_qd.get('num_niches', QD_CONFIG['num_niches']),
+        'batch_size': qd_batch_size if qd_batch_size is not None else existing_qd.get('batch_size', QD_CONFIG['batch_size']),
     }
     
     # Save objective function selection

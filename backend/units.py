@@ -36,8 +36,7 @@ def to_physical_units(normalized_values: np.ndarray, feature_indices: list, env_
     """
     physical_values = np.zeros_like(normalized_values)
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    z_length = ENCODING_CONFIG['z_length']
-    meters_per_floor = 3.0  # Approximate 3m per floor
+    z_length = ENCODING_CONFIG['z_length']  # Now in meters (e.g., 30m)
     
     buildable_area_m2 = env_context.get('buildable_area_in_sq_meters', 1000)
     buildable_mask = env_context.get('buildable_mask')
@@ -56,11 +55,11 @@ def to_physical_units(normalized_values: np.ndarray, feature_indices: list, env_
         if feature_idx == 0:  # Built Area - convert ratio to m²
             physical_values[i] = val * buildable_area_m2
             
-        elif feature_idx == 1:  # Average Height - convert floors to meters
-            physical_values[i] = val * meters_per_floor
+        elif feature_idx == 1:  # Average Height - already in meters
+            physical_values[i] = val
             
-        elif feature_idx == 2:  # Height Variability - convert floors to meters
-            physical_values[i] = val * meters_per_floor
+        elif feature_idx == 2:  # Height Variability - already in meters
+            physical_values[i] = val
             
         elif feature_idx == 3:  # Number of Buildings - already a count
             physical_values[i] = val
@@ -99,7 +98,6 @@ def from_physical_units(physical_values: np.ndarray, feature_indices: list, env_
     """
     normalized_values = np.zeros_like(physical_values)
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    meters_per_floor = 3.0
     
     buildable_area_m2 = env_context.get('buildable_area_in_sq_meters', 1000)
     buildable_mask = env_context.get('buildable_mask')
@@ -111,17 +109,20 @@ def from_physical_units(physical_values: np.ndarray, feature_indices: list, env_
     else:
         max_dist_meters = 100
     
+    # Get max height from environment context (already in meters)
+    max_height_meters = env_context.get('max_height_meters', ENCODING_CONFIG['z_length'])
+    
     for i, feature_idx in enumerate(feature_indices):
         val = physical_values[i] if i < len(physical_values) else 0.0
         
         if feature_idx == 0:  # Built Area m² -> ratio
             normalized_values[i] = val / buildable_area_m2 if buildable_area_m2 > 0 else 0.0
             
-        elif feature_idx == 1:  # Height meters -> floors
-            normalized_values[i] = val / meters_per_floor
+        elif feature_idx == 1:  # Height meters -> normalized by max height
+            normalized_values[i] = val / max_height_meters if max_height_meters > 0 else 0.0
             
-        elif feature_idx == 2:  # Height Variability meters -> floors
-            normalized_values[i] = val / meters_per_floor
+        elif feature_idx == 2:  # Height Variability meters -> normalized by max height/2
+            normalized_values[i] = val / (max_height_meters / 2) if max_height_meters > 0 else 0.0
             
         elif feature_idx == 3:  # Number of Buildings - already a count
             normalized_values[i] = val
@@ -193,24 +194,28 @@ def get_unit_label(feature_index: int, lang='DE') -> str:
     return T[lang].get(unit_key, '')
 
 
-def calculate_dynamic_ranges_physical(buildable_mask: np.ndarray, max_height_floors: int = None) -> list:
+def calculate_dynamic_ranges_physical(buildable_mask: np.ndarray, max_height_meters: int = None, min_distance_meters: float = None) -> list:
     """
-    Calculate feature ranges in physical units based on site properties.
+    Calculate feature ranges in physical units based on site properties and hard constraints.
     
     Args:
         buildable_mask: Boolean array indicating buildable pixels
-        max_height_floors: Maximum allowed building height in floors (from constraints)
+        max_height_meters: Maximum allowed building height in meters (from constraints)
+        min_distance_meters: Minimum required distance between buildings in meters (from constraints)
     
     Returns:
         List of [min, max] ranges for each of the 8 features in physical units
     """
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    z_length = ENCODING_CONFIG['z_length']
-    meters_per_floor = 3.0
+    z_length = ENCODING_CONFIG['z_length']  # In meters
     
-    # If no max height constraint, use default z_length
-    if max_height_floors is None:
-        max_height_floors = z_length
+    # If no max height constraint, use default z_length (in meters)
+    if max_height_meters is None:
+        max_height_meters = z_length
+    
+    # If no min distance constraint, use 0
+    if min_distance_meters is None:
+        min_distance_meters = 0.0
     
     buildable_pixels = np.sum(buildable_mask)
     buildable_area_m2 = buildable_pixels * (pixel_size ** 2)
@@ -220,17 +225,19 @@ def calculate_dynamic_ranges_physical(buildable_mask: np.ndarray, max_height_flo
     max_dist_meters = max_dist_pixels * pixel_size
     
     # Maximum possible floor area considering max height
-    max_possible_floor_area = buildable_area_m2 * max_height_floors
+    # Convert meters to floors (1 floor = 3m)
+    max_floors = max_height_meters / 3.0
+    max_possible_floor_area = buildable_area_m2 * max_floors
     
     ranges = [
-        [0.0, buildable_area_m2],                    # 0: Built Area (m²) - from 0 to full buildable area
-        [0.0, max_height_floors * meters_per_floor], # 1: Avg Height (m) - from 0 to max height in meters
-        [0.0, max_height_floors * meters_per_floor / 2], # 2: Height Variability (m) - roughly half of max
+        [0.0, buildable_area_m2],                # 0: Built Area (m²) - from 0 to full buildable area
+        [0.0, max_height_meters],                # 1: Avg Height (m) - from 0 to max height constraint
+        [0.0, max_height_meters / 2],            # 2: Height Variability (m) - roughly half of max
         [0.0, ENCODING_CONFIG['max_num_buildings']],  # 3: Number of Buildings (count)
-        [0.0, max_dist_meters],                      # 4: Avg Distance (m) - from 0 to max diagonal
-        [0.0, max_possible_floor_area],              # 5: Gross Floor Area (m²) - depends on max height!
-        [0.0, 1.0],                                  # 6: Building Mass X (normalized)
-        [0.0, 1.0],                                  # 7: Building Mass Y (normalized)
+        [min_distance_meters, max_dist_meters],  # 4: Avg Distance (m) - from min distance constraint to max diagonal
+        [0.0, max_possible_floor_area],          # 5: Gross Floor Area (m²) - depends on max height constraint
+        [0.0, 1.0],                              # 6: Building Mass X (normalized)
+        [0.0, 1.0],                              # 7: Building Mass Y (normalized)
     ]
     
     return ranges

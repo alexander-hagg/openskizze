@@ -160,20 +160,20 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             
             if not gdf_building_polygons.empty:
                 # Extract real building heights from NRW data
-                # CRITICAL: Convert everything to FLOORS for internal representation
+                # CRITICAL: Keep everything in METERS for consistency
                 # Try 'hoehe' (height in meters) or 'geschosszahl' (number of floors)
                 if 'hoehe' in gdf_building_polygons.columns:
-                    # Height in meters - convert to floors (1 floor = 3m)
-                    heights_floors = gdf_building_polygons['hoehe'].fillna(9.0) / 3.0  # Default 3 floors
+                    # Height in meters - keep as is
+                    heights_meters = gdf_building_polygons['hoehe'].fillna(9.0)  # Default 9m
                 elif 'geschosszahl' in gdf_building_polygons.columns:
-                    # Already in floors
-                    heights_floors = gdf_building_polygons['geschosszahl'].fillna(3.0)
+                    # Convert floors to meters (1 floor = 3m)
+                    heights_meters = gdf_building_polygons['geschosszahl'].fillna(3.0) * 3.0
                 else:
-                    # Fallback: assume 3 floors
-                    heights_floors = pd.Series([3.0] * len(gdf_building_polygons))
+                    # Fallback: assume 9 meters
+                    heights_meters = pd.Series([9.0] * len(gdf_building_polygons))
                 
-                # Clip heights to reasonable range (1-30 floors)
-                heights_floors = heights_floors.clip(1.0, 30.0)
+                # Clip heights to reasonable range (3-90 meters)
+                heights_meters = heights_meters.clip(3.0, 90.0)
                 
                 # Create a mapping array to store building function for each pixel
                 # We'll encode each unique function as a number
@@ -199,39 +199,39 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
                 )
                 building_function_map_exp = np.flipud(building_function_map_exp)
                 
-                # Rasterize heights to EXPANDED grid - create 2D heightmap in FLOORS
+                # Rasterize heights to EXPANDED grid - create 2D heightmap in METERS
                 shapes_with_heights = [(geom, height) for geom, height in 
-                                       zip(gdf_building_polygons.geometry, heights_floors)]
+                                       zip(gdf_building_polygons.geometry, heights_meters)]
                 building_heights_2d_exp = features.rasterize(
                     shapes=shapes_with_heights, out_shape=(expanded_res, expanded_res), transform=transform_exp,
                     fill=0, dtype='float32'
                 )
                 building_heights_2d_exp = np.flipud(building_heights_2d_exp)
                 
-                # Create 3D array with actual heights (each voxel = 1 FLOOR)
+                # Create 3D array with actual heights (each voxel = 1 METER)
                 # Calculate how many voxel layers needed for each position
-                max_height_floors = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
-                max_height_floors = max(max_height_floors, ENCODING_CONFIG['z_length'])  # At least z_length
+                max_height_meters = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
+                max_height_meters = max(max_height_meters, ENCODING_CONFIG['z_length'])  # At least z_length
                 
                 # Resize env_3d_expanded if needed to accommodate real heights
-                if env_3d_expanded.shape[2] < max_height_floors:
-                    new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_floors), dtype=np.int8)
+                if env_3d_expanded.shape[2] < max_height_meters:
+                    new_env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_meters), dtype=np.int8)
                     new_env_3d_expanded[:, :, :env_3d_expanded.shape[2]] = env_3d_expanded
                     env_3d_expanded = new_env_3d_expanded
                 
-                # Fill voxels up to building height (in floors)
+                # Fill voxels up to building height (in meters)
                 for r in range(expanded_res):
                     for c in range(expanded_res):
-                        height_floors = building_heights_2d_exp[r, c]
-                        if height_floors > 0:
-                            height_voxels = int(np.round(height_floors))  # Round to nearest floor
+                        height_meters = building_heights_2d_exp[r, c]
+                        if height_meters > 0:
+                            height_voxels = int(np.round(height_meters))  # Round to nearest meter
                             env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
                 
                 # Also rasterize to ORIGINAL grid for optimization
                 cell_size = grid_side_length / res
                 transform = from_origin(grid_min_x, grid_max_y, cell_size, cell_size)
                 
-                # Rasterize heights to original grid (in FLOORS)
+                # Rasterize heights to original grid (in METERS)
                 building_heights_2d = features.rasterize(
                     shapes=shapes_with_heights, out_shape=(res, res), transform=transform,
                     fill=0, dtype='float32'
@@ -239,8 +239,8 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
                 building_heights_2d = np.flipud(building_heights_2d)
                 
                 # Resize env_3d_fixed if needed
-                if env_3d_fixed.shape[2] < max_height_floors:
-                    new_env_3d_fixed = np.zeros((res, res, max_height_floors), dtype=np.int8)
+                if env_3d_fixed.shape[2] < max_height_meters:
+                    new_env_3d_fixed = np.zeros((res, res, max_height_meters), dtype=np.int8)
                     new_env_3d_fixed[:, :, :env_3d_fixed.shape[2]] = env_3d_fixed
                     env_3d_fixed = new_env_3d_fixed
                 
@@ -290,12 +290,12 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
             building_function_map_exp[start_idx + r, start_idx + c] = 0
     
     # --- Use the user-defined ranges to construct the final list of ranges for the optimizer ---
-    # Extract max height from constraints (convert voxels to floors: divide by 3)
-    max_height_voxels = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'] * 3)
-    max_height_floors = max_height_voxels // 3  # Convert to floors
+    # Extract constraints (already in meters)
+    max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])
+    min_distance_meters = hard_constraints.get('min_distance', 0.0)
     
-    # Get dynamic ranges for all 8 features (now in physical units!)
-    dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask, max_height_floors)
+    # Get dynamic ranges for all 8 features (now in physical units, respecting hard constraints!)
+    dynamic_ranges, buildable_area_m2 = _calculate_dynamic_feat_ranges(buildable_mask, max_height_meters, min_distance_meters)
     
     # Build the final ranges list: only for selected features
     final_feat_ranges = []
@@ -356,13 +356,14 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     }
 
 
-def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_floors: int = None):
+def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_meters: int = None, min_distance_meters: float = None):
     """
-    Calculate dynamic feature ranges in PHYSICAL UNITS based on site properties.
+    Calculate dynamic feature ranges in PHYSICAL UNITS based on site properties and hard constraints.
     
     Args:
         buildable_mask: Boolean array of buildable pixels
-        max_height_floors: Maximum building height in floors (from hard constraints)
+        max_height_meters: Maximum building height in meters (from hard constraints)
+        min_distance_meters: Minimum distance between buildings in meters (from hard constraints)
     
     Returns:
         Tuple of (ranges_list, buildable_area_m2)
@@ -370,11 +371,14 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_floors
     """
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
     z_len = ENCODING_CONFIG['z_length']
-    meters_per_floor = 3.0
     
     # Use constraint-based max height if provided, otherwise use default
-    if max_height_floors is None:
-        max_height_floors = z_len
+    if max_height_meters is None:
+        max_height_meters = z_len
+    
+    # Use constraint-based min distance if provided, otherwise use 0
+    if min_distance_meters is None:
+        min_distance_meters = 0.0
     
     buildable_pixels = np.sum(buildable_mask)
     if buildable_pixels == 0:
@@ -386,15 +390,17 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_floors
     max_dist_meters = max_dist_pixels * pixel_size
     
     # Maximum possible floor area depends on max height constraint
-    max_possible_floor_area_m2 = buildable_area_m2 * max_height_floors
+    # Convert meters to floors (1 floor = 3m)
+    max_floors = max_height_meters / 3.0
+    max_possible_floor_area_m2 = buildable_area_m2 * max_floors
     
     new_ranges = [
         [0.0, buildable_area_m2],                      # 0: Built Area (m²)
-        [0.0, max_height_floors * meters_per_floor],   # 1: Avg Height (m)
-        [0.0, max_height_floors * meters_per_floor / 2], # 2: Height Variability (m)
+        [0.0, max_height_meters],                      # 1: Avg Height (m) - constrained by max height
+        [0.0, max_height_meters / 2],                  # 2: Height Variability (m)
         [0.0, ENCODING_CONFIG['max_num_buildings']],   # 3: Number of Buildings (count)
-        [0.0, max_dist_meters],                        # 4: Avg Distance (m)
-        [0.0, max_possible_floor_area_m2],             # 5: Gross Floor Area (m²)
+        [min_distance_meters, max_dist_meters],        # 4: Avg Distance (m) - constrained by min distance
+        [0.0, max_possible_floor_area_m2],             # 5: Gross Floor Area (m²) - constrained by max height
         [0.0, 1.0],                                    # 6: Building Mass X (normalized)
         [0.0, 1.0],                                    # 7: Building Mass Y (normalized)
     ]
@@ -447,11 +453,16 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
     if qd_hyperparams:
         qd_config.update(qd_hyperparams)
     
-    encoding_obj = ParametricEncoding(ENCODING_CONFIG)
+    # Create encoding config with user's max_height
+    encoding_config = ENCODING_CONFIG.copy()
+    max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])
+    encoding_config['z_length'] = max_height_meters
+    
+    encoding_obj = ParametricEncoding(encoding_config)
     
     # Generate adaptive initial genome based on parcel size
     x0_adaptive = encoding_obj.get_adaptive_initial_genome(buildable_mask)
-    print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {ENCODING_CONFIG['xy_length']}")
+    print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {encoding_config['xy_length']}, max height {encoding_config['z_length']}m")
     
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     create_debug_plots(env_config, sample_genome, encoding_obj)
