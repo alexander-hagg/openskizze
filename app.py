@@ -35,6 +35,7 @@ app.layout = html.Div([
     dcc.Store(id='session-store', storage_type='session'),
     dcc.Store(id='results-store', storage_type='session'),
     dcc.Store(id='comparison-store', storage_type='session', data=[]),
+    dcc.Store(id='clustering-data-store', storage_type='session'),  # Store actual cluster data from Step 4
     dcc.Store(id='language-store', storage_type='session', data='DE'),
     dcc.Download(id="download-project-file"),
 

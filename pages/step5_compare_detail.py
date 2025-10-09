@@ -383,10 +383,11 @@ def layout(lang='DE'):
     Input('comparison-store', 'data'),
     Input('results-store', 'data'),
     Input('solution-mode-store', 'data'),
+    Input('clustering-data-store', 'data'),  # Get ACTUAL cluster data from Step 4
     State('language-store', 'data'),
     State('camera-sync-store', 'data')
 )
-def display_comparison(selected_ids, results_data, solution_modes, lang, camera_state):
+def display_comparison(selected_ids, results_data, solution_modes, clustering_data, lang, camera_state):
     if lang is None: lang = 'DE'  # Default to German
     
     if not selected_ids:
@@ -403,11 +404,12 @@ def display_comparison(selected_ids, results_data, solution_modes, lang, camera_
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Load cluster data to get both best and central solutions
-    from backend.analysis import cluster_and_analyze_solutions
+    # Use the ACTUAL cluster data from Step 4 (no re-clustering!)
+    # This ensures consistency - we use the exact same clusters that were displayed in Step 4
+    if not clustering_data or 'clusters' not in clustering_data:
+        return dbc.Alert(T[lang]['STEP6_NO_SELECTION'], color="warning")
     
-    # Get clustering results (use default k-medoids with k=10)
-    clusters = cluster_and_analyze_solutions(results_path, 'kmedoids', {'n_clusters': 10}, {})
+    clusters = clustering_data['clusters']
     
     # Map selected IDs to their clusters
     solutions_to_compare = []

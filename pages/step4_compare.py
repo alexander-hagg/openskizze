@@ -210,6 +210,7 @@ def create_filter_controls(results_data, language):
 
 @callback(
     Output('cluster-results-container', 'children'),
+    Output('clustering-data-store', 'data'),  # Store ACTUAL cluster data for Step 5
     Input('run-analysis-btn', 'n_clicks'),
     State('results-store', 'data'),
     State({'type': 'filter-slider', 'index': ALL}, 'value'),
@@ -221,13 +222,13 @@ def create_filter_controls(results_data, language):
 )
 def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
                              algorithm, k, lang):
-    if not n_clicks: return no_update
+    if not n_clicks: return no_update, no_update
     if lang is None: lang = 'DE'  # Default to German
 
     results_path = results_data.get('full_results_path')
     grid_geojson = results_data.get('grid_geojson')
     if not results_path or not grid_geojson:
-        return dbc.Alert(T[lang]['STEP5_NO_RESULTS_ERROR'], color="danger")
+        return dbc.Alert(T[lang]['STEP5_NO_RESULTS_ERROR'], color="danger"), no_update
         
     feature_filters = {s_id['index']: s_val for s_id, s_val in zip(slider_ids, slider_values)}
 
@@ -241,7 +242,16 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters)
 
     if not clusters:
-        return dbc.Alert(T[lang]['STEP5_NO_CLUSTERS_FOUND'], color="warning")
+        return dbc.Alert(T[lang]['STEP5_NO_CLUSTERS_FOUND'], color="warning"), no_update
+    
+    # Store the ACTUAL cluster data for Step 5 (not re-clustering params!)
+    # This way Step 5 uses the exact same clusters without recomputing
+    clustering_data = {
+        'clusters': clusters,  # The actual cluster results
+        'algorithm': algorithm,  # Store for display purposes only
+        'params': params,  # Store for display purposes only
+        'feature_filters': feature_filters
+    }
 
     lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
@@ -317,7 +327,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         ]), className="mb-3")
         cluster_cards.append(card)
         
-    return cluster_cards
+    return cluster_cards, clustering_data
 
 @callback(
     Output('comparison-store', 'data', allow_duplicate=True),
