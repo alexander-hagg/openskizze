@@ -17,9 +17,30 @@ ENCODING_CONFIG = {
     'z_length': 30,   # Max height in METERS (default 30m, can be updated from user constraints)
 }
 
+# Feature set definitions
+# Two feature sets available:
+# - 'original': The original 8 features (built area, height, variability, num buildings, distance, GFA, mass X/Y)
+# - 'planning': Planning-focused features from BACKLOG.md (GRZ, GFZ, height, variability, num buildings, distance, aspect ratio, SVF)
+
+FEATURE_SETS = {
+    'original': {
+        'name': 'Original Features',
+        'name_de': 'Original-Merkmale',
+        'features': [0, 1, 2, 3, 4, 5, 6, 7],  # Indices into calculate_all_features_original
+        'description': 'Original 8-feature set',
+    },
+    'planning': {
+        'name': 'Planning-Focused Features (BACKLOG)',
+        'name_de': 'Planungs-Merkmale (BACKLOG)',
+        'features': [0, 1, 2, 3, 4, 5, 6, 7],  # Indices into calculate_all_features_planning
+        'description': 'GRZ, GFZ, height metrics, street canyon aspect ratio, SVF',
+    }
+}
+
 DOMAIN_CONFIG = {
     'wind_direction': 180,
     'pixel_size_in_meters': 3,
+    'feature_set': 'original',  # Default feature set
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
     'labels': [T['DE'][f'MEASURE_{i}'] for i in range(8)],
     'feat_ranges': [

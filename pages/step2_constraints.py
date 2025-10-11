@@ -7,10 +7,10 @@ from backend.translation import T, translate_feature_labels
 from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG, QD_CONFIG
 import numpy as np
 
-def get_measures_options(lang='DE'):
-    """Generate measures options with translated labels"""
+def get_measures_options(lang='DE', feature_set='original'):
+    """Generate measures options with translated labels based on feature set"""
     feature_indices = list(range(8))  # All 8 features
-    labels = translate_feature_labels(feature_indices, lang)
+    labels = translate_feature_labels(feature_indices, lang, feature_set)
     return [{'label': label, 'value': i} for i, label in enumerate(labels)]
 
 def get_presets(lang):
@@ -124,7 +124,36 @@ def layout(lang='DE'):
                     ),
                 ]), color="light"),
 
-                dbc.Label(T[lang]['STEP2_MEASURES_LABEL']),
+                # --- Feature Set Selector ---
+                html.H5(T[lang]['STEP2_FEATURE_SET_HEADER'], className="mt-4"),
+                dbc.Card(dbc.CardBody([
+                    dbc.Label(T[lang]['STEP2_FEATURE_SET_LABEL']),
+                    dbc.RadioItems(
+                        id='feature-set-selector',
+                        options=[
+                            {
+                                'label': html.Div([
+                                    html.Strong(T[lang]['STEP2_FEATURE_SET_ORIGINAL']),
+                                    html.Br(),
+                                    html.Small(T[lang]['STEP2_FEATURE_SET_ORIGINAL_DESC'], className='text-muted')
+                                ]),
+                                'value': 'original'
+                            },
+                            {
+                                'label': html.Div([
+                                    html.Strong(T[lang]['STEP2_FEATURE_SET_PLANNING']),
+                                    html.Br(),
+                                    html.Small(T[lang]['STEP2_FEATURE_SET_PLANNING_DESC'], className='text-muted')
+                                ]),
+                                'value': 'planning'
+                            }
+                        ],
+                        value='original',
+                        className='mt-2'
+                    ),
+                ]), color="light"),
+
+                dbc.Label(T[lang]['STEP2_MEASURES_LABEL'], className="mt-3"),
                 dbc.Card(dbc.Checklist(
                     options=MEASURES_OPTIONS,
                     value=DOMAIN_CONFIG['features'],
@@ -175,6 +204,17 @@ def layout(lang='DE'):
             ], md=6),
         ])
     ], fluid=True)
+
+@callback(
+    Output('measures-checklist', 'options'),
+    Input('feature-set-selector', 'value'),
+    State('language-store', 'data')
+)
+def update_measures_options(feature_set, lang):
+    """Update measures checklist options when feature set changes"""
+    if lang is None:
+        lang = 'DE'
+    return get_measures_options(lang, feature_set)
 
 @callback(
     Output('max-height-value', 'children'),
@@ -503,7 +543,7 @@ def restore_step2_from_session(session_data, pathname):
     
     return no_update, int(max_height), min_distance, qd_generations, qd_emitters, qd_niches, qd_batch_size
 
-# --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters, and objective function to the session ---
+# --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters, objective function, and feature set to the session ---
 @callback(
     Output('session-store', 'data', allow_duplicate=True),
     Input('measures-checklist', 'value'),
@@ -515,6 +555,7 @@ def restore_step2_from_session(session_data, pathname):
     Input('qd-niches-input', 'value'),
     Input('qd-batch-size-input', 'value'),
     Input('objective-function-selector', 'value'),
+    Input('feature-set-selector', 'value'),
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     prevent_initial_call=True
@@ -522,7 +563,7 @@ def restore_step2_from_session(session_data, pathname):
 def update_session_with_features_and_ranges(
     selected_indices, slider_values, max_height, min_distance,
     qd_generations, qd_emitters, qd_niches, qd_batch_size,
-    objective_function,
+    objective_function, feature_set,
     slider_ids, session_data
 ):
     session_data = session_data or {}
@@ -559,5 +600,8 @@ def update_session_with_features_and_ranges(
     
     # Save objective function selection
     session_data['objective_function'] = objective_function if objective_function else 'simple_porosity'
+    
+    # Save feature set selection
+    session_data['feature_set'] = feature_set if feature_set else 'original'
     
     return session_data

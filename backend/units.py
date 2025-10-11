@@ -6,7 +6,7 @@ import numpy as np
 from backend.config import DOMAIN_CONFIG, ENCODING_CONFIG
 from backend.translation import T
 
-# Feature type definitions
+# Feature type definitions - Original feature set
 FEATURE_UNITS = {
     0: 'm²',      # Built Area (bebaute Fläche)
     1: 'm',       # Average Building Height
@@ -16,6 +16,18 @@ FEATURE_UNITS = {
     5: 'm²',      # Gross Floor Area (Brutto-Grundfläche)
     6: '',        # Building Mass X-Axis (normalized)
     7: '',        # Building Mass Y-Axis (normalized)
+}
+
+# Feature type definitions - Planning-focused feature set
+FEATURE_UNITS_PLANNING = {
+    0: '',        # GRZ (Grundflächenzahl) - ratio 0-1
+    1: '',        # GFZ (Geschossflächenzahl) - ratio
+    2: 'm',       # Average Building Height
+    3: 'm',       # Height Variability
+    4: '',        # Number of Buildings (count)
+    5: 'm',       # Average Building Distance
+    6: '',        # Street Canyon Aspect Ratio (H/W)
+    7: '',        # Sky View Factor (SVF) - 0-1
 }
 
 def to_physical_units(normalized_values: np.ndarray, feature_indices: list, env_context: dict) -> np.ndarray:
@@ -179,18 +191,22 @@ def format_value_with_unit(value: float, feature_index: int, lang='DE', decimals
         return f"{value:.{decimals}f}"
 
 
-def get_unit_label(feature_index: int, lang='DE') -> str:
+def get_unit_label(feature_index: int, lang='DE', feature_set='original') -> str:
     """
     Get the unit label for a feature.
     
     Args:
         feature_index: Index of the feature (0-7)
         lang: Language code ('DE' or 'EN')
+        feature_set: 'original' or 'planning'
     
     Returns:
         Unit string (e.g., 'm²', 'm', '')
     """
-    unit_key = f'MEASURE_{feature_index}_UNIT'
+    if feature_set == 'planning':
+        unit_key = f'MEASURE_PLANNING_{feature_index}_UNIT'
+    else:
+        unit_key = f'MEASURE_{feature_index}_UNIT'
     return T[lang].get(unit_key, '')
 
 

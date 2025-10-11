@@ -132,7 +132,7 @@ def compute_fitness_street_canyon(heightmap_3d: np.ndarray, wind_direction: int)
 
 def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, buildable_area_in_sq_meters: float) -> np.ndarray:
     """
-    Calculate all 8 features in PHYSICAL UNITS.
+    Calculate all 8 ORIGINAL features in PHYSICAL UNITS.
     
     Returns:
         Array of features in physical units:
@@ -195,6 +195,88 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
         avg_spacing_meters, total_floor_area_m2, center_x, center_y
     ])
 
+
+def calculate_all_features_planning(heightmap: np.ndarray, buildable_mask: np.ndarray, buildable_area_in_sq_meters: float) -> np.ndarray:
+    """
+    Calculate all 8 PLANNING-FOCUSED features (BACKLOG specification).
+    
+    Returns:
+        Array of planning-focused features:
+        [0] GRZ (Grundflächenzahl / Site Coverage Ratio) - ratio 0-1
+        [1] GFZ (Geschossflächenzahl / Floor Area Ratio) - ratio
+        [2] Average Building Height (m)
+        [3] Height Variability (m)
+        [4] Number of Buildings (count)
+        [5] Average Building Distance (m)
+        [6] Street Canyon Aspect Ratio (H/W) - dimensionless
+        [7] Sky View Factor (SVF) - ratio 0-1 (TODO: implement full calculation)
+    """
+    grid_res_y, grid_res_x = heightmap.shape
+    occupied = heightmap > 0
+    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+    pixel_area = pixel_size ** 2
+    
+    # Calculate built area
+    occupied_pixels = np.sum(occupied)
+    built_area_m2 = occupied_pixels * pixel_area
+    
+    building_heights = heightmap[occupied]
+    if not building_heights.any():
+        return np.zeros(8)  # Return zeros for all 8 features
+    
+    # [0] GRZ (Grundflächenzahl) - Site Coverage Ratio
+    # GRZ = Built Area / Total Site Area (buildable area)
+    grz = built_area_m2 / buildable_area_in_sq_meters if buildable_area_in_sq_meters > 0 else 0.0
+    grz = np.clip(grz, 0.0, 1.0)
+    
+    # [1] GFZ (Geschossflächenzahl) - Floor Area Ratio
+    # GFZ = Total Floor Area / Total Site Area
+    # Assuming each meter of height = 1/3 of a floor (3m per floor)
+    total_floor_area_m2 = np.sum(heightmap) * pixel_area
+    gfz = total_floor_area_m2 / buildable_area_in_sq_meters if buildable_area_in_sq_meters > 0 else 0.0
+    
+    # [2] Average Height - heightmap is already in METERS
+    avg_height_meters = np.mean(building_heights)
+    
+    # [3] Height Variability - heightmap is already in METERS
+    height_variability_meters = np.std(building_heights)
+    
+    # [4] Number of Buildings - already a count
+    labeled_array, num_buildings = label(occupied)
+    
+    # [5] Average Building Distance - in meters
+    if num_buildings > 1:
+        centroids = np.array(center_of_mass(occupied, labeled_array, range(1, num_buildings + 1)))
+        diff = centroids[:, None, :] - centroids[None, :, :]
+        dists = np.sqrt(np.sum(diff**2, axis=-1))
+        avg_spacing_pixels = np.mean(dists[np.triu_indices(num_buildings, k=1)])
+        avg_spacing_meters = avg_spacing_pixels * pixel_size
+    else:
+        avg_spacing_meters = 0.0
+    
+    # [6] Street Canyon Aspect Ratio (H/W)
+    # Calculate average height (H) and average street width (W)
+    # Street width = average distance between buildings
+    if avg_spacing_meters > 0:
+        aspect_ratio = avg_height_meters / avg_spacing_meters
+    else:
+        aspect_ratio = 0.0
+    
+    # [7] Sky View Factor (SVF) - Placeholder implementation
+    # TODO: Implement proper SVF calculation using ray-tracing or hemisphere projection
+    # For now, use a simple approximation based on building coverage and height
+    # SVF decreases with higher coverage and taller buildings
+    # Simple approximation: SVF ≈ 1 - (GRZ * normalized_height)
+    max_possible_height = ENCODING_CONFIG['z_length']
+    normalized_height = np.clip(avg_height_meters / max_possible_height, 0.0, 1.0) if max_possible_height > 0 else 0.0
+    svf_approx = 1.0 - (grz * normalized_height * 0.8)  # 0.8 factor to prevent reaching 0 too quickly
+    svf_approx = np.clip(svf_approx, 0.0, 1.0)
+    
+    return np.array([
+        grz, gfz, avg_height_meters, height_variability_meters,
+        num_buildings, avg_spacing_meters, aspect_ratio, svf_approx
+    ])
+
 def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndarray:
     heightmap_2d_solution = encoding_obj.express(env_config['buildable_mask'], genome)
 
@@ -235,12 +317,23 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
     buildable_area_in_sq_meters = np.sum(env_config['buildable_mask']) * (DOMAIN_CONFIG['pixel_size_in_meters'] ** 2)
 
     # --- DYNAMIC FEATURE SELECTION ---
-    # 1. Calculate all 8 possible features.
-    all_features = calculate_all_features(
-        heightmap_2d_solution,
-        env_config['buildable_mask'],
-        buildable_area_in_sq_meters
-    )
+    # Determine which feature set to use
+    feature_set = env_config.get('feature_set', 'original')
+    
+    # 1. Calculate all 8 possible features using the appropriate function
+    if feature_set == 'planning':
+        all_features = calculate_all_features_planning(
+            heightmap_2d_solution,
+            env_config['buildable_mask'],
+            buildable_area_in_sq_meters
+        )
+    else:  # 'original' or default
+        all_features = calculate_all_features(
+            heightmap_2d_solution,
+            env_config['buildable_mask'],
+            buildable_area_in_sq_meters
+        )
+    
     # 2. Filter the features based on the indices provided in the env_config.
     selected_features = all_features[env_config['selected_features']]
     

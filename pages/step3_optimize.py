@@ -454,6 +454,7 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     hard_constraints = session_data.get('hard_constraints', {})
     qd_hyperparams = session_data.get('qd_hyperparams', {})
     objective_function = session_data.get('objective_function', 'simple_porosity')
+    feature_set = session_data.get('feature_set', 'original')
     
     # Retrieve and deserialize cached building data from Step 1 (if available)
     cached_building_data = None
@@ -474,7 +475,7 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
         # profiler = cProfile.Profile()
         # profiler.enable()
         
-        # Start optimization with cached building data
+        # Start optimization with cached building data and feature set
         archive, labels, env_config = start_optimization(
             session_data['site_polygon'],
             session_data['wind_direction'],
@@ -483,8 +484,9 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
             hard_constraints,
             qd_hyperparams,
             objective_function,
-            progress_callback=progress_callback,
-            cached_building_data=cached_building_data
+            cached_building_data=cached_building_data,
+            feature_set=feature_set,
+            progress_callback=progress_callback
         )
         
         if archive and not archive.empty:
@@ -554,6 +556,7 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
                 'xy_length': ENCODING_CONFIG['xy_length'],
                 'selected_features_indices': selected_features,
                 'feature_ranges': user_feature_ranges,  # Store feature constraints for filtering
+                'feature_set': feature_set,  # Store which feature set was used
                 'grid_bounds_native': env_config.get('grid_bounds_native'),  # Design area bounds
                 'expanded_bounds_native': env_config.get('expanded_bounds_native'),  # Expanded visualization bounds
                 'design_offset': env_config.get('design_offset'),  # Design position within expanded grid

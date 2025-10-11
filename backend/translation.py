@@ -54,6 +54,7 @@ T = {
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch-Größe:",
         'STEP2_QD_HYPERPARAMS_INFO': "Höhere Werte = längere Laufzeit, mehr Lösungen. Standard: 1000 Generationen, 5 Emitter.",
 
+        # Original feature set (indices 0-7)
         'MEASURE_0': 'Bebaute Fläche',
         'MEASURE_1': 'Durchschnittliche Bauhöhe',
         'MEASURE_2': 'Variabilität Bauhöhe',
@@ -63,7 +64,17 @@ T = {
         'MEASURE_6': 'Gebäudemasse X-Achse',
         'MEASURE_7': 'Gebäudemasse Y-Achse',
         
-        # Feature units
+        # Planning-focused feature set (indices 0-7) - BACKLOG
+        'MEASURE_PLANNING_0': 'GRZ (Grundflächenzahl)',
+        'MEASURE_PLANNING_1': 'GFZ (Geschossflächenzahl)',
+        'MEASURE_PLANNING_2': 'Durchschnittliche Bauhöhe',
+        'MEASURE_PLANNING_3': 'Variabilität Bauhöhe',
+        'MEASURE_PLANNING_4': 'Anzahl der Gebäude',
+        'MEASURE_PLANNING_5': 'Durchschnittliche Gebäudedistanz',
+        'MEASURE_PLANNING_6': 'Straßenschlucht-Seitenverhältnis (H/W)',
+        'MEASURE_PLANNING_7': 'Sky View Factor (SVF)',
+        
+        # Feature units - Original
         'MEASURE_0_UNIT': 'm²',
         'MEASURE_1_UNIT': 'm',
         'MEASURE_2_UNIT': 'm',
@@ -72,6 +83,24 @@ T = {
         'MEASURE_5_UNIT': 'm²',
         'MEASURE_6_UNIT': '',  # normalized position
         'MEASURE_7_UNIT': '',  # normalized position
+        
+        # Feature units - Planning-focused
+        'MEASURE_PLANNING_0_UNIT': '',  # ratio 0-1
+        'MEASURE_PLANNING_1_UNIT': '',  # ratio
+        'MEASURE_PLANNING_2_UNIT': 'm',
+        'MEASURE_PLANNING_3_UNIT': 'm',
+        'MEASURE_PLANNING_4_UNIT': '',  # count
+        'MEASURE_PLANNING_5_UNIT': 'm',
+        'MEASURE_PLANNING_6_UNIT': '',  # ratio
+        'MEASURE_PLANNING_7_UNIT': '',  # 0-1
+        
+        # Feature set selector
+        'STEP2_FEATURE_SET_HEADER': 'Merkmalsatz auswählen',
+        'STEP2_FEATURE_SET_LABEL': 'Welcher Merkmalsatz soll verwendet werden?',
+        'STEP2_FEATURE_SET_ORIGINAL': 'Original-Merkmale (8)',
+        'STEP2_FEATURE_SET_PLANNING': 'Planungs-Merkmale (BACKLOG)',
+        'STEP2_FEATURE_SET_ORIGINAL_DESC': 'Bebaute Fläche, Höhe, Variabilität, Anzahl, Abstand, GFA, Masse X/Y',
+        'STEP2_FEATURE_SET_PLANNING_DESC': 'GRZ, GFZ, Höhe, Variabilität, Anzahl, Abstand, H/W-Verhältnis, SVF',
         
         'OBJECTIVE_UNIT': '',  # porosity is dimensionless (0-1)
 
@@ -209,6 +238,7 @@ T = {
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch Size:",
         'STEP2_QD_HYPERPARAMS_INFO': "Higher values = longer runtime, more solutions. Default: 1000 generations, 5 emitters.",
         
+        # Original feature set (indices 0-7)
         'MEASURE_0': 'Built Area',
         'MEASURE_1': 'Average Building Height',
         'MEASURE_2': 'Height Variability',
@@ -218,7 +248,17 @@ T = {
         'MEASURE_6': 'Building Mass X-Axis',
         'MEASURE_7': 'Building Mass Y-Axis',
         
-        # Feature units
+        # Planning-focused feature set (indices 0-7) - BACKLOG
+        'MEASURE_PLANNING_0': 'GRZ (Site Coverage Ratio)',
+        'MEASURE_PLANNING_1': 'GFZ (Floor Area Ratio)',
+        'MEASURE_PLANNING_2': 'Average Building Height',
+        'MEASURE_PLANNING_3': 'Height Variability',
+        'MEASURE_PLANNING_4': 'Number of Buildings',
+        'MEASURE_PLANNING_5': 'Average Building Distance',
+        'MEASURE_PLANNING_6': 'Street Canyon Aspect Ratio (H/W)',
+        'MEASURE_PLANNING_7': 'Sky View Factor (SVF)',
+        
+        # Feature units - Original
         'MEASURE_0_UNIT': 'm²',
         'MEASURE_1_UNIT': 'm',
         'MEASURE_2_UNIT': 'm',
@@ -227,6 +267,24 @@ T = {
         'MEASURE_5_UNIT': 'm²',
         'MEASURE_6_UNIT': '',  # normalized position
         'MEASURE_7_UNIT': '',  # normalized position
+        
+        # Feature units - Planning-focused
+        'MEASURE_PLANNING_0_UNIT': '',  # ratio 0-1
+        'MEASURE_PLANNING_1_UNIT': '',  # ratio
+        'MEASURE_PLANNING_2_UNIT': 'm',
+        'MEASURE_PLANNING_3_UNIT': 'm',
+        'MEASURE_PLANNING_4_UNIT': '',  # count
+        'MEASURE_PLANNING_5_UNIT': 'm',
+        'MEASURE_PLANNING_6_UNIT': '',  # ratio
+        'MEASURE_PLANNING_7_UNIT': '',  # 0-1
+        
+        # Feature set selector
+        'STEP2_FEATURE_SET_HEADER': 'Select Feature Set',
+        'STEP2_FEATURE_SET_LABEL': 'Which feature set should be used?',
+        'STEP2_FEATURE_SET_ORIGINAL': 'Original Features (8)',
+        'STEP2_FEATURE_SET_PLANNING': 'Planning-Focused Features (BACKLOG)',
+        'STEP2_FEATURE_SET_ORIGINAL_DESC': 'Built area, height, variability, count, distance, GFA, mass X/Y',
+        'STEP2_FEATURE_SET_PLANNING_DESC': 'GRZ, GFZ, height, variability, count, distance, H/W ratio, SVF',
         
         'OBJECTIVE_UNIT': '',  # porosity is dimensionless (0-1)
 
@@ -308,16 +366,20 @@ def get_translation(lang='DE'):
     """Helper function to get translations for a specific language"""
     return T.get(lang, T['DE'])
 
-def translate_feature_labels(feature_indices, lang='DE'):
+def translate_feature_labels(feature_indices, lang='DE', feature_set='original'):
     """
-    Translate feature indices to labels based on language.
+    Translate feature indices to labels based on language and feature set.
     
     Args:
         feature_indices: List of feature indices (0-7)
         lang: Language code ('DE' or 'EN')
+        feature_set: 'original' or 'planning'
     
     Returns:
         List of translated feature labels
     """
     translations = T.get(lang, T['DE'])
-    return [translations[f'MEASURE_{idx}'] for idx in feature_indices]
+    if feature_set == 'planning':
+        return [translations.get(f'MEASURE_PLANNING_{idx}', f'Feature {idx}') for idx in feature_indices]
+    else:
+        return [translations.get(f'MEASURE_{idx}', f'Feature {idx}') for idx in feature_indices]
