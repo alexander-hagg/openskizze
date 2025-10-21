@@ -343,17 +343,28 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
     
     if lang is None: lang = 'DE'
     
-    # Get feature set from input or session (prioritize input)
-    feature_set = feature_set_input if feature_set_input else (session_data.get('feature_set', 'original') if session_data else 'original')
-    
-    # If triggered by URL change, get selected_indices from session_data
+    # Determine feature_set with correct priority:
+    # The restoration callback will fire shortly after URL navigation and set the correct value
+    # So on URL trigger, we should skip if session has data (let restoration handle it)
     if ctx.triggered_id == 'url':
-        if pathname != '/step2':
+        # If we have session data with a feature_set, skip this URL trigger
+        # The restore_step2_from_session callback will fire next and trigger us again with correct values
+        if session_data and 'feature_set' in session_data:
             return no_update
-        if session_data and 'selected_features' in session_data:
+        # No session data - use defaults
+        feature_set = 'original'
+        if pathname == '/step2':
+            return dbc.Alert(T[lang]['STEP2_NO_FEATURES_SELECTED'] if 'STEP2_NO_FEATURES_SELECTED' in T[lang] else "Bitte mindestens ein Merkmal auswählen.", color="info")
+        return no_update
+    else:
+        # User interaction or restoration callback - use current input value
+        # Prioritize feature_set_input (the component's current value) over session
+        # because this callback fires AFTER the user changes the selector
+        feature_set = feature_set_input if feature_set_input else (session_data.get('feature_set', 'original') if session_data else 'original')
+        print(f"[DEBUG-CREATE-SLIDERS] Creating sliders for feature_set='{feature_set}', triggered_by={ctx.triggered_id}, feature_set_input='{feature_set_input}'")
+        # Also get selected features from session if available
+        if session_data and 'selected_features' in session_data and not selected_indices:
             selected_indices = session_data['selected_features']
-        else:
-            return no_update
     
     if not selected_indices:
         return dbc.Alert(T[lang]['STEP2_NO_FEATURES_SELECTED'] if 'STEP2_NO_FEATURES_SELECTED' in T[lang] else "Bitte mindestens ein Merkmal auswählen.", color="info")
@@ -426,20 +437,14 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
             dynamic_ranges = None
 
     # Get saved feature ranges from session if available
-    # Only use saved ranges if they're for the current feature set
+    # Use namespaced ranges for the current feature set
     saved_ranges = {}
-    if session_data:
-        saved_feature_set = session_data.get('feature_set', 'original')
-        if saved_feature_set == feature_set:
-            saved_ranges = session_data.get('feature_ranges', {})
-        else:
-            print(f"[DEBUG] Feature set changed (saved: {saved_feature_set}, current: {feature_set}), using default ranges")
-    
-    # Debug: Print what we're restoring
-    if saved_ranges:
-        print(f"[DEBUG] Restoring feature ranges from session: {saved_ranges}")
+    ranges_key = f'feature_ranges_{feature_set}'
+    if session_data and ranges_key in session_data:
+        saved_ranges = session_data[ranges_key]
+        print(f"[DEBUG] Restoring {len(saved_ranges)} feature ranges from {ranges_key}")
     else:
-        print(f"[DEBUG] No saved feature ranges found, using full dynamic ranges")
+        print(f"[DEBUG] No saved ranges found for {ranges_key}, using full dynamic ranges")
     
     for i, index in enumerate(sorted_indices):
         label = labels[i]
@@ -535,20 +540,26 @@ def toggle_advanced_mode(advanced_mode):
     Output('qd-emitters-input', 'value', allow_duplicate=True),
     Output('qd-niches-input', 'value', allow_duplicate=True),
     Output('qd-batch-size-input', 'value', allow_duplicate=True),
+    Output('objective-function-selector', 'value', allow_duplicate=True),
+    Output('feature-set-selector', 'value', allow_duplicate=True),
     Input('session-store', 'data'),
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
 def restore_step2_from_session(session_data, pathname):
     if pathname != '/step2' or not session_data:
-        return no_update, no_update, no_update, no_update, no_update, no_update, no_update
+        return (no_update,) * 9
     
     selected_features = session_data.get('selected_features')
     hard_constraints = session_data.get('hard_constraints', {})
     qd_params = session_data.get('qd_hyperparams', {})
+    objective_function = session_data.get('objective_function', 'simple_porosity')
+    feature_set = session_data.get('feature_set', 'original')
     
     max_height = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])  # Already in meters
     min_distance = hard_constraints.get('min_distance', 0)
+    
+    print(f"[DEBUG-RESTORE] Restoring feature_set='{feature_set}', max_height={max_height}m, min_distance={min_distance}m")
     
     qd_generations = qd_params.get('num_generations', QD_CONFIG['num_generations'])
     qd_emitters = qd_params.get('num_emitters', QD_CONFIG['num_emitters'])
@@ -556,9 +567,13 @@ def restore_step2_from_session(session_data, pathname):
     qd_batch_size = qd_params.get('batch_size', QD_CONFIG['batch_size'])
     
     if selected_features is not None:
-        return selected_features, int(max_height), min_distance, qd_generations, qd_emitters, qd_niches, qd_batch_size
+        return (selected_features, int(max_height), min_distance, 
+                qd_generations, qd_emitters, qd_niches, qd_batch_size,
+                objective_function, feature_set)
     
-    return no_update, int(max_height), min_distance, qd_generations, qd_emitters, qd_niches, qd_batch_size
+    return (no_update, int(max_height), min_distance, 
+            qd_generations, qd_emitters, qd_niches, qd_batch_size,
+            objective_function, feature_set)
 
 # --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters, objective function, and feature set to the session ---
 @callback(
@@ -575,43 +590,105 @@ def restore_step2_from_session(session_data, pathname):
     Input('feature-set-selector', 'value'),
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
+    State('url', 'pathname'),
     prevent_initial_call=True
 )
 def update_session_with_features_and_ranges(
     selected_indices, slider_values, max_height, min_distance,
     qd_generations, qd_emitters, qd_niches, qd_batch_size,
     objective_function, feature_set,
-    slider_ids, session_data
+    slider_ids, session_data, pathname
 ):
     from dash import ctx
     session_data = session_data or {}
     
-    # Check if feature set changed - if so, clear saved ranges to force recalculation
+    print(f"[DEBUG-SESSION-UPDATE] Called with feature_set='{feature_set}', triggered_by={ctx.triggered_id}, pathname={pathname}")
+    
+    # Detect if we're in restoration phase:
+    # When returning to page 2, constraint components fire with their default values BEFORE restoration callback sets correct values
+    # Key insight: During restoration, the constraint input values DON'T MATCH the session values
+    # During normal user interaction, we're updating the session to MATCH the input
+    on_step2 = (pathname == '/step2')
+    triggered_by_feature_selector = (ctx.triggered_id == 'feature-set-selector')
+    triggered_by_constraint = (ctx.triggered_id in ['max-height-constraint', 'min-distance-constraint'])
+    
+    # Check if this was triggered by restoration (not user interaction)
+    triggered_by_restoration = False
+    if ctx.triggered:
+        # If multiple inputs triggered at once, it's likely restoration
+        if len(ctx.triggered) > 3:
+            triggered_by_restoration = True
+        # OR if a constraint fired with the system default value while we have a different saved value
+        # AND the feature_set is also wrong (indicating pre-restoration state)
+        elif triggered_by_constraint and session_data.get('hard_constraints'):
+            saved_max = session_data['hard_constraints'].get('max_height', ENCODING_CONFIG['z_length'])
+            saved_min = session_data['hard_constraints'].get('min_distance', 0)
+            saved_feature_set = session_data.get('feature_set', 'original')
+            
+            # Additional check: Is the feature_set also stale (wrong)?
+            # During restoration, BOTH constraints and feature_set are stale
+            # After restoration completes, feature_set is correct
+            feature_set_is_stale = (feature_set != saved_feature_set)
+            
+            if ctx.triggered_id == 'max-height-constraint':
+                if max_height == ENCODING_CONFIG['z_length'] and saved_max != ENCODING_CONFIG['z_length'] and feature_set_is_stale:
+                    # Input is default, saved is different, AND feature_set is wrong → pre-restoration
+                    print(f"[DEBUG] Detected stale max_height during restoration: input={max_height}, saved={saved_max}, feature_set stale={feature_set_is_stale}")
+                    triggered_by_restoration = True
+            elif ctx.triggered_id == 'min-distance-constraint':
+                if min_distance == 0 and saved_min != 0 and feature_set_is_stale:
+                    # Input is default, saved is different, AND feature_set is wrong → pre-restoration
+                    print(f"[DEBUG] Detected stale min_distance during restoration: input={min_distance}, saved={saved_min}, feature_set stale={feature_set_is_stale}")
+                    triggered_by_restoration = True
+    
+    # Use namespaced feature ranges (separate storage for each feature set)
+    # BUT: When feature_set changes, the current slider values belong to the OLD feature set
+    # So we should NOT save them to the NEW feature set's namespace
+    ranges_key = f'feature_ranges_{feature_set}'
+    
+    # Check if feature set changed - log it but DON'T clear ranges
+    # Each feature set has its own namespace, so switching doesn't interfere
     previous_feature_set = session_data.get('feature_set', 'original')
-    if feature_set != previous_feature_set:
-        print(f"[DEBUG] Feature set changed from {previous_feature_set} to {feature_set}, clearing saved ranges")
-        session_data['feature_ranges'] = {}  # Clear old ranges
+    feature_set_changed = (feature_set != previous_feature_set and not triggered_by_restoration)
+    
+    if feature_set_changed:
+        print(f"[DEBUG] Feature set changed from {previous_feature_set} to {feature_set}")
+    elif feature_set != previous_feature_set and triggered_by_restoration:
+        print(f"[DEBUG] Feature set restored to {feature_set}")
     
     # Save feature selections
     session_data['selected_features'] = selected_indices
     
-    # Only update feature_ranges if we have valid slider data AND feature set hasn't just changed
-    # This prevents overwriting saved ranges when sliders are being recreated
-    if slider_ids and slider_values and feature_set == previous_feature_set:
+    # Save feature_ranges to the appropriate namespace
+    # BUT: Skip saving if feature_set just changed (current sliders belong to old feature set)
+    if slider_ids and slider_values and not feature_set_changed:
         new_feature_ranges = {
             str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
         }
         # Only save if we have actual data (not empty dict)
         if new_feature_ranges:
-            session_data['feature_ranges'] = new_feature_ranges
+            session_data[ranges_key] = new_feature_ranges
+            print(f"[DEBUG] Saved {len(new_feature_ranges)} ranges to {ranges_key}")
+    elif feature_set_changed:
+        print(f"[DEBUG] Skipping range save - feature set just changed (sliders belong to old set)")
 
     # Save hard constraints (max_height is already in meters, no conversion needed)
     # Preserve existing values if new values are None
+    # ALWAYS save constraints, even if feature_set changed (constraints are independent of feature set)
+    # BUT: Skip saving if triggered during restoration phase (values are stale component defaults)
     existing_constraints = session_data.get('hard_constraints', {})
-    session_data['hard_constraints'] = {
-        'max_height': max_height if max_height is not None else existing_constraints.get('max_height', ENCODING_CONFIG['z_length']),
-        'min_distance': min_distance if min_distance is not None else existing_constraints.get('min_distance', 0)
-    }
+    if not (triggered_by_restoration and triggered_by_constraint):
+        # Normal operation - save the constraint values
+        session_data['hard_constraints'] = {
+            'max_height': max_height if max_height is not None else existing_constraints.get('max_height', ENCODING_CONFIG['z_length']),
+            'min_distance': min_distance if min_distance is not None else existing_constraints.get('min_distance', 0)
+        }
+        print(f"[DEBUG] Saved hard_constraints: max_height={session_data['hard_constraints']['max_height']}m, min_distance={session_data['hard_constraints']['min_distance']}m")
+    else:
+        # Restoration phase - keep existing values
+        if 'hard_constraints' not in session_data:
+            session_data['hard_constraints'] = existing_constraints
+        print(f"[DEBUG] Keeping existing hard_constraints during restoration: max_height={session_data['hard_constraints'].get('max_height', 'N/A')}m")
     
     # Save QD hyperparameters - preserve existing values if new values are None
     existing_qd = session_data.get('qd_hyperparams', {})
@@ -625,7 +702,15 @@ def update_session_with_features_and_ranges(
     # Save objective function selection
     session_data['objective_function'] = objective_function if objective_function else 'simple_porosity'
     
-    # Save feature set selection
-    session_data['feature_set'] = feature_set if feature_set else 'original'
+    # Save feature set selection - BUT only if triggered by the feature-set-selector itself
+    # or by explicit user interaction (not during restoration phase)
+    # This prevents accidentally overwriting with stale component values during page navigation
+    if triggered_by_feature_selector:
+        session_data['feature_set'] = feature_set if feature_set else 'original'
+        print(f"[DEBUG-SESSION-UPDATE] Saved feature_set='{feature_set}' to session (user selected)")
+    else:
+        # Keep existing value - don't overwrite during restoration or other input changes
+        existing_feature_set = session_data.get('feature_set', 'original')
+        print(f"[DEBUG-SESSION-UPDATE] Keeping existing feature_set='{existing_feature_set}' (not triggered by selector)")
     
     return session_data
