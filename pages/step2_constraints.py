@@ -236,9 +236,11 @@ def update_min_distance_display(value):
     Output('feature-range-sliders-container', 'children', allow_duplicate=True),
     Input('presets-dropdown', 'value'),
     State('language-store', 'data'),
+    State('feature-set-selector', 'value'),
+    State('session-store', 'data'),
     prevent_initial_call=True
 )
-def apply_preset(preset_key, lang):
+def apply_preset(preset_key, lang, feature_set_input, session_data):
     """Apply preset feature selections - uses default ranges, not preset-specific ranges"""
     from backend.units import get_unit_label
     
@@ -246,6 +248,10 @@ def apply_preset(preset_key, lang):
         return no_update, no_update
     
     if lang is None: lang = 'DE'
+    
+    # Determine feature_set
+    feature_set = feature_set_input if feature_set_input else (session_data.get('feature_set', 'original') if session_data else 'original')
+    
     presets = get_presets(lang)
     preset = presets[preset_key]
     selected_indices = preset['features']
@@ -258,15 +264,18 @@ def apply_preset(preset_key, lang):
     
     # Get translated labels for sorted indices
     sorted_indices = sorted(selected_indices)
-    labels = translate_feature_labels(sorted_indices, lang)
+    labels = translate_feature_labels(sorted_indices, lang, feature_set)
     
     for i, index in enumerate(sorted_indices):
         label = labels[i]
-        unit = get_unit_label(index, lang)
+        unit = get_unit_label(index, lang, feature_set)
         label_with_unit = f"{label} ({unit})" if unit else label
         
-        # Use default ranges from config (these are now in physical units after our changes)
-        default_range = DOMAIN_CONFIG['feat_ranges'][index]
+        # Use default ranges from config based on feature_set
+        if feature_set == 'planning':
+            default_range = DOMAIN_CONFIG['feat_ranges_planning'][index]
+        else:
+            default_range = DOMAIN_CONFIG['feat_ranges'][index]
         min_val, max_val = default_range[0], default_range[1]
         
         # Create slider based on feature type
@@ -445,18 +454,33 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         label = labels[i]
         unit = get_unit_label(index, lang, feature_set)
         
-        # Use dynamic ranges if available, otherwise fall back to default
-        if dynamic_ranges is not None:
-            min_val, max_val = dynamic_ranges[index]
+        # ALWAYS use config defaults for slider min/max limits
+        # Dynamic ranges are only used for initial value suggestions when no saved ranges exist
+        # Use the correct ranges based on feature_set
+        if feature_set == 'planning':
+            default_range = DOMAIN_CONFIG['feat_ranges_planning'][index]
         else:
             default_range = DOMAIN_CONFIG['feat_ranges'][index]
-            min_val, max_val = default_range[0], default_range[1]
+        min_val, max_val = default_range[0], default_range[1]
         
         # Add unit to label
         label_with_unit = f"{label} ({unit})" if unit else label
         
         # Check if user has previously set a custom range for this feature
         user_range = saved_ranges.get(str(index), None)
+        
+        # GRZ and GFZ (planning features 0 and 1) should NEVER use dynamic ranges
+        # They are fixed percentages: GRZ = 0.0-1.0, GFZ = 0.0-1.0 (or higher for multi-story)
+        is_percentage_ratio = (feature_set == 'planning' and index in [0, 1])
+        
+        # If no saved range exists, use dynamic range as initial value suggestion (if available)
+        # This gives users a smart starting point while keeping full config range available
+        # EXCEPT for GRZ/GFZ which are always full range
+        if user_range is None and dynamic_ranges is not None and not is_percentage_ratio:
+            dyn_min, dyn_max = dynamic_ranges[index]
+            # Use dynamic range as suggested initial value, but keep it within config limits
+            suggested_range = [max(min_val, dyn_min), min(max_val, dyn_max)]
+            user_range = suggested_range
         
         slider_div = None
         # Integer sliders for count-based features

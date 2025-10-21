@@ -446,12 +446,25 @@ def update_parallel_coords_s3(results_data, language):
 def run_optimization(set_progress, n_clicks, session_data, existing_results):
     if n_clicks:
         cleanup_old_files(TEMP_RESULTS_DIR)
-        
-    if not n_clicks or not session_data or not session_data.get('site_polygon'):
-        # Don't overwrite existing results, just show no update
+    
+    # Validate prerequisites before starting optimization
+    if not n_clicks:
+        print("[run_optimization] No button click detected")
         if existing_results:
             return no_update
         return None
+    
+    if not session_data:
+        print("[run_optimization] ✗ ERROR: No session data available")
+        print("[run_optimization] Please go back to Step 1 and select a parcel")
+        return no_update
+    
+    if not session_data.get('site_polygon'):
+        print("[run_optimization] ✗ ERROR: No parcel selected")
+        print("[run_optimization] Please go back to Step 1 and select a parcel")
+        return no_update
+    
+    print(f"[run_optimization] ✓ Starting optimization (click #{n_clicks})")
 
     selected_features = session_data.get('selected_features', list(range(8)))
     user_feature_ranges = session_data.get('feature_ranges', {})

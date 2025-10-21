@@ -394,7 +394,9 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_meters
     
     buildable_pixels = np.sum(buildable_mask)
     if buildable_pixels == 0:
-        return DOMAIN_CONFIG['feat_ranges'], 0.0
+        # Return appropriate default ranges based on feature_set
+        default_ranges = DOMAIN_CONFIG['feat_ranges_planning'] if feature_set == 'planning' else DOMAIN_CONFIG['feat_ranges']
+        return default_ranges, 0.0
         
     buildable_area_m2 = buildable_pixels * (pixel_size ** 2)
     grid_res = buildable_mask.shape[0]
@@ -403,10 +405,12 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_meters
     
     if feature_set == 'planning':
         # Planning-focused feature ranges (BACKLOG specification)
-        # Maximum possible floor area depends on max height constraint
-        max_floors = max_height_meters / 3.0
-        max_possible_floor_area_m2 = buildable_area_m2 * max_floors
-        max_gfz = max_possible_floor_area_m2 / buildable_area_m2 if buildable_area_m2 > 0 else 5.0
+        # GRZ and GFZ are FIXED percentage ranges (not dynamically calculated)
+        # GRZ: Site coverage ratio, always 0.0-1.0 (0-100%)
+        # GFZ: Floor area ratio = GRZ × number of floors
+        # Typical GFZ values: 0.4-0.8 (low density), 1.0-3.0 (medium), 3.0-6.0 (high density)
+        # We use 0-10 to allow extreme high-density scenarios
+        max_gfz = 10.0
         
         # Street canyon aspect ratio: if min distance is 0, buildings can be very close
         # Max aspect ratio when buildings are close: H / small_distance
@@ -414,8 +418,8 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_meters
         max_aspect_ratio = 5.0 if min_distance_meters < 3 else max_height_meters / min_distance_meters
         
         new_ranges = [
-            [0.0, 1.0],                                    # 0: GRZ (Site Coverage Ratio) 0-1
-            [0.0, max_gfz],                                # 1: GFZ (Floor Area Ratio)
+            [0.0, 1.0],                                    # 0: GRZ (Site Coverage Ratio) 0-1 FIXED
+            [0.0, max_gfz],                                # 1: GFZ (Floor Area Ratio) 0-10 FIXED
             [0.0, max_height_meters],                      # 2: Avg Height (m)
             [0.0, max_height_meters / 2],                  # 3: Height Variability (m)
             [0.0, ENCODING_CONFIG['max_num_buildings']],   # 4: Number of Buildings (count)

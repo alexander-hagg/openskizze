@@ -44,9 +44,24 @@ DOMAIN_CONFIG = {
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
     'labels': [T['DE'][f'MEASURE_{i}'] for i in range(8)],
     'feat_ranges': [
-        [0.0, 0.15], [0.0, 3.0], [0.0, 6.0], 
-        [0.0, 10.0], [0.0, 1.0], [0.0, 1.0], 
-        [0.0, 1.0], [0.0, 1.0],
+        [0.0, 10000.0],  # 0: Built-up Area (m²) - up to 10,000 m²
+        [0.0, 30.0],     # 1: Avg Height (m) - up to 30m
+        [0.0, 15.0],     # 2: Height Variability (m) - up to 15m
+        [0.0, 10.0],     # 3: Number of Buildings (count) - up to 10
+        [0.0, 100.0],    # 4: Avg Distance (m) - up to 100m
+        [0.0, 50000.0],  # 5: Gross Floor Area (m²) - up to 50,000 m²
+        [0.0, 1.0],      # 6: Building Mass X-axis (normalized 0-1)
+        [0.0, 1.0],      # 7: Building Mass Y-axis (normalized 0-1)
+    ],
+    'feat_ranges_planning': [
+        [0.0, 1.0],      # 0: GRZ (Site Coverage Ratio) - FIXED 0-1 (0-100%)
+        [0.0, 10.0],     # 1: GFZ (Floor Area Ratio) - FIXED 0-10
+        [0.0, 30.0],     # 2: Avg Height (m) - up to 30m
+        [0.0, 15.0],     # 3: Height Variability (m) - up to 15m
+        [0.0, 10.0],     # 4: Number of Buildings (count) - up to 10
+        [0.0, 100.0],    # 5: Avg Distance (m) - up to 100m
+        [0.0, 5.0],      # 6: Street Canyon Aspect Ratio (H/W) - up to 5.0
+        [0.0, 1.0],      # 7: Sky View Factor (SVF) - FIXED 0-1
     ],
     'environment_border_size': 1.2,
 }
