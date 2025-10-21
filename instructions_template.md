@@ -1,5 +1,30 @@
 # OpenSKIZZE Coding Agent Instructions
 
+## Quick Start (Read This First!)
+
+**What is this?** An interactive web app for urban planners to explore building layouts optimized for climate (wind flow, heat). Uses Quality-Diversity algorithms to generate 100-1000 diverse solutions.
+
+**Tech at a glance**: Python 3.12, Dash web framework, PyRibs QD optimizer, GeoPandas for GIS, NumPy-heavy
+
+**Critical constraints**:
+- Genome dimension is FIXED at 60 (never change)
+- Always use physical units (meters, m²)
+- Always add bilingual strings (German + English)
+- Performance matters: evaluation runs 80,000+ times
+
+**Before making any changes**:
+1. Read the **Core Workflow** section (5 steps)
+2. Check **Common Tasks** for your specific task
+3. Review **Common Pitfalls** to avoid issues
+
+**Getting started**:
+```bash
+cd /home/runner/work/openskizze-gui/openskizze-gui
+python run.py  # Start at http://127.0.0.1:8050
+```
+
+---
+
 ## Project Overview
 
 OpenSKIZZE is an interactive urban planning decision-support tool for climate-aware building massing exploration. It uses Quality-Diversity optimization (PyRibs) with ML surrogates to generate diverse urban design solutions optimized for ventilation and heat metrics.
@@ -160,12 +185,15 @@ openskizze-gui/
 
 ### Installation
 ```bash
-# Note: requirements.txt has version conflicts with Python 3.12
-# dash-extensions 1.1.1 not available, use 1.0.x or 2.0.x
-pip install -r requirements.txt  # May need manual fixes
+# Install dependencies (Python 3.12 compatible)
+pip install -r requirements.txt
 
-# Core packages that must work:
-pip install dash==2.17.0 dash-bootstrap-components plotly pyribs geopandas numpy scipy
+# Known issue: dash-extensions 1.1.1 not available for Python 3.12
+# If installation fails, manually install compatible version:
+pip install dash-extensions>=1.0.0,<1.1.0
+
+# Minimal core packages (if full requirements.txt fails):
+pip install dash==2.17.0 dash-bootstrap-components plotly pyribs geopandas numpy scipy pandas shapely
 ```
 
 ### Running the App
@@ -175,11 +203,17 @@ python run.py  # Starts Flask dev server on http://127.0.0.1:8050
 
 ### Running Tests
 ```bash
-# Individual test
+# Individual test (many have hardcoded paths, may need adjustment)
 python tests/test_feature_constraints.py
 
-# All tests (no pytest configured)
-for f in tests/test_*.py; do python "$f"; done
+# Note: Test files often have hardcoded sys.path.insert statements
+# pointing to specific developer machines. You may need to:
+# 1. Comment out sys.path.insert lines
+# 2. Run from repo root: python tests/test_X.py
+# 3. Or add repo to PYTHONPATH: export PYTHONPATH=$PWD:$PYTHONPATH
+
+# Run all tests (no pytest/tox configured)
+for f in tests/test_*.py; do python "$f" 2>&1 | grep -E "PASS|FAIL|Error"; done
 ```
 
 ### Building Dependencies
@@ -232,6 +266,51 @@ for f in tests/test_*.py; do python "$f"; done
 - **GeoPandas**: https://geopandas.org/ (CRS, spatial joins)
 - **NRW Open Data**: https://www.opengeodata.nrw.de/ (LOD2, ALKIS)
 
+## Common Pitfalls and Solutions
+
+### 1. Test Files with Hardcoded Paths
+**Problem**: Tests have `sys.path.insert(0, '/home/alex/Documents/...')`
+**Solution**: Comment out or adjust to `/home/runner/work/openskizze-gui/openskizze-gui`
+
+### 2. Empty Archive After Optimization
+**Problem**: All solutions have fitness 0.0, archive stays empty
+**Solutions**:
+- Switch from `simple_porosity` to `street_canyon` objective (dense urban)
+- Reduce constraints (max_height, min_distance)
+- Check `/diagnostic` page for fitness values
+- Verify feature ranges aren't too narrow
+
+### 3. CRS Confusion
+**Problem**: Buildings/parcels appear in wrong location
+**Solution**: Always convert to/from correct CRS:
+- NRW data native: EPSG:25832 (UTM)
+- Web map display: EPSG:4326 (WGS84)
+- Use `geopandas.to_crs()` for all conversions
+
+### 4. Missing Bilingual Strings
+**Problem**: New UI shows undefined or English-only text
+**Solution**: Always add both:
+```python
+T['DE']['MY_NEW_LABEL'] = "Deutscher Text"
+T['EN']['MY_NEW_LABEL'] = "English Text"
+```
+
+### 5. Performance Regression in Evaluation
+**Problem**: Optimization becomes slow after changes
+**Solution**:
+- Profile: `python -m cProfile -o out.prof your_script.py`
+- Avoid: `scipy.ndimage.label()` calls (use cached result)
+- Avoid: Python loops over arrays (use NumPy broadcasting)
+- Check: 2D rotation before 3D conversion (not after)
+
+### 6. Dash Callback Errors
+**Problem**: Callback not triggering or multiple updates
+**Solution**:
+- Use `prevent_initial_call=True` to avoid startup triggers
+- Check Output/Input/State IDs match component IDs exactly
+- Use `no_update` to skip updates conditionally
+- Pattern-matching: `{'type': 'plot', 'index': ALL}` for dynamic components
+
 ## Anti-Patterns to Avoid
 
 1. **Breaking the genome dimension** (must stay 60)
@@ -242,6 +321,8 @@ for f in tests/test_*.py; do python "$f"; done
 6. **Removing caching** (critical for performance)
 7. **Using pickle for new features** (security risk)
 8. **Ignoring physical units** (always meters, m²)
+9. **Calling `scipy.ndimage.label()` multiple times** (cache it)
+10. **Rotating 3D arrays** instead of 2D heightmaps
 
 ## Quick Reference Commands
 
@@ -273,6 +354,59 @@ git status --short
 4. **Import errors**: Check requirements.txt versions, Python 3.12 compatibility
 5. **UI not updating**: Check Dash callback dependencies, use `prevent_initial_call=True`
 6. **Data fetching fails**: NRW APIs may be slow/down, check `backend/data_io.py` for fake parcel fallback
+
+## Practical Example: Adding a Simple Check
+
+Here's a step-by-step example following the instructions to add a minimum GRZ (site coverage) check:
+
+```python
+# 1. Add constraint to backend/config.py (if needed for defaults)
+# No changes needed - constraints come from UI
+
+# 2. Update backend/evaluation.py check_constraints()
+def check_constraints(heightmap: np.ndarray, constraints: dict):
+    is_violated = False
+    
+    # ... existing max_height and min_distance checks ...
+    
+    # NEW: Min GRZ (site coverage ratio) check
+    min_grz = constraints.get('min_grz')
+    if min_grz is not None and min_grz > 0:
+        pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+        occupied_pixels = np.sum(heightmap > 0)
+        total_pixels = heightmap.shape[0] * heightmap.shape[1]
+        actual_grz = occupied_pixels / total_pixels if total_pixels > 0 else 0
+        
+        if actual_grz < min_grz:
+            is_violated = True
+    
+    return heightmap, is_violated
+
+# 3. Add UI control in pages/step2_constraints.py
+# In hard constraints section:
+dbc.Label(T[lang]['STEP2_MIN_GRZ_LABEL']),
+dbc.Input(
+    id='min-grz-input',
+    type='number',
+    min=0.0, max=1.0, step=0.05,
+    placeholder=T[lang]['STEP2_MIN_GRZ_PLACEHOLDER']
+),
+
+# 4. Add translations to backend/translation.py
+T['DE']['STEP2_MIN_GRZ_LABEL'] = "Minimale Grundflächenzahl (GRZ):"
+T['DE']['STEP2_MIN_GRZ_PLACEHOLDER'] = "z.B. 0.2 (= 20% Bebauung)"
+T['EN']['STEP2_MIN_GRZ_LABEL'] = "Minimum site coverage (GRZ):"
+T['EN']['STEP2_MIN_GRZ_PLACEHOLDER'] = "e.g. 0.2 (= 20% coverage)"
+
+# 5. Wire up callback to pass constraint to optimizer
+# (in step2_constraints.py or step3_optimize.py)
+```
+
+This example demonstrates:
+- Physical units (ratio 0-1)
+- Bilingual strings
+- Minimal changes (only 4 files)
+- Following existing patterns
 
 ## Success Criteria for Changes
 
