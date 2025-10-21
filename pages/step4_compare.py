@@ -92,6 +92,18 @@ def layout(lang='DE'):
             ], md=7),
         ], className="mb-4"),
         
+        # New section: Feature vs Objective Scatter Plots
+        dbc.Row([
+            dbc.Col([
+                html.H4(T[lang].get('STEP5_FEATURE_VS_OBJECTIVE_HEADER', 'Feature vs Objective Analysis')),
+                html.P(T[lang].get('STEP5_FEATURE_VS_OBJECTIVE_INFO', 
+                       'Scatter plots showing the relationship between each feature and the objective function. '
+                       'Each point represents one solution in the archive.'),
+                       className="text-muted small"),
+                dcc.Loading(html.Div(id='feature-objective-plots-container')),
+            ], md=12),
+        ], className="mb-4"),
+        
     ], fluid=True)
 
 
@@ -516,3 +528,120 @@ def generate_correlation_heatmap(results_data, pathname, language):
             )]
         )
         return error_fig
+
+@callback(
+    Output('feature-objective-plots-container', 'children'),
+    Input('results-store', 'data'),
+    Input('url', 'pathname'),
+    State('language-store', 'data'),
+)
+def generate_feature_objective_plots(results_data, pathname, language):
+    """Generate scatter plots showing objective vs each feature"""
+    from backend.translation import translate_feature_labels
+    
+    # Get current language (default to 'DE')
+    lang = language if language else 'DE'
+    
+    # Only render on this page
+    if pathname != '/step4':
+        return []
+    
+    if not results_data or not results_data.get('full_results_path'):
+        return dbc.Alert(T[lang].get('STEP5_NO_RESULTS_TEXT', 'No optimization results available'), color="light")
+    
+    try:
+        # Load elite solutions list
+        results_path = results_data['full_results_path']
+        with open(results_path, 'rb') as f:
+            list_of_elites = pickle.load(f)
+        
+        if not list_of_elites:
+            return dbc.Alert(T[lang].get('STEP5_NO_ELITES', 'No elite solutions found'), color="warning")
+        
+        # Get feature set from results metadata
+        feature_set = results_data.get('feature_set', 'original')
+        
+        # Get feature indices
+        feature_indices = results_data.get('selected_features_indices', [])
+        if not feature_indices:
+            return dbc.Alert(T[lang].get('STEP5_NO_LABELS', 'No feature labels available'), color="warning")
+        
+        num_features = len(feature_indices)
+        
+        # Get feature labels
+        feature_labels = translate_feature_labels(feature_indices, lang, feature_set)
+        
+        # Add units to feature labels
+        from backend.units import get_unit_label
+        labels_with_units = []
+        for i, label in enumerate(feature_labels):
+            feature_idx = feature_indices[i]
+            unit = get_unit_label(feature_idx, lang)
+            if unit:
+                labels_with_units.append(f"{label} ({unit})")
+            else:
+                labels_with_units.append(label)
+        
+        # Get objective label
+        objective_label = T[lang].get('STEP6_OBJECTIVE', 'Objective:').replace(':', '')
+        
+        # Extract objectives and measures from list of elites
+        objectives = [elite['objective'] for elite in list_of_elites]
+        measures_list = [elite['measures'] for elite in list_of_elites]
+        
+        # Create scatter plots for each feature
+        scatter_plots = []
+        
+        # Organize in rows of 4 plots
+        for i in range(0, num_features, 4):
+            row_plots = []
+            
+            for j in range(4):
+                if i + j >= num_features:
+                    break
+                
+                feature_idx = i + j
+                feature_label = labels_with_units[feature_idx]
+                
+                # Extract feature values for this feature
+                feature_values = [measures[feature_idx] for measures in measures_list]
+                
+                # Create scatter plot
+                fig = px.scatter(
+                    x=feature_values,
+                    y=objectives,
+                    opacity=0.6,
+                    labels={'x': feature_label, 'y': objective_label},
+                    title=f'{feature_label} vs {objective_label}'
+                )
+                
+                # Customize layout
+                fig.update_traces(
+                    marker=dict(size=5, color='rgb(55, 126, 184)', line=dict(width=0.5, color='white'))
+                )
+                fig.update_layout(
+                    margin=dict(l=50, r=20, t=40, b=40),
+                    height=300,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    font=dict(size=10),
+                    title_font_size=11,
+                    showlegend=False
+                )
+                fig.update_xaxes(showgrid=True, gridwidth=0.5, gridcolor='lightgray')
+                fig.update_yaxes(showgrid=True, gridwidth=0.5, gridcolor='lightgray')
+                
+                row_plots.append(
+                    dbc.Col(dcc.Graph(figure=fig), md=3)
+                )
+            
+            scatter_plots.append(dbc.Row(row_plots, className="mb-3"))
+        
+        return scatter_plots
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"Error generating feature-objective plots: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        print(traceback.format_exc())
+        return dbc.Alert(error_msg, color="danger")
