@@ -40,9 +40,11 @@ def get_presets(lang):
     }
 
 def layout(lang='DE'):
+    from backend.translation import create_breadcrumb
     PRESETS = get_presets(lang)
     MEASURES_OPTIONS = get_measures_options(lang)
     return dbc.Container([
+        create_breadcrumb(2, lang),
         html.H2(T[lang]['STEP2_TITLE']),
         dbc.Row([
             dbc.Col(dcc.Link(dbc.Button(T[lang]['PREV_STEP'], color="secondary"), href='/')),
@@ -96,25 +98,25 @@ def layout(lang='DE'):
             ], md=6),
             dbc.Col([
                 
-                html.H5(T[lang].get('STEP2_OBJECTIVE_FUNCTION_HEADER', 'Optimization Criteria'), className="mt-4"),
+                html.H5(T[lang]['STEP2_OBJECTIVE_FUNCTION_HEADER'], className="mt-4"),
                 dbc.Card(dbc.CardBody([
-                    dbc.Label(T[lang].get('STEP2_OBJECTIVE_FUNCTION_LABEL', 'Wind Flow Objective')),
+                    dbc.Label(T[lang]['STEP2_OBJECTIVE_FUNCTION_LABEL']),
                     dbc.RadioItems(
                         id='objective-function-selector',
                         options=[
                             {
                                 'label': html.Div([
-                                    html.Strong('Simple Wind Porosity'),
+                                    html.Strong(T[lang]['STEP2_OBJECTIVE_SIMPLE_POROSITY']),
                                     html.Br(),
-                                    html.Small('Counts completely open vertical passages. Best for sparse environments.', className='text-muted')
+                                    html.Small(T[lang]['STEP2_OBJECTIVE_SIMPLE_POROSITY_DESC'], className='text-muted')
                                 ]),
                                 'value': 'simple_porosity'
                             },
                             {
                                 'label': html.Div([
-                                    html.Strong('Street Canyon Ventilation'),
+                                    html.Strong(T[lang]['STEP2_OBJECTIVE_STREET_CANYON']),
                                     html.Br(),
-                                    html.Small('Considers horizontal gaps, lateral flow, and partial penetration. Better for dense urban contexts.', className='text-muted')
+                                    html.Small(T[lang]['STEP2_OBJECTIVE_STREET_CANYON_DESC'], className='text-muted')
                                 ]),
                                 'value': 'street_canyon'
                             }

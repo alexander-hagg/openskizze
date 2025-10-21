@@ -125,9 +125,24 @@ T = {
         'STEP4_NO_RESULTS': "Optimierungsergebnisse nicht gefunden oder Achsen nicht gewählt.",
         'STEP4_NO_FILE': "Fehler: Große Ergebnisdatei oder Georeferenzierung nicht gefunden.",
         'STEP4_NO_DESIGN': "Kein Entwurf",
+        'STEP4_FEATURE_VS_OBJECTIVE_HEADER': "Merkmal vs. Zielfunktion Analyse",
+        'STEP4_FEATURE_VS_OBJECTIVE_INFO': "Streudiagramme zeigen die Beziehung zwischen jedem Merkmal und der Zielfunktion. Jeder Punkt repräsentiert eine Lösung im Archiv.",
+        
+        # Step 2 - Optimization Criteria
+        'STEP2_OBJECTIVE_FUNCTION_HEADER': "Optimierungskriterien",
+        'STEP2_OBJECTIVE_FUNCTION_LABEL': "Windstrom-Zielfunktion",
+        'STEP2_OBJECTIVE_SIMPLE_POROSITY': "Einfache Windporosität",
+        'STEP2_OBJECTIVE_SIMPLE_POROSITY_DESC': "Zählt vollständig offene vertikale Durchgänge. Am besten für spärliche Umgebungen.",
+        'STEP2_OBJECTIVE_STREET_CANYON': "Straßenschlucht-Ventilation",
+        'STEP2_OBJECTIVE_STREET_CANYON_DESC': "Berücksichtigt horizontale Lücken, seitlichen Fluss und teilweise Durchdringung. Besser für dichte städtische Kontexte.",
+        
+        # Step 3 - Heatmap
+        'STEP3_ARCHIVE_HEATMAP_TITLE': "Archiv-Heatmap",
+        'STEP3_ARCHIVE_HEATMAP_COVERAGE': "Archivabdeckung (Zielfunktionswerte)",
+        'STEP3_HEATMAP_OBJECTIVE_LABEL': "Zielfunktion",
         
         # Step 5
-        'STEP5_TITLE': "Schritt 4: Varianten vergleichen und Anforderungen exportieren",
+        'STEP5_TITLE': "Schritt 5: Clustering und Entwurfsauswahl",
         'STEP5_EXPORT_BUTTON': "Planungsanforderungen für Wettbewerb exportieren",
         'STEP5_EXPORT_FILENAME': "planungsanforderungen.txt",
         'STEP5_CORRELATION_HEADER': "Korrelation der Merkmale und Zielfunktion",
@@ -160,13 +175,14 @@ T = {
         'STEP5_NO_OPTIMIZATION': "Bitte zuerst in Schritt 3 eine Optimierung durchführen.",
         'STEP5_ALG_KMEDOIDS': "K-Medoids (Fuzzy Konsens-Karten)",
         'STEP5_ALG_HDBSCAN': "HDBSCAN (Klarere Entwürfe in Konsens-Karten)",
+        'STEP5_HDBSCAN_AUTO_NOTE': "HDBSCAN verwendet eine minimale Clustergröße von 5.",
         'STEP5_FILTER_INFO': "Filtern Sie die Lösungen nach ihren Merkmalen und passen Sie die Clustering-Parameter an, um Entwurfstypen zu identifizieren.",
         'STEP5_COMPARE_BUTTON': "Ausgewählte Designs vergleichen",
         'STEP5_NO_RESULTS_ERROR': "Ergebnisdatei oder Georeferenzierung nicht gefunden.",
         'STEP5_SELECT_FOR_COMPARISON': "Zum Vergleich auswählen",
         
         # Step 6
-        'STEP6_TITLE': "Schritt 5: Detailvergleich der ausgewählten Entwürfe",
+        'STEP6_TITLE': "Schritt 6: Detailvergleich der ausgewählten Entwürfe",
         'STEP6_NO_SELECTION': "Keine Entwürfe zum Vergleich ausgewählt. Bitte gehen Sie zu Schritt 4 zurück und wählen Sie mindestens einen Entwurf aus.",
         'STEP6_NO_DATA': "Die Ergebnisdaten konnten nicht geladen werden.",
         'STEP6_NO_FILE': "Ergebnisdatei oder Georeferenzierung nicht gefunden.",
@@ -184,6 +200,15 @@ T = {
         'STEP6_DESIGN_TITLE': "Entwurf {num}",
         'STEP6_OBJECTIVE_LABEL': "Zielfunktion (Kaltluft): {value:.4f}",
         'STEP6_METRICS_HEADER': "Leistungsmerkmale",
+        
+        # Breadcrumbs
+        'BREADCRUMB_HOME': 'Start',
+        'BREADCRUMB_STEP1': 'Geltungsbereich',
+        'BREADCRUMB_STEP2': 'Merkmale & Ziele',
+        'BREADCRUMB_STEP3': 'Optimierung',
+        'BREADCRUMB_STEP4': 'Analyse',
+        'BREADCRUMB_STEP5': 'Clustering',
+        'BREADCRUMB_STEP6': 'Vergleich',
     },
     'EN': {
         # App-wide
@@ -300,9 +325,25 @@ T = {
         'STEP3_Y_AXIS_LABEL': "Select Y-Axis:",
         'STEP3_SOLUTION_GRID_HEADER': "Solution Archive (Best Design per Niche)",
         'STEP3_PARALLEL_COORDS_HEADER': "Parallel Coordinates Plot",
+        'STEP3_ARCHIVE_HEATMAP_TITLE': "Archive Heatmap",
+        'STEP3_ARCHIVE_HEATMAP_COVERAGE': "Archive Coverage (Objective Values)",
+        'STEP3_HEATMAP_OBJECTIVE_LABEL': "Objective",
+
+        # Step 4
+        'STEP4_TITLE': "Step 4: Analyze Solution Space",
+        'STEP4_FEATURE_VS_OBJECTIVE_HEADER': "Feature vs Objective Analysis",
+        'STEP4_FEATURE_VS_OBJECTIVE_INFO': "Scatter plots showing the relationship between each feature and the objective function. Each point represents one solution in the archive.",
+        
+        # Step 2 - Optimization Criteria
+        'STEP2_OBJECTIVE_FUNCTION_HEADER': "Optimization Criteria",
+        'STEP2_OBJECTIVE_FUNCTION_LABEL': "Wind Flow Objective",
+        'STEP2_OBJECTIVE_SIMPLE_POROSITY': "Simple Wind Porosity",
+        'STEP2_OBJECTIVE_SIMPLE_POROSITY_DESC': "Counts completely open vertical passages. Best for sparse environments.",
+        'STEP2_OBJECTIVE_STREET_CANYON': "Street Canyon Ventilation",
+        'STEP2_OBJECTIVE_STREET_CANYON_DESC': "Considers horizontal gaps, lateral flow, and partial penetration. Better for dense urban contexts.",
 
         # Step 5
-        'STEP5_TITLE': "Step 4: Compare Variants and Export Requirements",
+        'STEP5_TITLE': "Step 5: Clustering and Design Selection",
         'STEP5_EXPORT_BUTTON': "Export Planning Requirements for Competition",
         'STEP5_EXPORT_FILENAME': "planning_requirements.txt",
         'STEP5_CORRELATION_HEADER': "Feature and Objective Correlation",
@@ -335,13 +376,19 @@ T = {
         'STEP5_NO_OPTIMIZATION': "Please run an optimization in Step 3 first.",
         'STEP5_ALG_KMEDOIDS': "K-Medoids (Fuzzy Consensus Maps)",
         'STEP5_ALG_HDBSCAN': "HDBSCAN (Clearer Designs in Consensus Maps)",
+        'STEP5_HDBSCAN_AUTO_NOTE': "HDBSCAN uses a minimum cluster size of 5.",
         'STEP5_FILTER_INFO': "Filter solutions by their metrics and adjust clustering parameters to identify design types.",
         'STEP5_COMPARE_BUTTON': "Compare Selected Designs",
         'STEP5_NO_RESULTS_ERROR': "Results file or georeferencing not found.",
         'STEP5_SELECT_FOR_COMPARISON': "Select for Comparison",
         
-        # Step 5
-        'STEP6_TITLE': "Step 5: Detailed Comparison of Selected Designs",
+        # Common labels
+        'OBJECTIVE_FUNCTION': 'Objective Function',
+        'COUNT': 'Count',
+        'OBJECTIVE_DISTRIBUTION': 'Objective Distribution',
+        
+        # Step 6
+        'STEP6_TITLE': "Step 6: Detailed Comparison of Selected Designs",
         'STEP6_NO_SELECTION': "No designs selected for comparison. Please return to Step 4 and select at least one design.",
         'STEP6_NO_DATA': "The results data could not be loaded.",
         'STEP6_NO_FILE': "Results file or georeferencing not found.",
@@ -359,6 +406,15 @@ T = {
         'STEP6_DESIGN_TITLE': "Design {num}",
         'STEP6_OBJECTIVE_LABEL': "Objective Function (Cold Air): {value:.4f}",
         'STEP6_METRICS_HEADER': "Performance Metrics",
+        
+        # Breadcrumbs
+        'BREADCRUMB_HOME': 'Home',
+        'BREADCRUMB_STEP1': 'Scope',
+        'BREADCRUMB_STEP2': 'Features & Goals',
+        'BREADCRUMB_STEP3': 'Optimization',
+        'BREADCRUMB_STEP4': 'Analysis',
+        'BREADCRUMB_STEP5': 'Clustering',
+        'BREADCRUMB_STEP6': 'Comparison',
     }
 }
 
@@ -383,3 +439,62 @@ def translate_feature_labels(feature_indices, lang='DE', feature_set='original')
         return [translations.get(f'MEASURE_PLANNING_{idx}', f'Feature {idx}') for idx in feature_indices]
     else:
         return [translations.get(f'MEASURE_{idx}', f'Feature {idx}') for idx in feature_indices]
+
+def create_breadcrumb(current_step, lang='DE'):
+    """
+    Create breadcrumb navigation component.
+    
+    Args:
+        current_step: Current step number (1-6) or 'home'
+        lang: Language code ('DE' or 'EN')
+    
+    Returns:
+        Dash Bootstrap Components Breadcrumb
+    """
+    import dash_bootstrap_components as dbc
+    from dash import html
+    
+    translations = T.get(lang, T['DE'])
+    
+    steps = [
+        ('/', 'BREADCRUMB_HOME'),
+        ('/step1', 'BREADCRUMB_STEP1'),
+        ('/step2', 'BREADCRUMB_STEP2'),
+        ('/step3', 'BREADCRUMB_STEP3'),
+        ('/step4', 'BREADCRUMB_STEP4'),
+        ('/step5', 'BREADCRUMB_STEP5'),
+        ('/step6', 'BREADCRUMB_STEP6'),
+    ]
+    
+    # Map step number to index
+    step_map = {
+        'home': 0,
+        1: 1,
+        2: 2,
+        3: 3,
+        4: 4,
+        5: 5,
+        6: 6
+    }
+    
+    current_index = step_map.get(current_step, 0)
+    
+    # Build breadcrumb items
+    items = []
+    for idx, (href, key) in enumerate(steps):
+        if idx <= current_index:
+            if idx == current_index:
+                # Current page - no link, active
+                items.append({
+                    "label": translations[key],
+                    "active": True,
+                })
+            else:
+                # Previous pages - with link
+                items.append({
+                    "label": translations[key],
+                    "href": href,
+                    "external_link": False,
+                })
+    
+    return dbc.Breadcrumb(items=items, className="mb-3")

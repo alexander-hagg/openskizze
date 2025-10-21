@@ -69,7 +69,9 @@ def cleanup_old_files(directory: str, max_age_hours: int = 24):
 
 
 def layout(lang='DE'):
+    from backend.translation import create_breadcrumb
     return dbc.Container([
+        create_breadcrumb(3, lang),
         html.H2(T[lang]['STEP3_TITLE']),
         dbc.Row([
             dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step2', color="secondary")),
@@ -112,7 +114,7 @@ def layout(lang='DE'):
             ], md=6),
             dbc.Col([
                 dbc.Row([
-                    html.H5("Archive Heatmap"),
+                    html.H5(T[lang]['STEP3_ARCHIVE_HEATMAP_TITLE']),
                     dcc.Loading(dcc.Graph(id='archive-heatmap-s3'))
                 ]),
                 dbc.Row([
@@ -160,19 +162,22 @@ def populate_dropdowns_s3(results_data, language):
     Input('x-axis-dropdown-s3', 'value'),
     Input('y-axis-dropdown-s3', 'value'),
     Input('results-store', 'data'),
+    State('language-store', 'data'),
 )
-def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data):
+def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data, language):
     """Create a heatmap of the archive showing objective values with proper axis labels and ranges"""
+    lang = language if language else 'DE'
+    
     if not isinstance(x_axis_idx, int) or not isinstance(y_axis_idx, int):
-        return px.imshow([[0]], title="Wählen Sie Achsen aus")
+        return px.imshow([[0]], title=T[lang].get('STEP3_NO_AREA', 'Select axes'))
     
     # Load final results only
     if not results_data:
-        return px.imshow([[0]], title="Keine Ergebnisse gefunden")
+        return px.imshow([[0]], title=T[lang].get('STEP3_NO_SOLUTIONS', 'No results found'))
     
     results_path = results_data.get('full_results_path')
     if not results_path or not os.path.exists(results_path):
-        return px.imshow([[0]], title="Keine Ergebnisse gefunden")
+        return px.imshow([[0]], title=T[lang].get('STEP3_NO_SOLUTIONS', 'No results found'))
     
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
@@ -233,8 +238,8 @@ def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data):
         heatmap_grid,
         aspect='equal',
         color_continuous_scale='Viridis',
-        labels={'x': labels[x_axis_idx], 'y': labels[y_axis_idx], 'color': 'Objective'},
-        title="Archive Coverage (Objective Values)",
+        labels={'x': labels[x_axis_idx], 'y': labels[y_axis_idx], 'color': T[lang]['STEP3_HEATMAP_OBJECTIVE_LABEL']},
+        title=T[lang]['STEP3_ARCHIVE_HEATMAP_COVERAGE'],
         zmin=0,  # Fixed color range from 0 to 1
         zmax=1.0
     )

@@ -8,7 +8,9 @@ import pandas as pd
 import plotly.express as px
 
 def layout(lang='DE'):
+    from backend.translation import create_breadcrumb
     return dbc.Container([
+        create_breadcrumb(4, lang),
         html.H2(T[lang].get('STEP4_TITLE', 'Results Analysis')),
         dbc.Row([
             dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step3', color="secondary")),
@@ -17,10 +19,8 @@ def layout(lang='DE'):
         
         # Feature vs Objective Scatter Plots
         dbc.Row([
-            html.H4(T[lang].get('STEP5_FEATURE_VS_OBJECTIVE_HEADER', 'Feature vs Objective Analysis')),
-            html.P(T[lang].get('STEP5_FEATURE_VS_OBJECTIVE_INFO', 
-                    'Scatter plots showing the relationship between each feature and the objective function. '
-                    'Each point represents one solution in the archive.'),
+            html.H4(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_HEADER']),
+            html.P(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_INFO'],
                     className="text-muted small"),
             dcc.Loading(html.Div(id='feature-objective-plots-container')),
         ], className="mb-4"),

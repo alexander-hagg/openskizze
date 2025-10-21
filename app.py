@@ -39,43 +39,68 @@ app.layout = html.Div([
     dcc.Store(id='language-store', storage_type='session', data='DE'),
     dcc.Download(id="download-project-file"),
 
-    dbc.NavbarSimple(
-        children=[
-            dbc.DropdownMenu(
-                children=[
-                    dbc.DropdownMenuItem("Neues Projekt", id="new-project-btn", n_clicks=0),
-                    dbc.DropdownMenuItem("Projekt speichern", id="save-project-btn", n_clicks=0),
-                    dcc.Upload(
-                        id='upload-project-file',
-                        children=dbc.DropdownMenuItem("Projekt laden"),
-                        accept='.skizze',
-                    ),
-                ],
-                nav=True,
-                in_navbar=True,
-                label="File",
-            ),
-            dbc.DropdownMenu(
-                children=[
-                    dbc.DropdownMenuItem("🇩🇪 Deutsch", id="lang-de-btn", n_clicks=0),
-                    dbc.DropdownMenuItem("🇬🇧 English", id="lang-en-btn", n_clicks=0),
-                ],
-                nav=True,
-                in_navbar=True,
-                label="Language",
-            ),
-            dbc.NavbarBrand(T['DE']['APP_TITLE'], href="/"),
-        ],
-        color="dark",
-        dark=True,
-        fluid=True,
-    ),
+    html.Div(id='navbar-container'),
     dcc.Location(id='url', refresh=False),
     html.Div(id='page-content', className="container-fluid mt-4") # Use container-fluid for better grid layout
 ])
 
 # Register page layouts
 from pages import step1_scope, step2_constraints, step3_optimize, step4_analysis, step5_clustering, step6_compare_detail, step_diagnostic
+
+# Callback to update navbar based on language
+@app.callback(
+    Output('navbar-container', 'children'),
+    Input('language-store', 'data')
+)
+def update_navbar(language):
+    lang = language if language else 'DE'
+    return dbc.Navbar(
+        dbc.Container([
+            # Logo on the left
+            html.A(
+                html.Img(src='/assets/logo.png', height="40px", style={'marginRight': '15px'}),
+                href="/",
+                style={'display': 'flex', 'alignItems': 'center'}
+            ),
+            # Brand name
+            dbc.NavbarBrand(T[lang]['APP_TITLE'], href="/", className="ms-2"),
+            # Toggler for mobile
+            dbc.NavbarToggler(id="navbar-toggler"),
+            # Menu items
+            dbc.Collapse(
+                dbc.Nav([
+                    dbc.DropdownMenu(
+                        children=[
+                            dbc.DropdownMenuItem(T[lang]['NEW_PROJECT'], id="new-project-btn", n_clicks=0),
+                            dbc.DropdownMenuItem(T[lang]['SAVE_PROJECT'], id="save-project-btn", n_clicks=0),
+                            dcc.Upload(
+                                id='upload-project-file',
+                                children=dbc.DropdownMenuItem(T[lang]['LOAD_PROJECT']),
+                                accept='.skizze',
+                            ),
+                        ],
+                        nav=True,
+                        in_navbar=True,
+                        label=T[lang]['FILE_MENU'],
+                    ),
+                    dbc.DropdownMenu(
+                        children=[
+                            dbc.DropdownMenuItem("🇩🇪 Deutsch", id="lang-de-btn", n_clicks=0),
+                            dbc.DropdownMenuItem("🇬🇧 English", id="lang-en-btn", n_clicks=0),
+                        ],
+                        nav=True,
+                        in_navbar=True,
+                        label="Language" if lang == 'EN' else "Sprache",
+                    ),
+                ], navbar=True, className="ms-auto"),
+                id="navbar-collapse",
+                navbar=True,
+            ),
+        ], fluid=True),
+        color="dark",
+        dark=True,
+        className="mb-3",
+    )
 
 # Callback to handle project file upload and load state
 @app.callback(

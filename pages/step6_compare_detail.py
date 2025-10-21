@@ -358,8 +358,10 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     return fig
 
 def layout(lang='DE'):
+    from backend.translation import create_breadcrumb
     return dbc.Container([
     dcc.Location(id='url-s6', refresh=False),
+    create_breadcrumb(6, lang),
     html.H2(T[lang]['STEP6_TITLE']),
         dbc.Row([
             dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step5', color="secondary")),

@@ -27,7 +27,9 @@ function(feature, context){
 """)
 
 def layout(lang='DE'):
+    from backend.translation import create_breadcrumb
     return dbc.Container([
+        create_breadcrumb(5, lang),
         html.H2(T[lang].get('STEP5_TITLE', 'Cluster Analysis')),
         dbc.Row([
             dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step4', color="secondary")),

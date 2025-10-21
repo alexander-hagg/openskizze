@@ -44,7 +44,9 @@ def create_compass_component():
     ])
 
 def layout(lang='DE'):
+    from backend.translation import create_breadcrumb
     return dbc.Container([
+        create_breadcrumb(1, lang),
         html.H2(T[lang]['STEP1_TITLE']),
         dbc.Row([
             dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], id='next-step1-btn', href='/step2', color="primary", className="mt-4")),
