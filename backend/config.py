@@ -7,14 +7,14 @@ QD_CONFIG = {
     'num_emitters': 5,      # Reduced for a fast web demo
     'sigma': 0.1,
     'learning_rate': 0.01,
-    'output_inv_frequency': 100,
+    'output_inv_frequency': 10,
     'batch_size': 16,
 }
 
 ENCODING_CONFIG = {
     'max_num_buildings': 10,  # FIXED - always 10 buildings
     'xy_length': 32,  # Updated dynamically per parcel
-    'z_length': 30,   # Max height in METERS (default 30m, can be updated from user constraints)
+    'z_length': 10,   # Max height in METERS (default 30m, can be updated from user constraints)
 }
 
 # Feature set definitions

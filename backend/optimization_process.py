@@ -500,7 +500,7 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
     print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {encoding_config['xy_length']}, max height {encoding_config['z_length']}m")
     
     sample_genome = np.random.randn(encoding_obj.get_dimension())
-    create_debug_plots(env_config, sample_genome, encoding_obj)
+    # create_debug_plots(env_config, sample_genome, encoding_obj)
     progress_callback(10, "Starting optimization...")
     archive = run_qd_optimization(
         encoding_obj, env_config, qd_config, x0_adaptive, progress_callback)

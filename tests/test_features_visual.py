@@ -264,6 +264,113 @@ def test_street_canyon_aspect_ratio():
     print("="*80 + "\n")
 
 
+def test_svf_calculation():
+    """Specific test for Sky View Factor (SVF) calculation."""
+    print("\n" + "="*80)
+    print("SKY VIEW FACTOR (SVF) CALCULATION TEST")
+    print("="*80)
+    
+    from backend.evaluation import calculate_sky_view_factor
+    import time
+    
+    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+    
+    # Test 1: Empty space (should have SVF = 1.0)
+    heightmap_empty = np.zeros((20, 20))
+    svf_empty = calculate_sky_view_factor(heightmap_empty, pixel_size)
+    print(f"\n1. Empty Space:")
+    print(f"   SVF: {svf_empty:.3f}")
+    print(f"   Expected: 1.000")
+    print(f"   Status: {'✓ PASS' if abs(svf_empty - 1.0) < 0.01 else '✗ FAIL'}")
+    
+    # Test 2: Single tall building in center
+    heightmap_single = np.zeros((30, 30))
+    heightmap_single[13:17, 13:17] = 30  # 4×4 building, 30m tall
+    t0 = time.time()
+    svf_single = calculate_sky_view_factor(heightmap_single, pixel_size)
+    t1 = time.time()
+    print(f"\n2. Single Central Building (30m):")
+    print(f"   SVF: {svf_single:.3f}")
+    print(f"   Expected: 0.92-0.98 (small central obstruction)")
+    print(f"   Computation time: {(t1-t0)*1000:.1f}ms")
+    print(f"   Status: {'✓ PASS' if 0.92 <= svf_single <= 0.99 else '✗ FAIL'}")
+    
+    # Test 3: Street canyon
+    heightmap_canyon = np.zeros((30, 30))
+    heightmap_canyon[5:25, 5:10] = 18  # Left wall
+    heightmap_canyon[5:25, 20:25] = 18  # Right wall
+    t0 = time.time()
+    svf_canyon = calculate_sky_view_factor(heightmap_canyon, pixel_size)
+    t1 = time.time()
+    print(f"\n3. Street Canyon (18m buildings):")
+    print(f"   SVF: {svf_canyon:.3f}")
+    print(f"   Expected: 0.80-0.90 (open-ended canyon)")
+    print(f"   Computation time: {(t1-t0)*1000:.1f}ms")
+    print(f"   Status: {'✓ PASS' if 0.80 <= svf_canyon <= 0.90 else '✗ FAIL'}")
+    
+    # Test 4: Dense urban (should have lower SVF)
+    heightmap_dense = np.zeros((30, 30))
+    heightmap_dense[2:8, 2:8] = 15
+    heightmap_dense[2:8, 10:16] = 18
+    heightmap_dense[2:8, 18:24] = 21
+    heightmap_dense[10:16, 2:8] = 12
+    heightmap_dense[10:16, 10:16] = 24
+    heightmap_dense[10:16, 18:24] = 15
+    heightmap_dense[18:24, 2:8] = 18
+    heightmap_dense[18:24, 10:16] = 15
+    heightmap_dense[18:24, 18:24] = 21
+    t0 = time.time()
+    svf_dense = calculate_sky_view_factor(heightmap_dense, pixel_size)
+    t1 = time.time()
+    print(f"\n4. Dense Urban (9 buildings):")
+    print(f"   SVF: {svf_dense:.3f}")
+    print(f"   Expected: 0.80-0.90 (grid with gaps)")
+    print(f"   Computation time: {(t1-t0)*1000:.1f}ms")
+    print(f"   Status: {'✓ PASS' if 0.80 <= svf_dense <= 0.90 else '✗ FAIL'}")
+    
+    # Test 5: Performance test on larger grid
+    heightmap_large = np.zeros((50, 50))
+    heightmap_large[10:15, 10:15] = 20
+    heightmap_large[20:28, 20:28] = 25
+    heightmap_large[35:42, 10:18] = 18
+    heightmap_large[10:18, 35:42] = 22
+    t0 = time.time()
+    svf_large = calculate_sky_view_factor(heightmap_large, pixel_size)
+    t1 = time.time()
+    print(f"\n5. Performance Test (50×50 grid):")
+    print(f"   SVF: {svf_large:.3f}")
+    print(f"   Computation time: {(t1-t0)*1000:.1f}ms")
+    print(f"   Status: {'✓ PASS' if (t1-t0) < 0.1 else '⚠ SLOW (>100ms)'}")
+    
+    # Create visualization
+    fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+    fig.suptitle('Sky View Factor (SVF) Test Cases', fontsize=14, fontweight='bold')
+    
+    test_cases = [
+        (heightmap_single, svf_single, 'Single Building', '(Expected: 0.92-0.98)'),
+        (heightmap_canyon, svf_canyon, 'Street Canyon', '(Expected: 0.80-0.90)'),
+        (heightmap_dense, svf_dense, 'Dense Urban', '(Expected: 0.80-0.90)'),
+        (heightmap_large, svf_large, 'Performance Test 50×50', '')
+    ]
+    
+    for idx, (hmap, svf, title, expected) in enumerate(test_cases):
+        ax = axes[idx // 2, idx % 2]
+        im = ax.imshow(hmap, cmap='viridis', origin='lower')
+        ax.set_title(f'{title}\nSVF = {svf:.3f} {expected}', fontsize=10, fontweight='bold')
+        ax.set_xlabel('X (pixels)', fontsize=8)
+        ax.set_ylabel('Y (pixels)', fontsize=8)
+        cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label('Height (m)', fontsize=8)
+        cbar.ax.tick_params(labelsize=7)
+    
+    plt.tight_layout()
+    plt.savefig('debug_plots/feature_test_svf_calculation.png', dpi=150, bbox_inches='tight')
+    print(f"\n  → Saved visualization to: debug_plots/feature_test_svf_calculation.png")
+    plt.close()
+    
+    print("="*80 + "\n")
+
+
 if __name__ == '__main__':
     print("\n" + "="*80)
     print("OPENSKIZZE FEATURE CALCULATION VISUAL TESTS")
@@ -277,6 +384,7 @@ if __name__ == '__main__':
     try:
         test_feature_calculations()
         test_street_canyon_aspect_ratio()
+        test_svf_calculation()
         print("\n✓ All tests completed successfully!")
         print("  Please review the visualizations in debug_plots/ for manual verification.\n")
     except Exception as e:
