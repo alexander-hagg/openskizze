@@ -1,5 +1,5 @@
-# backend/data_io.py
-
+import warnings
+warnings.filterwarnings('ignore', message='Field with same name.*already exists.*Skipping newer ones')
 import requests
 import json
 import geopandas

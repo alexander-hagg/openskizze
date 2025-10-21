@@ -32,10 +32,10 @@ server = app.server
 
 # Define the main layout
 app.layout = html.Div([
-    dcc.Store(id='session-store', storage_type='session'),
-    dcc.Store(id='results-store', storage_type='session'),
-    dcc.Store(id='comparison-store', storage_type='session', data=[]),
-    dcc.Store(id='clustering-data-store', storage_type='session'),  # Store actual cluster data from Step 4
+    dcc.Store(id='session-store', storage_type='memory'),  # Use memory to avoid localStorage quota errors with building data
+    dcc.Store(id='results-store', storage_type='memory'),  # Use memory to avoid localStorage quota errors
+    dcc.Store(id='comparison-store', storage_type='memory', data=[]),  # Use memory for large data
+    dcc.Store(id='clustering-data-store', storage_type='memory'),  # Use memory for large cluster data
     dcc.Store(id='language-store', storage_type='session', data='DE'),
     dcc.Download(id="download-project-file"),
 
