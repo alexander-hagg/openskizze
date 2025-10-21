@@ -113,6 +113,7 @@ openskizze-gui/
 - **CRS handling**: EPSG:25832 (native) ↔ EPSG:4326 (web) conversions via GeoPandas
 - **Bilingual**: Add both German and English strings to `backend/translation.py` T['DE'] and T['EN']
 - **No external scripts**: Use standard tools; avoid helper scripts
+- **No unnecessary markdown files**: Document changes in CHANGES.md only. No unnecessary .md files.
 
 ### Python Style
 - **Type hints**: Encouraged for new functions (e.g., `def foo(x: int) -> float:`)
