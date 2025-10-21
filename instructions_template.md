@@ -324,6 +324,44 @@ T['EN']['MY_NEW_LABEL'] = "English Text"
 9. **Calling `scipy.ndimage.label()` multiple times** (cache it)
 10. **Rotating 3D arrays** instead of 2D heightmaps
 
+## File Modification Checklist
+
+Use this checklist to ensure you haven't forgotten anything:
+
+**Adding a new feature/measure:**
+- [ ] `backend/config.py` - Add to DOMAIN_CONFIG['features'] and feat_ranges
+- [ ] `backend/evaluation.py` - Implement in calculate_all_features()
+- [ ] `backend/translation.py` - Add T['DE']['MEASURE_X'] and T['EN']['MEASURE_X']
+- [ ] `backend/units.py` - Add to FEATURE_UNITS dictionary
+- [ ] Test with sample optimization
+
+**Adding a new objective function:**
+- [ ] `backend/evaluation.py` - Implement compute_fitness_X()
+- [ ] `backend/evaluation.py` - Add dispatch in eval_solution()
+- [ ] `pages/step2_constraints.py` - Add UI radio button
+- [ ] `backend/translation.py` - Add bilingual labels
+- [ ] `backend/optimization_process.py` - Pass to env_config
+- [ ] Create test file (see test_street_canyon.py)
+
+**Adding a new constraint:**
+- [ ] `backend/evaluation.py` - Add check in check_constraints()
+- [ ] `pages/step2_constraints.py` - Add UI input field
+- [ ] `backend/translation.py` - Add bilingual labels
+- [ ] Wire callback to pass constraint to optimizer
+
+**Adding a new UI page:**
+- [ ] Create `pages/stepX_name.py` with layout() function
+- [ ] Register callbacks in the page module
+- [ ] Add navigation link in app.py
+- [ ] Add route in app.py display_page() callback
+- [ ] Add bilingual page title to backend/translation.py
+
+**Modifying data fetching:**
+- [ ] `backend/data_io.py` - Update fetch functions
+- [ ] Test with different bounding boxes
+- [ ] Check CRS conversions (EPSG:25832 ↔ EPSG:4326)
+- [ ] Verify cache directory handling
+
 ## Quick Reference Commands
 
 ```bash
@@ -344,7 +382,64 @@ rm -rf cache/lod2_tiles/*
 
 # Check git status
 git status --short
+
+# Quick smoke test (check all imports work)
+python -c "from app import app; print('App imports OK')"
+
+# Check if feature calculation works
+python -c "from backend.evaluation import calculate_all_features; import numpy as np; print(calculate_all_features(np.random.rand(32,32)*10, np.ones((32,32), bool), 3072.0))"
 ```
+
+## Troubleshooting Flowchart
+
+### Problem: "Archive is empty after optimization"
+1. Check `/diagnostic` page - are fitness values 0.0?
+   - YES → Switch objective from 'simple_porosity' to 'street_canyon'
+   - NO → Check if feature ranges are too narrow
+2. Are constraints too restrictive?
+   - Increase max_height or decrease min_distance
+3. Still empty?
+   - Increase num_generations (100 → 500)
+   - Check buildable mask isn't too small
+
+### Problem: "Code is too slow"
+1. Did you modify `backend/evaluation.py`?
+   - YES → Profile with `python -m cProfile`
+   - Check if you added Python loops (use NumPy instead)
+   - Check if you call `scipy.ndimage.label()` multiple times (cache it)
+2. Did you change rotation logic?
+   - Ensure rotating 2D heightmaps, NOT 3D arrays
+3. Normal slowness:
+   - 3-4 minutes for 1000 generations is expected
+
+### Problem: "Import errors or module not found"
+1. Check Python version: `python3 --version` (need 3.12)
+2. Install dependencies: `pip install -r requirements.txt`
+3. If dash-extensions fails:
+   - `pip install dash-extensions>=1.0.0,<1.1.0`
+4. Check repo is in path:
+   - `export PYTHONPATH=/home/runner/work/openskizze-gui/openskizze-gui:$PYTHONPATH`
+
+### Problem: "Buildings/parcels in wrong location"
+1. Check CRS conversions:
+   - NRW native data: EPSG:25832
+   - Web map: EPSG:4326
+2. Use `geopandas.to_crs()` for all conversions
+3. Check `backend/data_io.py` for conversion patterns
+
+### Problem: "UI not showing my changes"
+1. Check Dash callback:
+   - Output/Input/State IDs match component IDs?
+   - Using `prevent_initial_call=True`?
+   - Callback registered in correct page module?
+2. Clear browser cache (Ctrl+Shift+R)
+3. Restart app: kill `python run.py` and restart
+
+### Problem: "Tests failing with path errors"
+1. Check sys.path.insert statements in test files
+2. Comment out hardcoded paths
+3. Run from repo root: `python tests/test_X.py`
+4. Or set: `export PYTHONPATH=$PWD:$PYTHONPATH`
 
 ## When You're Stuck
 
