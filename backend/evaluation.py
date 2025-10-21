@@ -557,6 +557,13 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
     constraints = env_config.get('hard_constraints', {})
     heightmap_2d_solution, is_violated = check_constraints(heightmap_2d_solution, constraints)
 
+    # Check for empty solutions (no buildings)
+    if np.sum(heightmap_2d_solution) == 0:
+        num_features = len(env_config['selected_features'])
+        dummy_features = np.zeros(num_features)
+        dummy_heightmap = heightmap_2d_solution.flatten()
+        return np.concatenate(([-10.0], dummy_features, dummy_heightmap))
+
     if is_violated:
         # If constraints are violated, return a very poor fitness score (-1)
         # and dummy values for the rest. This solution will be discarded.

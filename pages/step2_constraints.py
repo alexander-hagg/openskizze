@@ -551,10 +551,37 @@ def restore_step2_from_session(session_data, pathname):
     objective_function = session_data.get('objective_function', 'simple_porosity')
     feature_set = session_data.get('feature_set', 'original')
     
-    max_height = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])  # Already in meters
+    # Determine which max height to use:
+    # Priority 1: User has explicitly set a constraint (stored AND different from any adaptive value)
+    # Priority 2: Fresh adaptive height from new parcel selection
+    # Priority 3: Default value
+    adaptive_height = session_data.get('adaptive_max_height')
+    stored_max_height = hard_constraints.get('max_height')
+    user_has_set_constraint = session_data.get('user_set_max_height', False)
+    
+    if user_has_set_constraint and stored_max_height:
+        # User explicitly set this value - respect it
+        max_height = stored_max_height
+        print(f"[DEBUG-RESTORE] Using user-defined max height: {max_height}m")
+    elif adaptive_height:
+        # Use the adaptive height calculated for this parcel
+        max_height = adaptive_height
+        if stored_max_height and stored_max_height != adaptive_height:
+            print(f"[DEBUG-RESTORE] Using adaptive max height: {max_height}m (overriding stored {stored_max_height}m)")
+        else:
+            print(f"[DEBUG-RESTORE] Using adaptive max height: {max_height}m")
+    elif stored_max_height:
+        # Fallback to stored value
+        max_height = stored_max_height
+        print(f"[DEBUG-RESTORE] Using stored max height: {max_height}m")
+    else:
+        # Fallback to default
+        max_height = ENCODING_CONFIG['z_length']
+        print(f"[DEBUG-RESTORE] Using default max height: {max_height}m")
+    
     min_distance = hard_constraints.get('min_distance', 0)
     
-    print(f"[DEBUG-RESTORE] Restoring feature_set='{feature_set}', max_height={max_height}m, min_distance={min_distance}m")
+    print(f"[DEBUG-RESTORE] Final values - feature_set='{feature_set}', max_height={max_height}m, min_distance={min_distance}m")
     
     qd_generations = qd_params.get('num_generations', QD_CONFIG['num_generations'])
     qd_emitters = qd_params.get('num_emitters', QD_CONFIG['num_emitters'])
@@ -678,6 +705,12 @@ def update_session_with_features_and_ranges(
             'max_height': max_height if max_height is not None else existing_constraints.get('max_height', ENCODING_CONFIG['z_length']),
             'min_distance': min_distance if min_distance is not None else existing_constraints.get('min_distance', 0)
         }
+        # Mark that user has explicitly set max height if it differs from adaptive height
+        if ctx.triggered_id == 'max-height-constraint' and max_height is not None:
+            adaptive_height = session_data.get('adaptive_max_height')
+            if not adaptive_height or max_height != adaptive_height:
+                session_data['user_set_max_height'] = True
+                print(f"[DEBUG] User explicitly set max_height to {max_height}m")
         print(f"[DEBUG] Saved hard_constraints: max_height={session_data['hard_constraints']['max_height']}m, min_distance={session_data['hard_constraints']['min_distance']}m")
     else:
         # Restoration phase - keep existing values

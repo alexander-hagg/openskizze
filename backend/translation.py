@@ -202,17 +202,16 @@ T = {
         'STEP6_OBJECTIVE_LABEL': "Zielfunktion (Kaltluft): {value:.4f}",
         'STEP6_METRICS_HEADER': "Leistungsmerkmale",
         
-                # Breadcrumbs
-        'BREADCRUMB_HOME': 'Home',
-        'BREADCRUMB_STEP1': 'Scope',
-        'BREADCRUMB_STEP2': 'Features & Objectives',
-        'BREADCRUMB_STEP3': 'Optimization',
-        'BREADCRUMB_STEP4': 'Analysis',
+        # Breadcrumbs
+        'BREADCRUMB_HOME': 'Start',
+        'BREADCRUMB_STEP1': 'Geltungsbereich',
+        'BREADCRUMB_STEP2': 'Merkmale & Ziele',
+        'BREADCRUMB_STEP3': 'Optimierung',
+        'BREADCRUMB_STEP4': 'Analyse',
         'BREADCRUMB_STEP5': 'Clustering',
-        'BREADCRUMB_STEP6': 'Comparison',
+        'BREADCRUMB_STEP6': 'Vergleich',
         
-        
-        # Step titles
+        # Next step navigation
         'NEXT_STEP_LABEL': 'Weiter zu',
         'NEXT_STEP_STEP1': 'Geltungsbereich festlegen',
         'NEXT_STEP_STEP2': 'Merkmale & Ziele definieren',

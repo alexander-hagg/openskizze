@@ -339,8 +339,47 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
                     # Count buildings from the GeoDataFrame
                     num_buildings = len(building_data.get('gdf_buildings_filtered', []))
                     print(f"[fetch_buildings] ✓ Cached building data: {num_buildings} buildings processed")
+                    
+                    # Calculate adaptive max height based on nearby buildings
+                    from backend.data_io import calculate_adaptive_max_height
+                    from shapely.geometry import shape as geom_shape
+                    try:
+                        gdf_buildings = building_data.get('gdf_buildings_filtered')
+                        if gdf_buildings is not None and not gdf_buildings.empty:
+                            parcel_shape = geom_shape(final_geojson['features'][0]['geometry'])
+                            parcel_centroid = parcel_shape.centroid
+                            adaptive_height = calculate_adaptive_max_height(
+                                gdf_buildings, 
+                                parcel_centroid, 
+                                num_closest=20,
+                                default_height=10
+                            )
+                            session_data['adaptive_max_height'] = int(adaptive_height)
+                            # Clear user override flag for new parcel
+                            if 'user_set_max_height' in session_data:
+                                del session_data['user_set_max_height']
+                            print(f"[fetch_buildings] ✓ Calculated adaptive max height: {adaptive_height}m")
+                        else:
+                            # No buildings found - use default 10m
+                            session_data['adaptive_max_height'] = 10
+                            # Clear user override flag for new parcel
+                            if 'user_set_max_height' in session_data:
+                                del session_data['user_set_max_height']
+                            print(f"[fetch_buildings] ℹ No buildings in vicinity, using default max height: 10m")
+                    except Exception as e:
+                        print(f"[fetch_buildings] Warning: Could not calculate adaptive height: {e}")
+                        session_data['adaptive_max_height'] = 10  # Fallback to default
+                        # Clear user override flag for new parcel
+                        if 'user_set_max_height' in session_data:
+                            del session_data['user_set_max_height']
                 else:
                     print("[fetch_buildings] ✗ No building data returned")
+                    # No buildings - use default 10m
+                    session_data['adaptive_max_height'] = 10
+                    # Clear user override flag for new parcel
+                    if 'user_set_max_height' in session_data:
+                        del session_data['user_set_max_height']
+                    print(f"[fetch_buildings] ℹ No buildings in vicinity, using default max height: 10m")
                     # Clear cache if fetch returned None
                     if 'building_data' in session_data:
                         del session_data['building_data']

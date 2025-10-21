@@ -524,6 +524,9 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         # Clip to reasonable range (3m to 90m = 1 to 30 floors)
         heights_meters = heights_meters.clip(3.0, 90.0)
         
+        # Add heights to the GeoDataFrame for later use (e.g., adaptive max height calculation)
+        gdf_building_polygons['height_meters'] = heights_meters.values
+        
         # Create function mapping
         if 'funktion' in gdf_building_polygons.columns:
             unique_functions = gdf_building_polygons['funktion'].unique()
@@ -593,3 +596,64 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         import traceback
         traceback.print_exc()
         return None
+
+
+def calculate_adaptive_max_height(gdf_buildings, parcel_centroid, num_closest=20, default_height=10):
+    """
+    Calculate an adaptive maximum building height based on nearby existing buildings.
+    
+    Args:
+        gdf_buildings: GeoDataFrame of existing buildings with 'height_meters' column
+        parcel_centroid: Shapely Point representing the center of the selected parcel
+        num_closest: Number of closest buildings to consider (default: 20)
+        default_height: Fallback height in meters if no buildings found (default: 10m)
+    
+    Returns:
+        float: Recommended maximum height in meters (rounded to nearest 3m)
+    """
+    import numpy as np
+    
+    try:
+        if gdf_buildings is None or gdf_buildings.empty:
+            print(f"[adaptive_height] No buildings found, using default: {default_height}m")
+            return default_height
+        
+        if 'height_meters' not in gdf_buildings.columns:
+            print(f"[adaptive_height] No height data available, using default: {default_height}m")
+            return default_height
+        
+        # Calculate distances from parcel centroid to each building
+        gdf_buildings = gdf_buildings.copy()
+        gdf_buildings['distance'] = gdf_buildings.geometry.distance(parcel_centroid)
+        
+        # Sort by distance and get the closest N buildings
+        closest_buildings = gdf_buildings.nsmallest(num_closest, 'distance')
+        
+        if len(closest_buildings) == 0:
+            print(f"[adaptive_height] No close buildings found, using default: {default_height}m")
+            return default_height
+        
+        # Get heights of closest buildings (filter out zeros)
+        heights = closest_buildings['height_meters'].values
+        heights = heights[heights > 0]
+        
+        if len(heights) == 0:
+            print(f"[adaptive_height] No valid heights found, using default: {default_height}m")
+            return default_height
+        
+        # Calculate mean height of closest buildings
+        mean_height = np.mean(heights)
+        
+        # Round to nearest 3 meters (matching the slider step)
+        rounded_height = max(3, int(np.round(mean_height / 3) * 3))
+        
+        print(f"[adaptive_height] Analyzed {len(heights)} nearby buildings:")
+        print(f"  → Height range: {heights.min():.1f}m - {heights.max():.1f}m")
+        print(f"  → Mean height: {mean_height:.1f}m")
+        print(f"  → Recommended max height: {rounded_height}m")
+        
+        return rounded_height
+        
+    except Exception as e:
+        print(f"[adaptive_height] Error calculating adaptive height: {e}")
+        return default_height
