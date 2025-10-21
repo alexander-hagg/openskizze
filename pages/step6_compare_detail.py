@@ -364,7 +364,6 @@ def layout(lang='DE'):
     create_breadcrumb(6, lang),
     html.H2(T[lang]['STEP6_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step5', color="secondary")),
             dbc.Col([
                 dbc.Button(T[lang]['STEP6_EXPORT_PDF'], id="export-pdf-btn-s6", color="info"),
                 dcc.Download(id="download-pdf-s6")

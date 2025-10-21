@@ -31,11 +31,7 @@ def layout(lang='DE'):
     return dbc.Container([
         create_breadcrumb(5, lang),
         html.H2(T[lang].get('STEP5_TITLE', 'Cluster Analysis')),
-        dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step4', color="secondary")),
-            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step6', color="primary"), className="text-end")
-        ], className="mt-4"),
-
+        
         # Reorganized layout with filter controls in left column
         dbc.Row([
             # Left column: Filtering Controls

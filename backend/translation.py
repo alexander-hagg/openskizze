@@ -32,6 +32,7 @@ T = {
 
         # Step 2
         'STEP2_TITLE': "Schritt 2: Leistungsmerkmale und Optimierungsziele festlegen",
+        'STEP2_RESET_BUTTON': "Zurücksetzen",
         'STEP2_OBJECTIVES_HEADER': "Leistungsmerkmale",
         'STEP2_MEASURES_LABEL': "Wählen Sie die Merkmale zur Generierung diverser Lösungen:",
         'STEP2_PRESETS_HEADER': "Voreinstellungen (Presets)",
@@ -201,14 +202,24 @@ T = {
         'STEP6_OBJECTIVE_LABEL': "Zielfunktion (Kaltluft): {value:.4f}",
         'STEP6_METRICS_HEADER': "Leistungsmerkmale",
         
-        # Breadcrumbs
-        'BREADCRUMB_HOME': 'Start',
-        'BREADCRUMB_STEP1': 'Geltungsbereich',
-        'BREADCRUMB_STEP2': 'Merkmale & Ziele',
-        'BREADCRUMB_STEP3': 'Optimierung',
-        'BREADCRUMB_STEP4': 'Analyse',
+                # Breadcrumbs
+        'BREADCRUMB_HOME': 'Home',
+        'BREADCRUMB_STEP1': 'Scope',
+        'BREADCRUMB_STEP2': 'Features & Objectives',
+        'BREADCRUMB_STEP3': 'Optimization',
+        'BREADCRUMB_STEP4': 'Analysis',
         'BREADCRUMB_STEP5': 'Clustering',
-        'BREADCRUMB_STEP6': 'Vergleich',
+        'BREADCRUMB_STEP6': 'Comparison',
+        
+        
+        # Step titles
+        'NEXT_STEP_LABEL': 'Weiter zu',
+        'NEXT_STEP_STEP1': 'Geltungsbereich festlegen',
+        'NEXT_STEP_STEP2': 'Merkmale & Ziele definieren',
+        'NEXT_STEP_STEP3': 'Optimierung starten',
+        'NEXT_STEP_STEP4': 'Ergebnisse analysieren',
+        'NEXT_STEP_STEP5': 'Entwürfe clustern',
+        'NEXT_STEP_STEP6': 'Entwürfe vergleichen',
     },
     'EN': {
         # App-wide
@@ -241,6 +252,7 @@ T = {
 
         # Step 2
         'STEP2_TITLE': "Step 2: Define Performance Metrics and Optimization Goals",
+        'STEP2_RESET_BUTTON': "Reset All",
         'STEP2_OBJECTIVES_HEADER': "Performance Metrics",
         'STEP2_MEASURES_LABEL': "Select metrics to generate diverse solutions:",
         'STEP2_PRESETS_HEADER': "Presets",
@@ -415,6 +427,16 @@ T = {
         'BREADCRUMB_STEP4': 'Analysis',
         'BREADCRUMB_STEP5': 'Clustering',
         'BREADCRUMB_STEP6': 'Comparison',
+
+        # Next step navigation
+        'NEXT_STEP_LABEL': 'Go to',
+        'NEXT_STEP_STEP1': 'Define Scope',
+        'NEXT_STEP_STEP2': 'Set Features & Objectives',
+        'NEXT_STEP_STEP3': 'Run Optimization',
+        'NEXT_STEP_STEP4': 'Analyze Results',
+        'NEXT_STEP_STEP5': 'Cluster Designs',
+        'NEXT_STEP_STEP6': 'Compare Designs',
+        
     }
 }
 
@@ -442,14 +464,14 @@ def translate_feature_labels(feature_indices, lang='DE', feature_set='original')
 
 def create_breadcrumb(current_step, lang='DE'):
     """
-    Create breadcrumb navigation component.
+    Create breadcrumb navigation component with next step button.
     
     Args:
         current_step: Current step number (1-6) or 'home'
         lang: Language code ('DE' or 'EN')
     
     Returns:
-        Dash Bootstrap Components Breadcrumb
+        Dash Bootstrap Components container with Breadcrumb and next step button
     """
     import dash_bootstrap_components as dbc
     from dash import html
@@ -497,4 +519,32 @@ def create_breadcrumb(current_step, lang='DE'):
                     "external_link": False,
                 })
     
-    return dbc.Breadcrumb(items=items, className="mb-3")
+    # Create next step button (if not on last step)
+    next_button = None
+    if current_index < 6:
+        next_step_num = current_index + 1
+        next_step_label_key = f'NEXT_STEP_STEP{next_step_num}'
+        next_step_href = f'/step{next_step_num}'
+        
+        next_button = dbc.Button(
+            [
+                f"{translations['NEXT_STEP_LABEL']}: {translations[next_step_label_key]}",
+                html.I(className="bi bi-arrow-right ms-2")
+            ],
+            href=next_step_href,
+            color="primary",
+            outline=True,
+            size="sm",
+            className="ms-3",
+            style={"whiteSpace": "nowrap"}
+        )
+    
+    # Return container with breadcrumb and next button aligned horizontally at baseline
+    return html.Div(
+        [
+            dbc.Breadcrumb(items=items, className="mb-0"),
+            next_button if next_button else html.Div()
+        ],
+        className="d-flex align-items-baseline mb-3",
+        style={"flexWrap": "wrap"}
+    )

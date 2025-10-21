@@ -12,11 +12,6 @@ def layout(lang='DE'):
     return dbc.Container([
         create_breadcrumb(4, lang),
         html.H2(T[lang].get('STEP4_TITLE', 'Results Analysis')),
-        dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step3', color="secondary")),
-            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step5', color="primary"), className="text-end")
-        ], className="mt-4"),
-        
         # Feature vs Objective Scatter Plots
         dbc.Row([
             html.H4(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_HEADER']),

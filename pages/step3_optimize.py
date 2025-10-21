@@ -73,11 +73,7 @@ def layout(lang='DE'):
     return dbc.Container([
         create_breadcrumb(3, lang),
         html.H2(T[lang]['STEP3_TITLE']),
-        dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step2', color="secondary")),
-            dbc.Col(dbc.Button(T[lang]['NEXT_STEP'], href='/step4', color="primary"), className="text-end")
-        ], className="mt-4"),
-
+        
         dbc.Row([
             dbc.Col([
                 dbc.Button(T[lang]['STEP3_START_BUTTON'], id='start-optimization-btn', color="success", size="lg", className="mb-3"),

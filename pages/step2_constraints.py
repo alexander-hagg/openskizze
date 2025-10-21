@@ -45,25 +45,18 @@ def layout(lang='DE'):
     MEASURES_OPTIONS = get_measures_options(lang)
     return dbc.Container([
         create_breadcrumb(2, lang),
-        html.H2(T[lang]['STEP2_TITLE']),
-        dbc.Row([
-            dbc.Col(dcc.Link(dbc.Button(T[lang]['PREV_STEP'], color="secondary"), href='/')),
-            dbc.Col(dcc.Link(dbc.Button(T[lang]['NEXT_STEP'], color="primary"), href='/step3'), className="text-end")
-        ], className="mt-4"),
-
-        #dbc.Card(dbc.CardBody([
-        #    html.H5(T[lang]['STEP2_PRESETS_HEADER']),
-        #    dbc.Select(
-        #        id='presets-dropdown',
-        #        options=[
-        #            {'label': T[lang]['STEP2_PRESET_CUSTOM'], 'value': 'custom'},
-        #            {'label': PRESETS['suburban']['name'], 'value': 'suburban'},
-        #            {'label': PRESETS['dense_urban']['name'], 'value': 'dense_urban'},
-        #        ],
-        #        value='custom'
-        #    )
-        #]), className="mb-4"),
-
+        html.Div([
+            html.H2(T[lang]['STEP2_TITLE'], className="d-inline-block mb-0"),
+            dbc.Button(
+                [html.I(className="bi bi-arrow-counterclockwise me-2"), T[lang]['STEP2_RESET_BUTTON']],
+                id='reset-all-button',
+                color="secondary",
+                outline=True,
+                size="sm",
+                className="float-end"
+            ),
+        ], className="mb-3 clearfix"),
+        
         dbc.Row([
             dbc.Col([
                 html.H5(T[lang]['STEP2_HARD_CONSTRAINTS_HEADER'], className="mt-4"),
@@ -716,3 +709,43 @@ def update_session_with_features_and_ranges(
         print(f"[DEBUG-SESSION-UPDATE] Keeping existing feature_set='{existing_feature_set}' (not triggered by selector)")
     
     return session_data
+
+
+# Reset all parameters to default values - clear session except parcel data
+@callback(
+    Output('session-store', 'data', allow_duplicate=True),
+    Input('reset-all-button', 'n_clicks'),
+    State('session-store', 'data'),
+    prevent_initial_call=True
+)
+def reset_all_parameters(n_clicks, session_data):
+    """
+    Reset all parameters to default values by clearing the session.
+    This simulates a fresh start as if the user just selected the parcel.
+    Only preserves the parcel selection data.
+    """
+    if not n_clicks:
+        return no_update
+    
+    session_data = session_data or {}
+    
+    # Preserve only the parcel/area selection data
+    preserved_keys = [
+        'selected_parcel',
+        'selected_bbox', 
+        'parcel_geometry',
+        'parcel_area_sqm',
+        'grid_params',
+        'buildable_mask',
+        'existing_buildings_grid',
+        'wind_direction'
+    ]
+    
+    new_session = {}
+    for key in preserved_keys:
+        if key in session_data:
+            new_session[key] = session_data[key]
+    
+    print("[RESET] Session cleared - all parameters reset to defaults (parcel data preserved)")
+    
+    return new_session
