@@ -362,7 +362,7 @@ def layout(lang='DE'):
     dcc.Location(id='url-s6', refresh=False),
     html.H2(T[lang]['STEP6_TITLE']),
         dbc.Row([
-            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step4', color="secondary")),
+            dbc.Col(dbc.Button(T[lang]['PREV_STEP'], href='/step5', color="secondary")),
             dbc.Col([
                 dbc.Button(T[lang]['STEP6_EXPORT_PDF'], id="export-pdf-btn-s6", color="info"),
                 dcc.Download(id="download-pdf-s6")
@@ -383,7 +383,7 @@ def layout(lang='DE'):
     Input('comparison-store', 'data'),
     Input('results-store', 'data'),
     Input('solution-mode-store', 'data'),
-    Input('clustering-data-store', 'data'),  # Get ACTUAL cluster data from Step 4
+    Input('clustering-data-store', 'data'),  # Get ACTUAL cluster data from Step 5
     State('language-store', 'data'),
     State('camera-sync-store', 'data')
 )
@@ -404,8 +404,8 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Use the ACTUAL cluster data from Step 4 (no re-clustering!)
-    # This ensures consistency - we use the exact same clusters that were displayed in Step 4
+    # Use the ACTUAL cluster data from Step 5 (no re-clustering!)
+    # This ensures consistency - we use the exact same clusters that were displayed in Step 5
     if not clustering_data or 'clusters' not in clustering_data:
         return dbc.Alert(T[lang]['STEP6_NO_SELECTION'], color="warning")
     
