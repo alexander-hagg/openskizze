@@ -10,7 +10,7 @@
 - Genome dimension is FIXED at 60 (never change)
 - Always use physical units (meters, m²)
 - Always add bilingual strings (German + English)
-- Performance matters: evaluation runs 80,000+ times
+- Performance matters: evaluation runs 50,000 to 500,000 times
 
 **Before making any changes**:
 1. Read the **Core Workflow** section (5 steps)
@@ -100,10 +100,10 @@ openskizze-gui/
 ## Core Workflow (5 Steps)
 
 1. **Step 1**: Select parcel (GeoJSON upload or NRW WFS fetch) + set wind direction
-2. **Step 2**: Select features (8 measures), set target ranges, hard constraints (max height, min distance)
-3. **Step 3**: Run QD optimization (100-1000 generations, multiprocess)
+2. **Step 2**: Select features (8 measures), set target ranges, hard constraints (max height, min distance), set number of generations
+3. **Step 3**: Run QD optimization (multiprocess)
 4. **Step 4**: Explore archive (heatmaps, clustering, tiled 3D previews)
-5. **Step 5**: Compare 2-4 solutions side-by-side (synchronized 3D views)
+5. **Step 5**: Compare solution clusters or "design families" side-by-side (synchronized 3D views)
 
 ## Coding Guidelines
 
@@ -122,11 +122,10 @@ openskizze-gui/
 - **Error handling**: Use try/except for network calls and file I/O
 
 ### Performance Critical
-- **Evaluation loop**: `backend/evaluation.py` runs 80,000+ times per optimization
-  - Already optimized: 2D heightmap rotation (not 3D), label caching
-  - Avoid: Python loops, redundant `scipy.ndimage.label()` calls
+- **Evaluation loop**: `backend/evaluation.py` runs 50,000 to 500,000 times per optimization
+  - Avoid: Python loops, redundant `scipy.ndimage.label()` calls altogether
   - Profile with `python -m cProfile` if adding compute-heavy code
-- **Multiprocessing**: Optimizer uses `Pool(processes=cpu_count-2)` for batch evaluation
+- **Multiprocessing**: Optimizer uses `Pool(processes=N)` for batch evaluation where N depends on available CPU cores
 - **Caching**: LOD2 tiles cached in `cache/lod2_tiles/`, building labels cached per evaluation
 
 ### Dash/UI Patterns
@@ -185,15 +184,15 @@ openskizze-gui/
 
 ### Installation
 ```bash
-# Install dependencies (Python 3.12 compatible)
+# Install dependencies using mamba (recommended)
+mamba create -n openskizze python=3.12
+mamba activate openskizze
+mamba install --file requirements.txt
+
+# Alternative: Use pip within mamba environment
+mamba create -n openskizze python=3.12
+mamba activate openskizze
 pip install -r requirements.txt
-
-# Known issue: dash-extensions 1.1.1 not available for Python 3.12
-# If installation fails, manually install compatible version:
-pip install dash-extensions>=1.0.0,<1.1.0
-
-# Minimal core packages (if full requirements.txt fails):
-pip install dash==2.17.0 dash-bootstrap-components plotly pyribs geopandas numpy scipy pandas shapely
 ```
 
 ### Running the App
@@ -414,9 +413,8 @@ python -c "from backend.evaluation import calculate_all_features; import numpy a
 
 ### Problem: "Import errors or module not found"
 1. Check Python version: `python3 --version` (need 3.12)
-2. Install dependencies: `pip install -r requirements.txt`
-3. If dash-extensions fails:
-   - `pip install dash-extensions>=1.0.0,<1.1.0`
+2. Install dependencies using mamba: `mamba install --file requirements.txt`
+3. Alternative: Use pip within mamba environment: `pip install -r requirements.txt`
 4. Check repo is in path:
    - `export PYTHONPATH=/home/runner/work/openskizze-gui/openskizze-gui:$PYTHONPATH`
 
