@@ -470,7 +470,8 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
     from backend.translation import translate_feature_labels
     from backend.units import format_value_with_unit
     feature_indices = results_data.get('selected_features_indices', [])
-    labels = translate_feature_labels(feature_indices, lang)
+    feature_set = results_data.get('feature_set', 'original')
+    labels = translate_feature_labels(feature_indices, lang, feature_set)
     
     cols = []
     for sol_data in solutions_to_compare:
@@ -629,7 +630,8 @@ def export_pdf_report_s6(n_clicks, selected_ids, results_data):
     # Translate feature labels (use German for PDF report - could be made configurable)
     from backend.translation import translate_feature_labels
     feature_indices = results_data.get('selected_features_indices', [])
-    labels = translate_feature_labels(feature_indices, 'DE')  # PDF in German
+    feature_set = results_data.get('feature_set', 'original')
+    labels = translate_feature_labels(feature_indices, 'DE', feature_set)  # PDF in German
 
     pdf_content = generate_pdf_report(
         solutions_to_compare,

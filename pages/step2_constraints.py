@@ -329,17 +329,22 @@ def apply_preset(preset_key, lang):
     Input('url', 'pathname'),
     Input('max-height-constraint', 'value'),
     Input('min-distance-constraint', 'value'),
+    Input('feature-set-selector', 'value'),
     State('language-store', 'data'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
-def create_range_sliders(selected_indices, pathname, max_height_input, min_distance_input, lang, session_data):
+def create_range_sliders(selected_indices, pathname, max_height_input, min_distance_input, feature_set_input, lang, session_data):
     from backend.units import calculate_dynamic_ranges_physical, get_unit_label
+    from backend.optimization_process import _calculate_dynamic_feat_ranges
     import geopandas as gpd
     import math
     from dash import ctx
     
     if lang is None: lang = 'DE'
+    
+    # Get feature set from input or session (prioritize input)
+    feature_set = feature_set_input if feature_set_input else (session_data.get('feature_set', 'original') if session_data else 'original')
     
     # If triggered by URL change, get selected_indices from session_data
     if ctx.triggered_id == 'url':
@@ -356,9 +361,9 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
     sliders = []
     num_buildings_original_index = 3 # The original index for 'Anzahl der Gebäude'
 
-    # Get translated labels for sorted indices
+    # Get translated labels for sorted indices with correct feature set
     sorted_indices = sorted(selected_indices)
-    labels = translate_feature_labels(sorted_indices, lang)
+    labels = translate_feature_labels(sorted_indices, lang, feature_set)
     
     # Try to calculate dynamic ranges based on selected site from Step 1
     dynamic_ranges = None
@@ -409,24 +414,36 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
             max_height_meters = max_height_input if max_height_input else ENCODING_CONFIG['z_length']
             min_distance_meters = min_distance_input if min_distance_input else 0.0
             
-            # Calculate dynamic ranges in physical units, respecting hard constraints
-            dynamic_ranges = calculate_dynamic_ranges_physical(buildable_mask, max_height_meters, min_distance_meters)
+            # Calculate dynamic ranges based on feature set
+            if feature_set == 'planning':
+                # Use planning-specific range calculation
+                dynamic_ranges, _ = _calculate_dynamic_feat_ranges(buildable_mask, max_height_meters, min_distance_meters, feature_set='planning')
+            else:
+                # Use original feature range calculation (in physical units)
+                dynamic_ranges = calculate_dynamic_ranges_physical(buildable_mask, max_height_meters, min_distance_meters)
         except Exception as e:
             print(f"Warning: Could not calculate dynamic ranges: {e}")
             dynamic_ranges = None
 
     # Get saved feature ranges from session if available
-    saved_ranges = session_data.get('feature_ranges', {}) if session_data else {}
+    # Only use saved ranges if they're for the current feature set
+    saved_ranges = {}
+    if session_data:
+        saved_feature_set = session_data.get('feature_set', 'original')
+        if saved_feature_set == feature_set:
+            saved_ranges = session_data.get('feature_ranges', {})
+        else:
+            print(f"[DEBUG] Feature set changed (saved: {saved_feature_set}, current: {feature_set}), using default ranges")
     
     # Debug: Print what we're restoring
     if saved_ranges:
         print(f"[DEBUG] Restoring feature ranges from session: {saved_ranges}")
     else:
-        print(f"[DEBUG] No saved feature ranges found in session_data")
+        print(f"[DEBUG] No saved feature ranges found, using full dynamic ranges")
     
     for i, index in enumerate(sorted_indices):
         label = labels[i]
-        unit = get_unit_label(index, lang)
+        unit = get_unit_label(index, lang, feature_set)
         
         # Use dynamic ranges if available, otherwise fall back to default
         if dynamic_ranges is not None:
@@ -566,14 +583,21 @@ def update_session_with_features_and_ranges(
     objective_function, feature_set,
     slider_ids, session_data
 ):
+    from dash import ctx
     session_data = session_data or {}
+    
+    # Check if feature set changed - if so, clear saved ranges to force recalculation
+    previous_feature_set = session_data.get('feature_set', 'original')
+    if feature_set != previous_feature_set:
+        print(f"[DEBUG] Feature set changed from {previous_feature_set} to {feature_set}, clearing saved ranges")
+        session_data['feature_ranges'] = {}  # Clear old ranges
     
     # Save feature selections
     session_data['selected_features'] = selected_indices
     
-    # Only update feature_ranges if we have valid slider data
+    # Only update feature_ranges if we have valid slider data AND feature set hasn't just changed
     # This prevents overwriting saved ranges when sliders are being recreated
-    if slider_ids and slider_values:
+    if slider_ids and slider_values and feature_set == previous_feature_set:
         new_feature_ranges = {
             str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
         }

@@ -141,12 +141,13 @@ def populate_dropdowns_s3(results_data, language):
         return [], [], None, None
     
     feature_indices = results_data['selected_features_indices']
+    feature_set = results_data.get('feature_set', 'original')
     
     # Get current language (default to 'DE')
     lang = language if language else 'DE'
     
-    # Translate feature labels based on current language
-    labels = translate_feature_labels(feature_indices, lang)
+    # Translate feature labels based on current language and feature set
+    labels = translate_feature_labels(feature_indices, lang, feature_set)
     
     options = [{'label': label, 'value': i} for i, label in enumerate(labels)]
     val1 = 0 if len(options) > 0 else None
@@ -208,7 +209,8 @@ def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data):
     
     # Get feature labels
     from backend.translation import translate_feature_labels
-    labels = translate_feature_labels(selected_features, 'DE')
+    feature_set = results_data.get('feature_set', 'original')
+    labels = translate_feature_labels(selected_features, 'DE', feature_set)
     
     # Calculate axis tick positions and labels
     x_range = feat_ranges[x_axis_idx]
@@ -381,11 +383,12 @@ def update_parallel_coords_s3(results_data, language):
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Get feature indices from final results
+    # Get feature indices and feature set from final results
     feature_indices = results_data.get('selected_features_indices', [])
+    feature_set = results_data.get('feature_set', 'original')
     
-    # Translate labels based on current language
-    labels = translate_feature_labels(feature_indices, lang)
+    # Translate labels based on current language and feature set
+    labels = translate_feature_labels(feature_indices, lang, feature_set)
     
     # Create parallel coordinates plot
     df_for_plot = pd.DataFrame(list_of_elites)

@@ -126,13 +126,14 @@ def create_filter_controls(results_data, language):
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
-    # Translate feature labels based on current language
+    # Translate feature labels based on current language and feature set
     from backend.translation import translate_feature_labels
     from backend.units import get_unit_label
     selected_feature_indices = results_data.get('selected_features_indices', [])
+    feature_set = results_data.get('feature_set', 'original')
     if not selected_feature_indices: return no_update
     
-    labels = translate_feature_labels(selected_feature_indices, lang)
+    labels = translate_feature_labels(selected_feature_indices, lang, feature_set)
     
     # Extract measures data to get actual ranges from optimization results
     measures_data = np.array([e['measures'] for e in list_of_elites if e is not None])
@@ -290,12 +291,16 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         # Create histogram of objective function values for this cluster
         objective_values = cluster['objective_values']  # List of objective values for solutions in this cluster
         objective_label = T[lang].get('OBJECTIVE_FUNCTION', 'Objective Function')
+        count_label = T[lang].get('COUNT', 'Count')
+        
+        # Create dataframe for proper histogram plotting
+        df_hist = pd.DataFrame({objective_label: objective_values})
         
         histogram_fig = px.histogram(
-            x=objective_values,
+            df_hist,
+            x=objective_label,
             nbins=20,
             range_x=[0, 1],  # Fixed range for objective function (0 to 1)
-            labels={'x': objective_label, 'y': T[lang].get('COUNT', 'Count')},
             title=None
         )
         histogram_fig.update_layout(
@@ -303,11 +308,18 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
             showlegend=False,
             height=200,
             xaxis_title=objective_label,
-            yaxis_title=T[lang].get('COUNT', 'Count'),
+            yaxis_title=count_label,
             yaxis_range=[0, max_count * 1.05],  # Uniform y-axis across all clusters with 5% padding
-            bargap=0.1
+            bargap=0.05,
+            plot_bgcolor='white',
+            paper_bgcolor='white'
         )
-        histogram_fig.update_traces(marker_color='rgb(50, 150, 200)', marker_line_width=1, marker_line_color='white')
+        histogram_fig.update_traces(
+            marker_color='rgb(55, 126, 184)',  # Brighter blue
+            marker_line_width=0.5,
+            marker_line_color='rgb(30, 70, 120)',  # Darker blue outline
+            opacity=0.85
+        )
         histogram_graph = dcc.Graph(figure=histogram_fig, style={'height': '200px', 'width': '100%'})
         
         card = dbc.Card(dbc.CardBody([
@@ -407,9 +419,10 @@ def generate_correlation_heatmap(results_data, pathname, language):
         )
         return empty_fig
     
-    # Translate feature labels based on current language
+    # Translate feature labels based on current language and feature set
     from backend.translation import translate_feature_labels
     feature_indices = results_data.get('selected_features_indices', [])
+    feature_set = results_data.get('feature_set', 'original')
     if not feature_indices:
         empty_fig = px.scatter(title=T[lang]['STEP5_NO_LABELS'])
         empty_fig.update_layout(
@@ -424,7 +437,7 @@ def generate_correlation_heatmap(results_data, pathname, language):
         )
         return empty_fig
     
-    labels = translate_feature_labels(feature_indices, lang)
+    labels = translate_feature_labels(feature_indices, lang, feature_set)
     
     # Add units to feature labels
     from backend.units import get_unit_label
