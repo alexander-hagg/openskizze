@@ -592,15 +592,15 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         ),
         height=700,  # Square viewport
         width=700,  # Square viewport
-        margin=dict(l=0, r=0, t=30, b=100),  # More bottom margin for legend
+        margin=dict(l=0, r=0, t=50, b=0),  # Top margin for legend, no bottom margin
         hovermode='closest',
         paper_bgcolor='white',
         plot_bgcolor='white',
-        # Legend at bottom center, horizontal orientation
+        # Legend at top center, horizontal orientation
         legend=dict(
             orientation='h',
-            yanchor='top',
-            y=-0.12,
+            yanchor='bottom',
+            y=1.0,
             xanchor='center',
             x=0.5,
             bgcolor='rgba(255, 255, 255, 0.9)',
@@ -647,6 +647,71 @@ def layout(lang='DE'):
         
         dcc.Loading(html.Div(id='comparison-content'))
     ], fluid=True)
+
+
+def create_diversity_grid(cluster, heightmap_res, cluster_index):
+    """Create a 3x3 grid of random solution previews from the cluster"""
+    cluster_solutions = cluster.get('all_solutions', [])
+    
+    if len(cluster_solutions) < 9:
+        # If less than 9 solutions, take what we have
+        num_samples = min(len(cluster_solutions), 9)
+        sampled_solutions = cluster_solutions[:num_samples]
+    else:
+        # Random sample of 9 solutions
+        np.random.seed(cluster_index)  # Consistent randomization per cluster
+        sample_indices = np.random.choice(len(cluster_solutions), size=9, replace=False)
+        sampled_solutions = [cluster_solutions[idx] for idx in sample_indices]
+    
+    # Create 3x3 grid
+    preview_cards = []
+    for idx, sol in enumerate(sampled_solutions):
+        heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
+        
+        # Create simple 3D preview (surface plot)
+        fig = go.Figure()
+        x = np.arange(heightmap.shape[1])
+        y = np.arange(heightmap.shape[0])
+        
+        fig.add_trace(go.Surface(
+            z=heightmap,
+            x=x,
+            y=y,
+            colorscale='Blues',
+            showscale=False,
+            hoverinfo='skip'
+        ))
+        
+        fig.update_layout(
+            scene=dict(
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                zaxis=dict(visible=False),
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
+                aspectmode='data'
+            ),
+            margin=dict(l=0, r=0, t=0, b=0),
+            height=120,
+            width=120,
+            showlegend=False,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        
+        card = dbc.Col([
+            dcc.Graph(figure=fig, config={'displayModeBar': False}, 
+                     style={'height': '120px', 'width': '120px'})
+        ], width=4, className="p-1")
+        
+        preview_cards.append(card)
+    
+    # Organize into rows of 3
+    rows = []
+    for i in range(0, len(preview_cards), 3):
+        row_cards = preview_cards[i:i+3]
+        rows.append(dbc.Row(row_cards, className="g-1 justify-content-center"))
+    
+    return html.Div(rows)
 
 
 @callback(
@@ -767,16 +832,37 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
             function_lookup=function_lookup
         )
         
-        # Format values with physical units
+        # Format values with physical units and calculate ranges
         formatted_values = []
+        formatted_ranges = []
+        
+        # Get all solutions in cluster to calculate ranges
+        cluster_solutions = cluster.get('all_solutions', [cluster['best_solution'], cluster['central_solution']])
+        
         for j, value in enumerate(sol['measures']):
             if j < len(feature_indices):
                 feature_idx = feature_indices[j]
                 formatted_values.append(format_value_with_unit(value, feature_idx, lang))
+                
+                # Calculate range for this feature across all solutions in cluster
+                if len(cluster_solutions) > 1:
+                    feature_values = [s['measures'][j] for s in cluster_solutions]
+                    min_val = min(feature_values)
+                    max_val = max(feature_values)
+                    range_str = f"{format_value_with_unit(min_val, feature_idx, lang)} - {format_value_with_unit(max_val, feature_idx, lang)}"
+                else:
+                    range_str = "-"
+                formatted_ranges.append(range_str)
             else:
                 formatted_values.append(f"{value:.3f}")  # Fallback
+                formatted_ranges.append("-")
         
-        metrics_data = {T[lang]['STEP6_FEATURE_LABEL']: labels, T[lang]['STEP6_VALUE_LABEL']: formatted_values}
+        range_label = "Bereich" if lang == 'DE' else "Range"
+        metrics_data = {
+            T[lang]['STEP6_FEATURE_LABEL']: labels, 
+            T[lang]['STEP6_VALUE_LABEL']: formatted_values,
+            range_label: formatted_ranges
+        }
         metrics_df = pd.DataFrame(metrics_data)
         table = dbc.Table.from_dataframe(metrics_df, striped=True, bordered=True, hover=True, size='sm')
         
@@ -798,19 +884,42 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
             className="mb-2"
         )
         
-        col = dbc.Col([
-            html.H5(f"Cluster {cluster['cluster_id']} ({cluster['size']} " + 
-                   ("Lösungen" if lang == 'DE' else "solutions") + ")"),
-            toggle_radio,
-            html.B(objective_formatted, className="d-block mb-2"),
-            dcc.Graph(
-                figure=fig_3d,
-                id={'type': '3d-plot', 'index': i},
-                config={'displayModeBar': True, 'displaylogo': False}
-            ),
-            html.H6(T[lang]['STEP6_METRICS_HEADER'], className="mt-3"),
-            html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
-        ], md=12, lg=6, xl=6, className="mb-4")  # 2 designs per row on large screens, 1 on medium
+        # Create card with side-by-side layout
+        card = dbc.Card([
+            dbc.CardHeader([
+                html.H5(f"Cluster {cluster['cluster_id']} ({cluster['size']} " + 
+                       ("Lösungen" if lang == 'DE' else "solutions") + ")", className="mb-0 d-inline-block"),
+            ]),
+            dbc.CardBody([
+                toggle_radio,
+                html.B(objective_formatted, className="d-block mb-2"),
+                dbc.Row([
+                    # 3D visualization on the left
+                    dbc.Col([
+                        html.Div([
+                            dcc.Graph(
+                                figure=fig_3d,
+                                id={'type': '3d-plot', 'index': i},
+                                config={'displayModeBar': True, 'displaylogo': False},
+                                style={'height': '450px', 'width': '100%'}
+                            ),
+                        ], style={'overflow': 'hidden'}),  # Prevent overflow
+                    ], md=8, className="pe-2"),
+                    # Metrics table on the right
+                    dbc.Col([
+                        html.H6(T[lang]['STEP6_METRICS_HEADER'], className="mb-2"),
+                        html.Div(table, className="compact-table")
+                    ], md=4, className="ps-2"),
+                ], className="g-0"),  # Remove gutter spacing
+                # 3x3 Diversity preview below
+                html.Hr(className="my-2"),
+                html.H6(("Diversität (9 zufällige Beispiele)" if lang == 'DE' else "Diversity (9 random samples)"), 
+                       className="mb-2 mt-2"),
+                html.Div(id={'type': 'diversity-grid', 'index': i}, children=create_diversity_grid(cluster, heightmap_res, i))
+            ], className="p-2")
+        ], className="mb-3")
+        
+        col = dbc.Col(card, md=12, lg=12, xl=6)  # Full width on small/medium, half on XL
         cols.append(col)
     
     return dbc.Row(cols)

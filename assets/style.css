@@ -15,3 +15,49 @@ body {
 .leaflet-container {
     height: 100%;
 }
+
+/* Compact table styling for Step 6 - narrow, no scrollbar, smaller padding */
+.compact-table {
+    overflow: visible !important;
+    max-height: none !important;
+}
+
+.compact-table table {
+    margin-bottom: 0 !important;
+    font-size: 0.75rem;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.compact-table td, .compact-table th {
+    padding: 0.25rem 0.35rem !important;
+    line-height: 1.2;
+}
+
+.compact-table th {
+    font-weight: 600;
+    background-color: #f8f9fa;
+}
+
+.compact-table td:first-child, .compact-table th:first-child {
+    font-size: 0.7rem;
+    width: 35%;
+}
+
+.compact-table td:nth-child(2), .compact-table th:nth-child(2) {
+    width: 20%;
+    white-space: nowrap;
+}
+
+.compact-table td:nth-child(3), .compact-table th:nth-child(3) {
+    width: 45%;
+    font-size: 0.7rem;
+    word-wrap: break-word;
+}
+
+/* Diversity grid styling */
+.diversity-grid {
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 4px;
+}

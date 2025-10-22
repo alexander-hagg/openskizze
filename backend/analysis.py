@@ -154,6 +154,9 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
 
         boolean_heightmaps = cluster_heightmaps > 0
         consensus_map = np.mean(boolean_heightmaps, axis=0)
+        
+        # Store all solutions in this cluster for diversity analysis
+        cluster_solutions = [filtered_elites[idx] for idx in cluster_indices]
 
         analysis_results.append({
             'cluster_id': int(k),
@@ -162,7 +165,8 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
             'central_solution': filtered_elites[central_solution_orig_idx],
             'consensus_map': consensus_map.tolist(),
             'objective_values': cluster_objectives.tolist(),  # Add objective values for histogram
-            'median_objective': float(np.median(cluster_objectives))  # Add median for sorting
+            'median_objective': float(np.median(cluster_objectives)),  # Add median for sorting
+            'all_solutions': cluster_solutions  # Store all solutions for diversity preview
         })
     
     
