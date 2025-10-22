@@ -118,6 +118,11 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         j_indices = []
         k_indices = []
         
+        # Wireframe coordinates (all edges combined into one trace)
+        wireframe_x = []
+        wireframe_y = []
+        wireframe_z = []
+        
         vertex_count = 0
         
         # Process each cell and try to merge with neighbors of same height
@@ -192,6 +197,26 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                     j_indices.append(vertex_count + face[1])
                     k_indices.append(vertex_count + face[2])
                 
+                # Add wireframe edges for this building block (12 edges of the box)
+                # Combine all edges into single lists with None separators
+                wireframe_edges = [
+                    # Bottom rectangle
+                    [0, 1], [1, 2], [2, 3], [3, 0],
+                    # Top rectangle
+                    [4, 5], [5, 6], [6, 7], [7, 4],
+                    # Vertical edges
+                    [0, 4], [1, 5], [2, 6], [3, 7]
+                ]
+                
+                for edge in wireframe_edges:
+                    v0 = vertices[edge[0]]
+                    v1 = vertices[edge[1]]
+                    
+                    # Add edge to combined wireframe (with None separator)
+                    wireframe_x.extend([v0[0], v1[0], None])
+                    wireframe_y.extend([v0[1], v1[1], None])
+                    wireframe_z.extend([v0[2], v1[2], None])
+                
                 vertex_count += 8
         
         if vertex_count > 0:
@@ -217,18 +242,28 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                 name=name,
                 showlegend=show_in_legend,
                 hovertemplate=f'{name}<br>X: %{{x:.1f}}m<br>Y: %{{y:.1f}}m<br>Höhe: %{{z:.1f}}m<extra></extra>',
-                flatshading=False,  # Smooth shading
+                flatshading=True,  # Use flat shading to avoid interpolation artifacts
                 lighting=dict(
-                    ambient=0.7,      # Higher ambient for well-lit buildings
-                    diffuse=0.8,      # Good diffuse lighting
-                    specular=0.2,     # Low specular to reduce shine
-                    roughness=0.9,    # Very rough surfaces (matte)
+                    ambient=0.9,      # Very high ambient = minimal shadows
+                    diffuse=0.5,      # Reduced diffuse to minimize directional effects
+                    specular=0.0,     # No specular highlights
+                    roughness=1.0,    # Maximum roughness (completely matte)
                     fresnel=0.0       # No fresnel effect
                 ),
-                # Hide mesh edges
-                contour=dict(show=False),
-                lightposition=dict(x=1e5, y=1e5, z=1e5)  # Distant light source
+                lightposition=dict(x=0, y=0, z=1e5)  # Light directly from above (like sun at noon)
             ))
+            
+            # Add ALL wireframe edges as a SINGLE trace (much faster!)
+            if len(wireframe_x) > 0:
+                fig.add_trace(go.Scatter3d(
+                    x=wireframe_x,
+                    y=wireframe_y,
+                    z=wireframe_z,
+                    mode='lines',
+                    line=dict(color='black', width=4),
+                    showlegend=False,
+                    hoverinfo='skip'
+                ))
     
     # Add existing buildings first (in gray, fully opaque)
     if env_3d_fixed is not None and env_3d_fixed.size > 0:
@@ -236,12 +271,6 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         # env_3d_fixed z-axis is already in meters (1 voxel = 1 meter)
         # No multiplication needed - heights are already correct
         existing_heightmap = np.sum(env_3d_fixed > 0, axis=2) * height_exaggeration
-        
-        # DEBUG: Print existing building stats
-        existing_non_zero = existing_heightmap[existing_heightmap > 0]
-        if len(existing_non_zero) > 0:
-            print(f"    EXISTING buildings (gray): min={existing_non_zero.min():.2f}m, "
-                  f"max={existing_non_zero.max():.2f}m, mean={existing_non_zero.mean():.2f}m")
         
         if existing_heightmap.max() > 0:
             # Determine coordinates for existing buildings
@@ -267,22 +296,17 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                     func_heightmap[~func_mask] = 0
                     
                     if func_heightmap.max() > 0:
-                        func_color = func_colors[idx] if idx < len(func_colors) else 'rgb(140, 140, 140)'
+                        func_color = func_colors[idx] if idx < len(func_colors) else 'rgb(160, 160, 160)'
                         add_voxel_blocks(func_heightmap, func_color, f'Bestand: {func_name}', 
                                        opacity=1.0, show_in_legend=True, x_coords=x_coords_exp, y_coords=y_coords_exp)
             else:
-                # No function data, show all as one group
-                add_voxel_blocks(existing_heightmap, 'rgb(140, 140, 140)', 'Bestand', 
+                # No function data, show all as concrete gray
+                add_voxel_blocks(existing_heightmap, 'rgb(160, 160, 160)', 'Bestand', 
                                opacity=1.0, show_in_legend=True, x_coords=x_coords_exp, y_coords=y_coords_exp)
     
-    # Add new design buildings (in blue, fully opaque)
-    if heightmap_meters.max() > 0:
-        # DEBUG: Print new design building stats
-        new_non_zero = heightmap_meters[heightmap_meters > 0]
-        print(f"    NEW DESIGN buildings (blue): min={new_non_zero.min():.2f}m, "
-              f"max={new_non_zero.max():.2f}m, mean={new_non_zero.mean():.2f}m")
-        
-        add_voxel_blocks(heightmap_meters, 'rgb(50, 150, 200)', 'Entwurf', 
+    # Add new design buildings (modern blue)
+    if heightmap_meters.max() > 0:        
+        add_voxel_blocks(heightmap_meters, 'rgb(70, 140, 200)', 'Entwurf', 
                         opacity=1.0, show_in_legend=True)
     
     # Determine scene bounds - use expanded if available
@@ -291,23 +315,214 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     else:
         scene_min_x, scene_min_y, scene_max_x, scene_max_y = min_x, min_y, max_x, max_y
     
-    # Add simple ground plane
-    x_ground = [scene_min_x, scene_max_x, scene_max_x, scene_min_x]
-    y_ground = [scene_min_y, scene_min_y, scene_max_y, scene_max_y]
-    z_ground = [-1.0, -1.0, -1.0, -1.0]
+    # Add simple shadow projections on ground (light from above-south-east)
+    # OPTIMIZED: Combine ALL shadows into ONE mesh trace
+    shadow_offset_x = 3  # meters shadow offset in x
+    shadow_offset_y = 3  # meters shadow offset in y
     
+    shadow_x = []
+    shadow_y = []
+    shadow_z = []
+    shadow_i = []
+    shadow_j = []
+    shadow_k = []
+    shadow_vertex_count = 0
+    
+    # Shadow for new design buildings
+    if heightmap_meters.max() > 0:
+        shadow_mask = heightmap_meters > 1.5  # Only cast shadows for buildings > 1.5m
+        if shadow_mask.any():
+            for row in range(heightmap_meters.shape[0]):
+                for col in range(heightmap_meters.shape[1]):
+                    if shadow_mask[row, col]:
+                        # Get building footprint coordinates
+                        x0 = x_coords_geo[col] + shadow_offset_x
+                        x1 = x_coords_geo[col + 1] + shadow_offset_x
+                        y0 = y_coords_geo[row] + shadow_offset_y
+                        y1 = y_coords_geo[row + 1] + shadow_offset_y
+                        
+                        # Add vertices for this shadow quad
+                        shadow_x.extend([x0, x1, x1, x0])
+                        shadow_y.extend([y0, y0, y1, y1])
+                        shadow_z.extend([0.1, 0.1, 0.1, 0.1])
+                        
+                        # Add faces (2 triangles per quad)
+                        shadow_i.extend([shadow_vertex_count, shadow_vertex_count])
+                        shadow_j.extend([shadow_vertex_count + 1, shadow_vertex_count + 2])
+                        shadow_k.extend([shadow_vertex_count + 2, shadow_vertex_count + 3])
+                        shadow_vertex_count += 4
+    
+    # Shadow for existing buildings
+    if env_3d_fixed is not None and env_3d_fixed.size > 0:
+        existing_heightmap = np.sum(env_3d_fixed > 0, axis=2) * height_exaggeration
+        shadow_mask_existing = existing_heightmap > 1.5
+        
+        if shadow_mask_existing.any():
+            # Get coordinates for existing buildings
+            if expanded_bounds_native is not None:
+                exp_min_x, exp_min_y, exp_max_x, exp_max_y = expanded_bounds_native
+                exp_rows, exp_cols = existing_heightmap.shape
+                x_coords_exp = np.linspace(exp_min_x, exp_max_x, exp_cols + 1)
+                y_coords_exp = np.linspace(exp_min_y, exp_max_y, exp_rows + 1)
+            else:
+                x_coords_exp = x_coords_geo
+                y_coords_exp = y_coords_geo
+            
+            for row in range(existing_heightmap.shape[0]):
+                for col in range(existing_heightmap.shape[1]):
+                    if shadow_mask_existing[row, col]:
+                        x0 = x_coords_exp[col] + shadow_offset_x
+                        x1 = x_coords_exp[col + 1] + shadow_offset_x
+                        y0 = y_coords_exp[row] + shadow_offset_y
+                        y1 = y_coords_exp[row + 1] + shadow_offset_y
+                        
+                        # Add vertices for this shadow quad
+                        shadow_x.extend([x0, x1, x1, x0])
+                        shadow_y.extend([y0, y0, y1, y1])
+                        shadow_z.extend([0.1, 0.1, 0.1, 0.1])
+                        
+                        # Add faces
+                        shadow_i.extend([shadow_vertex_count, shadow_vertex_count])
+                        shadow_j.extend([shadow_vertex_count + 1, shadow_vertex_count + 2])
+                        shadow_k.extend([shadow_vertex_count + 2, shadow_vertex_count + 3])
+                        shadow_vertex_count += 4
+    
+    # Add single combined shadow mesh
+    if shadow_vertex_count > 0:
+        fig.add_trace(go.Mesh3d(
+            x=shadow_x,
+            y=shadow_y,
+            z=shadow_z,
+            i=shadow_i,
+            j=shadow_j,
+            k=shadow_k,
+            color='rgb(0, 0, 0)',
+            opacity=0.15,
+            showlegend=False,
+            hoverinfo='skip',
+            lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0)
+        ))
+    
+    # Add improved ground plane at z=0
+    # Make it slightly larger than the scene for better visual context
+    margin = max(scene_max_x - scene_min_x, scene_max_y - scene_min_y) * 0.1
+    ground_min_x = scene_min_x - margin
+    ground_max_x = scene_max_x + margin
+    ground_min_y = scene_min_y - margin
+    ground_max_y = scene_max_y + margin
+    
+    # Create simple ground plane at z=0
     fig.add_trace(go.Mesh3d(
-        x=x_ground,
-        y=y_ground,
-        z=z_ground,
+        x=[ground_min_x, ground_max_x, ground_max_x, ground_min_x],
+        y=[ground_min_y, ground_min_y, ground_max_y, ground_max_y],
+        z=[0, 0, 0, 0],
         i=[0, 0],
         j=[1, 2],
         k=[2, 3],
-        color='rgba(200, 220, 200, 0.5)',
-        opacity=0.5,
-        name='Ground',
+        color='rgb(180, 200, 180)',  # Light green
+        opacity=0.6,
+        name='Boden',
         hoverinfo='skip',
-        showlegend=False
+        showlegend=False,
+        lighting=dict(
+            ambient=0.9,
+            diffuse=0.3,
+            specular=0.0,
+            roughness=1.0
+        )
+    ))
+    
+    # Add grid lines on ground plane for scale reference
+    # OPTIMIZED: Combine all grid lines into ONE trace with None separators
+    grid_spacing = max(50, int((ground_max_y - ground_min_y) / 10) // 10 * 10)  # Round to nearest 10m, min 50m
+    
+    grid_x = []
+    grid_y = []
+    grid_z = []
+    
+    # Horizontal grid lines (along x-axis)
+    y_lines = np.arange(ground_min_y, ground_max_y + grid_spacing, grid_spacing)
+    for y_line in y_lines:
+        grid_x.extend([ground_min_x, ground_max_x, None])
+        grid_y.extend([y_line, y_line, None])
+        grid_z.extend([0, 0, None])
+    
+    # Vertical grid lines (along y-axis)
+    x_lines = np.arange(ground_min_x, ground_max_x + grid_spacing, grid_spacing)
+    for x_line in x_lines:
+        grid_x.extend([x_line, x_line, None])
+        grid_y.extend([ground_min_y, ground_max_y, None])
+        grid_z.extend([0, 0, None])
+    
+    # Add single trace with all grid lines
+    if len(grid_x) > 0:
+        fig.add_trace(go.Scatter3d(
+            x=grid_x,
+            y=grid_y,
+            z=grid_z,
+            mode='lines',
+            line=dict(color='rgba(120, 120, 120, 0.3)', width=1),
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+    
+    # Add 3D compass arrow on ground plane (pointing NORTH)
+    # Position to the north of the scene
+    compass_length = max(scene_max_x - scene_min_x, scene_max_y - scene_min_y) * 0.15  # 15% of scene size
+    compass_x = (scene_min_x + scene_max_x) / 2  # Center horizontally
+    compass_y_start = scene_max_y + (scene_max_y - scene_min_y) * 0.05  # Just north of scene
+    compass_y_end = compass_y_start + compass_length
+    
+    # Arrow shaft (thick red line pointing north)
+    fig.add_trace(go.Scatter3d(
+        x=[compass_x, compass_x],
+        y=[compass_y_start, compass_y_end],
+        z=[0.2, 0.2],  # Slightly above ground
+        mode='lines',
+        line=dict(color='red', width=8),
+        showlegend=False,
+        hoverinfo='skip',
+        name='North'
+    ))
+    
+    # Arrow head (cone pointing north)
+    arrow_width = compass_length * 0.3
+    arrowhead_x = [
+        compass_x - arrow_width/2, 
+        compass_x + arrow_width/2, 
+        compass_x
+    ]
+    arrowhead_y = [
+        compass_y_end - arrow_width * 0.8, 
+        compass_y_end - arrow_width * 0.8, 
+        compass_y_end
+    ]
+    arrowhead_z = [0.2, 0.2, 0.2]
+    
+    fig.add_trace(go.Mesh3d(
+        x=arrowhead_x,
+        y=arrowhead_y,
+        z=arrowhead_z,
+        i=[0],
+        j=[1],
+        k=[2],
+        color='red',
+        opacity=1.0,
+        showlegend=False,
+        hoverinfo='skip',
+        lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0)
+    ))
+    
+    # Add "N" text label using annotation (in 3D scene coordinates)
+    fig.add_trace(go.Scatter3d(
+        x=[compass_x],
+        y=[compass_y_end + arrow_width * 0.5],
+        z=[0.2],
+        mode='text',
+        text=['<b>N</b>'],
+        textfont=dict(size=20, color='red', family='Arial Black'),
+        showlegend=False,
+        hoverinfo='skip'
     ))
     
     # Calculate scene bounds in geographic coordinates
@@ -344,26 +559,70 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     # Update layout with geographic coordinate system - SQUARE viewport
     fig.update_layout(
         scene=dict(
-            xaxis=dict(title='Ost (m)', range=x_range, showgrid=True),
-            yaxis=dict(title='Nord (m)', range=y_range, showgrid=True),
-            zaxis=dict(title='Höhe (m)', range=z_range, showgrid=True),
+            xaxis=dict(
+                title='Ost (m)', 
+                range=x_range, 
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                gridwidth=1,
+                showbackground=True,
+                backgroundcolor='rgb(240, 245, 250)'
+            ),
+            yaxis=dict(
+                title='Nord (m)', 
+                range=y_range, 
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                gridwidth=1,
+                showbackground=True,
+                backgroundcolor='rgb(240, 245, 250)'
+            ),
+            zaxis=dict(
+                title='Höhe (m)', 
+                range=z_range, 
+                showgrid=True,
+                gridcolor='rgba(200, 200, 200, 0.3)',
+                gridwidth=1,
+                showbackground=True,
+                backgroundcolor='rgb(245, 250, 255)'
+            ),
             camera=camera,
             aspectmode='data',  # Force equal aspect ratio on all axes (1m = 1m in all directions)
-            # Add sun-like lighting effect with sky blue background
-            bgcolor='rgb(230, 240, 255)',  # Light sky blue background
+            bgcolor='rgb(235, 245, 255)',  # Soft sky blue background
         ),
         height=700,  # Square viewport
         width=700,  # Square viewport
         margin=dict(l=0, r=0, t=30, b=100),  # More bottom margin for legend
         hovermode='closest',
+        paper_bgcolor='white',
+        plot_bgcolor='white',
         # Legend at bottom center, horizontal orientation
         legend=dict(
             orientation='h',
             yanchor='top',
             y=-0.12,
             xanchor='center',
-            x=0.5
-        )
+            x=0.5,
+            bgcolor='rgba(255, 255, 255, 0.9)',
+            bordercolor='rgba(0, 0, 0, 0.1)',
+            borderwidth=1
+        ),
+        annotations=[
+            # Scale bar (keep only the scale bar, compass is now 3D on ground plane)
+            dict(
+                text=f'<b>━━━━</b> {grid_spacing}m',
+                x=0.02,
+                y=0.05,
+                xref='paper',
+                yref='paper',
+                showarrow=False,
+                font=dict(size=12, color='black'),
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                bordercolor='black',
+                borderwidth=1,
+                borderpad=4
+            )
+        ]
     )
     
     return fig
@@ -494,14 +753,6 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
         # Create heightmap
         heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
         
-        # DEBUG: Check actual heightmap values
-        non_zero_heights = heightmap[heightmap > 0]
-        if len(non_zero_heights) > 0:
-            print(f"  Heightmap stats: min={non_zero_heights.min():.2f}m, "
-                  f"max={non_zero_heights.max():.2f}m, "
-                  f"mean={non_zero_heights.mean():.2f}m, "
-                  f"pixels={len(non_zero_heights)}")
-        
         # Create 3D visualization with geographic context
         fig_3d = create_3d_building_plot(
             heightmap, 
@@ -561,9 +812,6 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
             html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
         ], md=12, lg=6, xl=6, className="mb-4")  # 2 designs per row on large screens, 1 on medium
         cols.append(col)
-    
-    print(f"[STEP 6 DEBUG] Created {len(cols)} comparison columns")
-    print("="*80 + "\n")
     
     return dbc.Row(cols)
 
