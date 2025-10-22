@@ -402,44 +402,23 @@ def layout(lang='DE'):
 def display_comparison(selected_ids, results_data, solution_modes, clustering_data, lang, camera_state):
     if lang is None: lang = 'DE'  # Default to German
     
-    # DEBUG: Print what we received
-    print("\n" + "="*80)
-    print("STEP 6 DEBUG: Display Comparison")
-    print("="*80)
-    print(f"Selected cluster IDs: {selected_ids}")
-    print(f"Has clustering_data: {clustering_data is not None}")
-    if clustering_data:
-        print(f"Clustering data keys: {clustering_data.keys()}")
-        if 'clusters' in clustering_data:
-            print(f"Number of clusters in data: {len(clustering_data['clusters'])}")
-            print(f"Applied filters: {clustering_data.get('feature_filters', {})}")
-    
     if not selected_ids:
-        print("[STEP 6 DEBUG] No clusters selected")
-        print("="*80 + "\n")
         return dbc.Alert(T[lang]['STEP6_NO_SELECTION'], color="info")
 
     if not results_data:
-        print("[STEP 6 DEBUG] No results data available")
-        print("="*80 + "\n")
         return dbc.Alert(T[lang]['STEP6_NO_RESULTS'], color="danger")
     
     grid_geojson = results_data.get('grid_geojson')
     if not grid_geojson:
-        print("[STEP 6 DEBUG] No grid GeoJSON in results data")
-        print("="*80 + "\n")
         return dbc.Alert(T[lang]['STEP6_FILE_NOT_FOUND'], color="danger")
     
     # Use the ACTUAL cluster data from Step 5 (no re-clustering!)
     # This ensures consistency - we use the exact same clusters that were displayed in Step 5
     # The clusters already contain the filtered solutions, no need to reload the full pickle!
     if not clustering_data or 'clusters' not in clustering_data:
-        print("[STEP 6 DEBUG] No clustering data available")
-        print("="*80 + "\n")
         return dbc.Alert(T[lang]['STEP6_NO_SELECTION'], color="warning")
     
     clusters = clustering_data['clusters']
-    print(f"[STEP 6 DEBUG] Using {len(clusters)} clusters from clustering data")
     
     # Map selected IDs to their clusters
     solutions_to_compare = []
@@ -461,13 +440,8 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
                 'display_mode': display_mode,
                 'index': idx
             })
-            print(f"[STEP 6 DEBUG] Cluster {cluster_id} matched, mode={display_mode}, size={matching_cluster['size']}")
-        else:
-            print(f"[STEP 6 DEBUG] Cluster {cluster_id} NOT FOUND in clustering data!")
     
     if not solutions_to_compare:
-        print("[STEP 6 DEBUG] No matching clusters found for selected IDs")
-        print("="*80 + "\n")
         return dbc.Alert(T[lang]['STEP6_IDS_NOT_FOUND'], color="warning")
     
     from backend.config import DOMAIN_CONFIG
@@ -517,13 +491,6 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
         # Get the solution to display (central or best)
         sol = cluster['central_solution'] if display_mode == 'central' else cluster['best_solution']
         
-        # DEBUG: Print solution details
-        print(f"[STEP 6 DEBUG] Displaying cluster {cluster['cluster_id']}, mode={display_mode}")
-        print(f"  Solution ID: {sol.get('id', '?')}")
-        print(f"  ALL Measures: {sol['measures']}")
-        print(f"  Feature 1 (Avg Height) = {sol['measures'][1]:.2f}m")
-        print(f"  Objective: {sol['objective']:.4f}")
-        
         # Create heightmap
         heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
         
@@ -534,8 +501,6 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
                   f"max={non_zero_heights.max():.2f}m, "
                   f"mean={non_zero_heights.mean():.2f}m, "
                   f"pixels={len(non_zero_heights)}")
-        else:
-            print(f"  Heightmap: NO BUILDINGS (all zeros)")
         
         # Create 3D visualization with geographic context
         fig_3d = create_3d_building_plot(
