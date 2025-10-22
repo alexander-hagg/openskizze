@@ -406,7 +406,7 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
         Array of features in physical units:
         [0] Built Area (m²)
         [1] Average Height (m)
-        [2] Height Variability (m)
+        [2] Maximum Building Height (m)
         [3] Number of Buildings (count)
         [4] Average Distance (m)
         [5] Gross Floor Area (m²)
@@ -433,8 +433,8 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
     # [1] Average Height - heightmap is already in METERS
     avg_height_meters = np.mean(building_heights)
     
-    # [2] Height Variability - heightmap is already in METERS
-    height_variability_meters = np.std(building_heights)
+    # [2] Maximum Building Height - heightmap is already in METERS
+    max_height_meters = np.max(building_heights)
     
     # [3] Number of Buildings - already a count
     # Cache the labeled array to avoid calling label() twice
@@ -462,7 +462,7 @@ def calculate_all_features(heightmap: np.ndarray, buildable_mask: np.ndarray, bu
     center_y = center_y_px / grid_res_y if grid_res_y > 0 else 0.0
 
     return np.array([
-        built_area_m2, avg_height_meters, height_variability_meters, num_buildings,
+        built_area_m2, avg_height_meters, max_height_meters, num_buildings,
         avg_spacing_meters, total_floor_area_m2, center_x, center_y
     ])
 
@@ -477,7 +477,7 @@ def calculate_all_features_planning(heightmap: np.ndarray, buildable_mask: np.nd
         [0] GRZ (Grundflächenzahl / Site Coverage Ratio) - ratio 0-1
         [1] GFZ (Geschossflächenzahl / Floor Area Ratio) - ratio
         [2] Average Building Height (m)
-        [3] Height Variability (m)
+        [3] Maximum Building Height (m)
         [4] Number of Buildings (count)
         [5] Average Building Distance (m)
         [6] Street Canyon Aspect Ratio (H/W) - dimensionless
@@ -511,8 +511,8 @@ def calculate_all_features_planning(heightmap: np.ndarray, buildable_mask: np.nd
     # [2] Average Height - heightmap is already in METERS
     avg_height_meters = np.mean(building_heights)
     
-    # [3] Height Variability - heightmap is already in METERS
-    height_variability_meters = np.std(building_heights)
+    # [3] Maximum Building Height - heightmap is already in METERS
+    max_height_meters = np.max(building_heights)
     
     # [4] Number of Buildings - already a count
     labeled_array, num_buildings = label(occupied)
@@ -546,7 +546,7 @@ def calculate_all_features_planning(heightmap: np.ndarray, buildable_mask: np.nd
     svf_approx = np.clip(svf_approx, 0.0, 1.0)
     
     return np.array([
-        grz, gfz, avg_height_meters, height_variability_meters,
+        grz, gfz, avg_height_meters, max_height_meters,
         num_buildings, avg_spacing_meters, aspect_ratio, svf_approx
     ])
 

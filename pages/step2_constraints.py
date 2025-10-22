@@ -373,7 +373,8 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         return dbc.Alert(T[lang]['STEP2_NO_FEATURES_SELECTED'] if 'STEP2_NO_FEATURES_SELECTED' in T[lang] else "Bitte mindestens ein Merkmal auswählen.", color="info")
 
     sliders = []
-    num_buildings_original_index = 3 # The original index for 'Anzahl der Gebäude'
+    # Number of Buildings index depends on feature set
+    num_buildings_index = 3 if feature_set == 'original' else 4  # Original: index 3, Planning: index 4
 
     # Get translated labels for sorted indices with correct feature set
     sorted_indices = sorted(selected_indices)
@@ -481,7 +482,7 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         
         slider_div = None
         # Integer sliders for count-based features
-        if index == num_buildings_original_index:  # Number of Buildings
+        if index == num_buildings_index:  # Number of Buildings
             min_v = int(np.floor(min_val))
             max_v = int(np.ceil(max_val))
             if min_v == max_v: max_v += 1
@@ -496,7 +497,9 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
                 )
             ], className="mb-3")
         # Normalized sliders for position features (0-1)
-        elif index in [6, 7]:  # Building Mass X/Y
+        # Original set: indices 6, 7 are Building Mass X/Y (0-1)
+        # Planning set: index 7 is SVF (0-1), but index 6 is Street Canyon Aspect Ratio (not 0-1)
+        elif (feature_set == 'original' and index in [6, 7]) or (feature_set == 'planning' and index == 7):
             min_v = 0.0
             max_v = 1.0
             slider_value = user_range if user_range else [0.0, 1.0]
@@ -513,6 +516,23 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
             min_v = round(min_val, 1)
             max_v = round(max_val, 1)
             if min_v == max_v: max_v = min_v + 1.0
+            
+            # OVERRIDE: For height features, use max_height_constraint as the max value
+            # Original set: Index 1 (Avg Height), Index 2 (Max Height)
+            # Planning set: Index 2 (Avg Height), Index 3 (Max Height)
+            is_height_feature = (feature_set == 'original' and index in [1, 2]) or \
+                               (feature_set == 'planning' and index in [2, 3])
+            
+            if is_height_feature and max_height_input:
+                max_v = float(max_height_input)
+                # Ensure min_v doesn't exceed max_v
+                if min_v >= max_v:
+                    min_v = 0.0
+                # Ensure saved slider value doesn't exceed new max
+                if user_range and user_range[1] > max_v:
+                    user_range = [user_range[0], max_v]
+                    if user_range[0] > max_v:
+                        user_range[0] = 0.0
             
             # Determine appropriate step size based on magnitude
             if max_v - min_v > 100:

@@ -1,4 +1,4 @@
-from dash import dcc, html, Input, Output, State, callback
+from dash import dcc, html, Input, Output, State, callback, ALL
 import dash_bootstrap_components as dbc
 from backend.translation import T
 import pickle
@@ -12,25 +12,271 @@ def layout(lang='DE'):
     return dbc.Container([
         create_breadcrumb(4, lang),
         html.H2(T[lang].get('STEP4_TITLE', 'Results Analysis')),
-        # Feature vs Objective Scatter Plots
+        
+        # NEW: Interactive Filter Section with Random Sample Display
         dbc.Row([
-            html.H4(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_HEADER']),
-            html.P(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_INFO'],
-                    className="text-muted small"),
-            dcc.Loading(html.Div(id='feature-objective-plots-container')),
+            dbc.Col([
+                dbc.Card(dbc.CardBody([
+                    html.H4("Filter & Preview Solutions" if lang == 'EN' else "Lösungen filtern & vorschauen"),
+                    html.P("Adjust feature ranges to filter solutions in real-time. "
+                           "A random selection of high-performing filtered solutions is shown below." 
+                           if lang == 'EN' else 
+                           "Passen Sie die Merkmalsbereiche an, um Lösungen in Echtzeit zu filtern. "
+                           "Eine zufällige Auswahl hochperformanter gefilterter Lösungen wird unten angezeigt.",
+                           className="text-muted small"),
+                    html.Hr(),
+                    # Filter controls will be dynamically generated
+                    html.Div(id='filter-sliders-container'),
+                    
+                ]), className="mb-4"),
+            ], md=6),
+            dbc.Col([
+                dbc.Card(dbc.CardBody([
+                    # Statistics about filtered solutions
+                    html.Div(id='filter-statistics'),
+                    # Random sample preview (3D thumbnails)
+                    dcc.Loading(html.Div(id='random-sample-preview')),
+                ]), className="mb-4"),
+            ], md=6),            
         ], className="mb-4"),
-
-        # Correlation Heatmap
+        
+        
+        # Feature vs Objective Scatter Plots and Correlation Heatmap
         dbc.Row([
+            dbc.Col([
+                dbc.Card(dbc.CardBody([
+                    html.H4(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_HEADER']),
+                    html.P(T[lang]['STEP4_FEATURE_VS_OBJECTIVE_INFO'],
+                    className="text-muted small"),
+                    dcc.Loading(html.Div(id='feature-objective-plots-container')),
+                ]), className="mb-3"),
+            ], md=6),
             dbc.Col([
                 dbc.Card(dbc.CardBody([
                     html.H4(T[lang]['STEP5_CORRELATION_HEADER']),
                     dcc.Loading(dcc.Graph(id='correlation-heatmap'))
                 ]), className="mb-3"),
-            ], md=12),
+            ], md=6),
         ], className="mb-4"),
         
     ], fluid=True)
+
+
+@callback(
+    Output('filter-sliders-container', 'children'),
+    Input('results-store', 'data'),
+    State('language-store', 'data'),
+)
+def create_filter_sliders(results_data, lang):
+    """Create range sliders for each feature to filter solutions"""
+    if lang is None:
+        lang = 'DE'
+    
+    if not results_data or not results_data.get('full_results_path'):
+        return html.Div("No results available" if lang == 'EN' else "Keine Ergebnisse verfügbar", className="text-muted")
+    
+    try:
+        results_path = results_data['full_results_path']
+        with open(results_path, 'rb') as f:
+            list_of_elites = pickle.load(f)
+        
+        if not list_of_elites:
+            return html.Div("No elite solutions found" if lang == 'EN' else "Keine Elite-Lösungen gefunden", className="text-muted")
+        
+        # Get feature information
+        from backend.translation import translate_feature_labels
+        from backend.units import get_unit_label
+        
+        feature_indices = results_data.get('selected_features_indices', [])
+        feature_set = results_data.get('feature_set', 'original')
+        feature_labels = translate_feature_labels(feature_indices, lang, feature_set)
+        
+        # Calculate min/max for each feature from actual data
+        measures_array = np.array([elite['measures'] for elite in list_of_elites])
+        
+        sliders = []
+        for i, (feature_idx, label) in enumerate(zip(feature_indices, feature_labels)):
+            feature_values = measures_array[:, i]
+            min_val = float(np.min(feature_values))
+            max_val = float(np.max(feature_values))
+            
+            # Get unit
+            unit = get_unit_label(feature_idx, lang)
+            label_with_unit = f"{label} ({unit})" if unit else label
+            
+            # Create range slider
+            slider = dbc.Row([
+                dbc.Col([
+                    html.Label(label_with_unit, className="fw-bold"),
+                    dcc.RangeSlider(
+                        id={'type': 'filter-slider', 'index': i},
+                        min=min_val,
+                        max=max_val,
+                        value=[min_val, max_val],  # Start with full range
+                        marks={
+                            min_val: f'{min_val:.1f}',
+                            max_val: f'{max_val:.1f}'
+                        },
+                        tooltip={"placement": "bottom", "always_visible": False},
+                        updatemode='mouseup',  # Only update when user releases slider
+                    ),
+                ], md=6),
+            ], className="mb-3")
+            
+            sliders.append(slider)
+        
+        return sliders
+        
+    except Exception as e:
+        return html.Div(f"Error: {str(e)}", className="text-danger")
+
+
+@callback(
+    [Output('filter-statistics', 'children'),
+     Output('random-sample-preview', 'children')],
+    [Input({'type': 'filter-slider', 'index': ALL}, 'value')],
+    [State('results-store', 'data'),
+     State('language-store', 'data')],
+)
+def update_filtered_preview(slider_values, results_data, lang):
+    """Filter solutions based on slider values and show random sample"""
+    if lang is None:
+        lang = 'DE'
+    
+    if not results_data or not results_data.get('full_results_path'):
+        return "", ""
+    
+    # If no slider values yet, wait for initial values
+    if not slider_values or all(v is None for v in slider_values):
+        return "", ""
+    
+    try:
+        results_path = results_data['full_results_path']
+        with open(results_path, 'rb') as f:
+            list_of_elites = pickle.load(f)
+        
+        if not list_of_elites:
+            return "", ""
+        
+        # Convert to numpy array for efficient filtering
+        measures_array = np.array([elite['measures'] for elite in list_of_elites])
+        objectives = np.array([elite['objective'] for elite in list_of_elites])
+        
+        # Apply filters
+        mask = np.ones(len(list_of_elites), dtype=bool)
+        for i, slider_range in enumerate(slider_values):
+            if slider_range is None or i >= measures_array.shape[1]:
+                continue
+            
+            min_val, max_val = slider_range
+            feature_values = measures_array[:, i]
+            
+            feature_mask = (feature_values >= min_val) & (feature_values <= max_val)
+            mask &= feature_mask
+        
+        filtered_indices = np.where(mask)[0]
+        num_filtered = len(filtered_indices)
+        
+        
+        # Statistics
+        stats = dbc.Alert([
+            html.Strong(f"{num_filtered} / {len(list_of_elites)} " + 
+                       ("solutions match filters" if lang == 'EN' else "Lösungen passen zu den Filtern")),
+            html.Br(),
+            ("Average objective: " if lang == 'EN' else "Durchschnittliches Ziel: ") + 
+            f"{objectives[mask].mean():.3f}" if num_filtered > 0 else ""
+        ], color="info" if num_filtered > 0 else "warning", className="mb-3")
+        
+        # Random sample preview
+        if num_filtered == 0:
+            return stats, dbc.Alert(
+                "No solutions match the current filters. Try relaxing the constraints." if lang == 'EN' else
+                "Keine Lösungen entsprechen den aktuellen Filtern. Versuchen Sie, die Einschränkungen zu lockern.",
+                color="warning"
+            )
+        
+        # Select random sample of high performers
+        # Sort by objective (descending) and take top 50%, then random sample
+        sorted_indices = filtered_indices[np.argsort(-objectives[mask])]  # Sort descending
+        top_50_percent = max(1, len(sorted_indices) // 2)
+        high_performers = sorted_indices[:top_50_percent]
+
+        # Random sample (up to 25 solutions)
+        num_samples = min(25, len(high_performers))
+        np.random.seed(None)  # Use current time for true randomness
+        sampled_indices = np.random.choice(high_performers, size=num_samples, replace=False)
+        
+        # Create 3D preview thumbnails
+        from backend.encoding import ParametricEncoding
+        from backend.config import ENCODING_CONFIG
+        import plotly.graph_objects as go
+        
+        xy_length = results_data['xy_length']
+        
+        preview_cards = []
+        for idx in sampled_indices:
+            elite = list_of_elites[idx]
+            
+            # Get heightmap directly from elite (already stored)
+            heightmap = np.array(elite['heightmap']).reshape(xy_length, xy_length)
+            
+            
+            # Create simple 3D preview
+            fig = go.Figure()
+            
+            # Add buildings as surface
+            x = np.arange(heightmap.shape[1])
+            y = np.arange(heightmap.shape[0])
+            
+            fig.add_trace(go.Surface(
+                z=heightmap,
+                x=x,
+                y=y,
+                colorscale='Blues',
+                showscale=False,
+                hoverinfo='skip'
+            ))
+            
+            fig.update_layout(
+                scene=dict(
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False),
+                    zaxis=dict(visible=False),
+                    camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
+                    aspectmode='data'
+                ),
+                margin=dict(l=0, r=0, t=20, b=0),
+                height=200,
+                width=200,
+                showlegend=False,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)'
+            )
+            
+            card = dbc.Col([
+                dbc.Card([
+                    dbc.CardBody([
+                        dcc.Graph(figure=fig, config={'displayModeBar': False}),
+                        html.Small(f"Obj: {elite['objective']:.3f}", className="text-center d-block")
+                    ], className="p-2")
+                ])
+            ], width=2, className="mb-3")  # width=2 gives us 6 columns, but we'll organize in rows of 5
+            
+            preview_cards.append(card)
+        
+        # Organize cards into rows of 5 for 5x5 grid
+        rows = []
+        for i in range(0, len(preview_cards), 5):
+            row_cards = preview_cards[i:i+5]
+            rows.append(dbc.Row(row_cards, className="mb-2 justify-content-start"))
+        
+        return stats, html.Div(rows)
+        
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Filter preview: {str(e)}")
+        print(traceback.format_exc())
+        return "", dbc.Alert(f"Error: {str(e)}", color="danger")
 
 
 @callback(
