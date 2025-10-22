@@ -337,19 +337,6 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         grid_res=res
     )
     
-    print(f"\n[ADAPTIVE PHENOTYPE] Parcel: {buildable_area_m2:.0f} m²")
-    print(f"  Grid: {res}×{res} cells ({res * pixel_size:.0f}m × {res * pixel_size:.0f}m)")
-    print(f"  Buildable pixels: {phenotype_config['buildable_pixels']} ({phenotype_config['buildable_ratio']*100:.1f}% of grid)")
-    print(f"[FIXED GENOME] Buildings: 10, Genome dimension: 60\n")
-    
-    # Warn about extreme cases
-    if buildable_area_m2 < 50:
-        print(f"[WARNING] Very small parcel ({buildable_area_m2:.1f} m²). Optimization may be challenging.")
-    if res > 100:
-        print(f"[WARNING] Large grid ({res}×{res}). Evaluations may be slower (~2x).")
-    if phenotype_config['buildable_ratio'] < 0.3:
-        print(f"[WARNING] Irregular parcel: only {phenotype_config['buildable_ratio']*100:.1f}% buildable.")
-
     return {
         'buildable_mask': buildable_mask, 
         'env_3d_fixed': env_3d_fixed,  # Original size for optimization
@@ -494,7 +481,6 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
     
     # Generate adaptive initial genome based on parcel size
     x0_adaptive = encoding_obj.get_adaptive_initial_genome(buildable_mask)
-    print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {encoding_config['xy_length']}, max height {max_height_floors} floors ({max_height_meters}m)")
     
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     # create_debug_plots(env_config, sample_genome, encoding_obj)

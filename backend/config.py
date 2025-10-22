@@ -4,11 +4,11 @@ import numpy as np
 QD_CONFIG = {
     'num_niches': 5,
     'num_generations': 100,  # Drastically reduced for a fast web demo
-    'num_emitters': 5,      # Reduced for a fast web demo
-    'sigma': 0.1,
-    'learning_rate': 0.01,
+    'num_emitters': 10,      # Reduced for a fast web demo
+    'sigma': 0.15,
+    'learning_rate': 0.02,
     'output_inv_frequency': 100,
-    'batch_size': 16,
+    'batch_size': 64,
 }
 
 ENCODING_CONFIG = {
