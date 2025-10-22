@@ -228,6 +228,14 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         
     feature_filters = {s_id['index']: s_val for s_id, s_val in zip(slider_ids, slider_values)}
 
+    
+    # Translate to show human-readable feature names
+    from backend.translation import translate_feature_labels
+    selected_feature_indices = results_data.get('selected_features_indices', [])
+    feature_set = results_data.get('feature_set', 'original')
+    feature_labels = translate_feature_labels(selected_feature_indices, lang, feature_set)
+    
+
     params = {}
     if algorithm == 'kmedoids':
         params = {'n_clusters': k}
@@ -236,7 +244,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         params = {'min_cluster_size': 5}
 
     clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters)
-
+    
     if not clusters:
         return dbc.Alert(T[lang]['STEP5_NO_CLUSTERS_FOUND'], color="warning"), no_update
     
@@ -248,6 +256,7 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         'params': params,  # Store for display purposes only
         'feature_filters': feature_filters
     }
+    
 
     lons = [c[0] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
     lats = [c[1] for f in grid_geojson['features'] for c in f['geometry']['coordinates'][0]]
@@ -267,14 +276,14 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
         best_geojson = heightmap_to_geojson(np.flipud(best_hm), grid_geojson)
         best_map = dl.Map(center=map_center, zoom=14, children=[
             dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
-            dl.GeoJSON(data=best_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
+            dl.GeoJSON(data=best_geojson, options=dict(style=style_handle), hideout={'z_length': int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])})
         ], style={'height': '200px', 'width': '100%'})
         
         central_hm = np.array(cluster['central_solution']['heightmap']).reshape(heightmap_res, heightmap_res)
         central_geojson = heightmap_to_geojson(np.flipud(central_hm), grid_geojson)
         central_map = dl.Map(center=map_center, zoom=14, children=[
             dl.TileLayer(url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"),
-            dl.GeoJSON(data=central_geojson, options=dict(style=style_handle), hideout={'z_length': ENCODING_CONFIG['z_length']})
+            dl.GeoJSON(data=central_geojson, options=dict(style=style_handle), hideout={'z_length': int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])})
         ], style={'height': '200px', 'width': '100%'})
 
         consensus_map_data = np.array(cluster['consensus_map']).reshape(heightmap_res, heightmap_res)

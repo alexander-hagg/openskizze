@@ -600,8 +600,9 @@ def run_diagnostic(n_clicks, session_data):
         aspect_ratio = max(rows_occupied, cols_occupied) / min(rows_occupied, cols_occupied) if min(rows_occupied, cols_occupied) > 0 else float('inf')
         
         # Analyze constraints
-        max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])
-        max_height_floors = max_height_meters / 3.0  # For display purposes
+        default_max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+        max_height_meters = hard_constraints.get('max_height', default_max_height_meters)
+        max_height_floors = max_height_meters / ENCODING_CONFIG['meters_per_floor']  # For display purposes
         max_height_voxels = max_height_meters  # 1 voxel = 1 meter
         
         min_distance_meters = hard_constraints.get('min_distance', 0)

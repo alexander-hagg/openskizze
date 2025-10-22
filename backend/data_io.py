@@ -559,12 +559,13 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         building_heights_2d_exp = np.flipud(building_heights_2d_exp)
         
         # Create 3D array - each voxel represents 1 METER (not 1 floor)
-        max_height_needed = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
+        default_max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+        max_height_needed = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else default_max_height_meters
         if max_height_meters:
             # Use the constraint (already in meters)
             max_height_needed = max(max_height_needed, int(max_height_meters))
         else:
-            max_height_needed = max(max_height_needed, ENCODING_CONFIG['z_length'])
+            max_height_needed = max(max_height_needed, default_max_height_meters)
         
         env_3d_expanded = np.zeros((expanded_res, expanded_res, max_height_needed), dtype=np.int8)
         

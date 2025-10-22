@@ -540,8 +540,8 @@ def calculate_all_features_planning(heightmap: np.ndarray, buildable_mask: np.nd
     # For now, use a simple approximation based on building coverage and height
     # SVF decreases with higher coverage and taller buildings
     # Simple approximation: SVF ≈ 1 - (GRZ * normalized_height)
-    max_possible_height = ENCODING_CONFIG['z_length']
-    normalized_height = np.clip(avg_height_meters / max_possible_height, 0.0, 1.0) if max_possible_height > 0 else 0.0
+    max_possible_height_meters = ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor']
+    normalized_height = np.clip(avg_height_meters / max_possible_height_meters, 0.0, 1.0) if max_possible_height_meters > 0 else 0.0
     svf_approx = 1.0 - (grz * normalized_height * 0.8)  # 0.8 factor to prevent reaching 0 too quickly
     svf_approx = np.clip(svf_approx, 0.0, 1.0)
     
@@ -574,15 +574,15 @@ def eval_solution(genome: np.ndarray, encoding_obj, env_config: dict) -> np.ndar
     
     # --- JIT-OPTIMIZED 3D MESH GENERATION ---
     # CRITICAL: ALL Z-axes are now in METERS throughout the application
-    # heightmap_2d_solution is in METERS, env_3d_fixed is in METERS (1 voxel = 1 meter)
-    max_height = env_config['env_3d_fixed'].shape[2]
+    # heightmap_2d_solution is in METERS (from express()), env_3d_fixed is in METERS (1 voxel = 1 meter)
+    max_height_meters = env_config['env_3d_fixed'].shape[2]
     
     # Use JIT-optimized 3D mesh generation (~15-20× faster)
     if NUMBA_AVAILABLE:
-        design_3d = _create_3d_from_heightmap_jit(heightmap_2d_solution.astype(np.float32), max_height)
+        design_3d = _create_3d_from_heightmap_jit(heightmap_2d_solution.astype(np.float32), max_height_meters)
     else:
         # Fallback to NumPy broadcasting if numba not available
-        z_indices = np.arange(max_height)
+        z_indices = np.arange(max_height_meters)
         design_3d = (z_indices < heightmap_2d_solution.astype(int)[:, :, np.newaxis]).astype(np.int8)
     
             

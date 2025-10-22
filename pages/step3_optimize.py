@@ -326,7 +326,7 @@ def update_solution_map_grid_s3(x_axis_idx, y_axis_idx, results_data):
                                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'),
                         dl.GeoJSON(data=design_geojson, id=f'geojson-s3-{row}-{col}', 
                                    options=dict(style=style_handle), 
-                                   hideout={'z_length': ENCODING_CONFIG['z_length']})
+                                   hideout={'z_length': int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])})
                     ], 
                     style={'width': '100%', 'height': '150px', 'min-height': '150px'},
                     id=map_id
@@ -507,8 +507,11 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
         )
         
         if archive and not archive.empty:
-            # 1. Instantiate an encoder object to regenerate heightmaps from the genomes.
-            encoding_obj = ParametricEncoding(ENCODING_CONFIG)
+            # 1. Instantiate an encoder object with the SAME config used during optimization
+            # CRITICAL: Use the encoding config from env_config, NOT the default ENCODING_CONFIG!
+            # This ensures max_building_floors matches what was used during optimization.
+            encoding_config_for_saving = env_config.get('encoding_config', ENCODING_CONFIG.copy())
+            encoding_obj = ParametricEncoding(encoding_config_for_saving)
             
             # 2. Retrieve all necessary data from the archive, including the compact
             #    'solution' (genome) instead of the non-existent 'heightmaps'.
@@ -525,6 +528,19 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
             for i in range(len(objectives)):
                 genome = solutions[i]
                 heightmap = encoding_obj.express(env_config['buildable_mask'], genome)
+                
+                # DEBUG: Check heightmap regeneration
+                if i == 0:  # Only for first solution to avoid spam
+                    print(f"\n[REGENERATION DEBUG] First solution:")
+                    print(f"  max_building_floors used by encoding_obj: {encoding_obj.config['max_building_floors']}")
+                    print(f"  Max height in meters: {encoding_obj.config['max_building_floors'] * encoding_obj.config['meters_per_floor']:.1f}m")
+                    print(f"  Genome shape: {genome.shape}")
+                    print(f"  Heightmap shape: {heightmap.shape}")
+                    non_zero = heightmap[heightmap > 0]
+                    if len(non_zero) > 0:
+                        print(f"  Heightmap stats (METERS): min={non_zero.min():.2f}m, max={non_zero.max():.2f}m, mean={non_zero.mean():.2f}m")
+                    print(f"  Measures (archive): {measures[i]}")
+                    print(f"  Objective: {objectives[i]:.4f}\n")
                 
                 # Check if this solution respects all feature constraints
                 is_valid = True

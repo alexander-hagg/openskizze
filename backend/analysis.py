@@ -72,6 +72,7 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
     with open(results_path, 'rb') as f:
         list_of_elites = pickle.load(f)
     
+    
     # 1. Filtering - solutions should already be filtered, but apply additional filters if specified
     filtered_elites = []
     if feature_filters:
@@ -79,7 +80,8 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
             is_valid = True
             for feat_idx_str, (min_val, max_val) in feature_filters.items():
                 feat_idx = int(feat_idx_str)
-                if not (min_val <= elite['measures'][feat_idx] <= max_val):
+                actual_val = elite['measures'][feat_idx]
+                if not (min_val <= actual_val <= max_val):
                     is_valid = False
                     break
             if is_valid:
@@ -162,13 +164,13 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
             'objective_values': cluster_objectives.tolist(),  # Add objective values for histogram
             'median_objective': float(np.median(cluster_objectives))  # Add median for sorting
         })
-
+    
+    
     # Sort by median objective value (highest first), then by size
     analysis_results.sort(key=lambda x: (x['median_objective'], x['size']), reverse=True)
     return analysis_results
 
 def create_parallel_coords_fig(results_archive, measures_map):
-    # ... (this function is unchanged) ...
     if not results_archive or not results_archive['objective']:
         return None
     df_data = {'objective': results_archive['objective']}

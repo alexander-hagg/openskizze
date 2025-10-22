@@ -48,7 +48,7 @@ def to_physical_units(normalized_values: np.ndarray, feature_indices: list, env_
     """
     physical_values = np.zeros_like(normalized_values)
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    z_length = ENCODING_CONFIG['z_length']  # Now in meters (e.g., 30m)
+    max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])  # Now in meters (e.g., 30m)
     
     buildable_area_m2 = env_context.get('buildable_area_in_sq_meters', 1000)
     buildable_mask = env_context.get('buildable_mask')
@@ -122,7 +122,8 @@ def from_physical_units(physical_values: np.ndarray, feature_indices: list, env_
         max_dist_meters = 100
     
     # Get max height from environment context (already in meters)
-    max_height_meters = env_context.get('max_height_meters', ENCODING_CONFIG['z_length'])
+    default_max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+    max_height_meters = env_context.get('max_height_meters', default_max_height_meters)
     
     for i, feature_idx in enumerate(feature_indices):
         val = physical_values[i] if i < len(physical_values) else 0.0
@@ -223,11 +224,11 @@ def calculate_dynamic_ranges_physical(buildable_mask: np.ndarray, max_height_met
         List of [min, max] ranges for each of the 8 features in physical units
     """
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    z_length = ENCODING_CONFIG['z_length']  # In meters
+    default_max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])  # In meters
     
-    # If no max height constraint, use default z_length (in meters)
+    # If no max height constraint, use default max height (in meters)
     if max_height_meters is None:
-        max_height_meters = z_length
+        max_height_meters = default_max_height_meters
     
     # If no min distance constraint, use 0
     if min_distance_meters is None:

@@ -71,7 +71,9 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     
     # Create two arrays: one for optimization (same size as design grid), 
     # one for visualization (expanded to show more neighborhood)
-    env_3d_fixed = np.zeros((res, res, ENCODING_CONFIG['z_length']), dtype=np.int8)
+    # z-axis size in meters (each voxel = 1 meter)
+    max_z_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+    env_3d_fixed = np.zeros((res, res, max_z_meters), dtype=np.int8)
     
     # Expand the area for fetching buildings for better visualization context
     neighborhood_expansion = 1.0  # Multiplier: 1.0 means 3x area (1x on each side)
@@ -86,7 +88,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     start_idx = int(res * neighborhood_expansion)
     
     # Create expanded array for visualization
-    env_3d_expanded = np.zeros((expanded_res, expanded_res, ENCODING_CONFIG['z_length']), dtype=np.int8)
+    env_3d_expanded = np.zeros((expanded_res, expanded_res, max_z_meters), dtype=np.int8)
     
     grid_poly_native = gpd.GeoSeries([Polygon.from_bounds(grid_min_x, grid_min_y, grid_max_x, grid_max_y)], crs="EPSG:25832")
     grid_poly_web = grid_poly_native.to_crs("EPSG:4326")
@@ -211,8 +213,9 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
                 
                 # Create 3D array with actual heights (each voxel = 1 METER)
                 # Calculate how many voxel layers needed for each position
-                max_height_meters = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else ENCODING_CONFIG['z_length']
-                max_height_meters = max(max_height_meters, ENCODING_CONFIG['z_length'])  # At least z_length
+                default_max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+                max_height_meters = int(np.ceil(building_heights_2d_exp.max())) if building_heights_2d_exp.max() > 0 else default_max_height_meters
+                max_height_meters = max(max_height_meters, default_max_height_meters)  # At least default max height
                 
                 # Resize env_3d_expanded if needed to accommodate real heights
                 if env_3d_expanded.shape[2] < max_height_meters:
@@ -292,7 +295,8 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     
     # --- Use the user-defined ranges to construct the final list of ranges for the optimizer ---
     # Extract constraints (already in meters)
-    max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])
+    default_max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+    max_height_meters = hard_constraints.get('max_height', default_max_height_meters)
     min_distance_meters = hard_constraints.get('min_distance', 0.0)
     
     # Get dynamic ranges for all 8 features (now in physical units, respecting hard constraints!)
@@ -382,68 +386,53 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_meters
         For 'planning': [ratio], [ratio], [m], [m], [count], [m], [ratio], [0-1]
     """
     pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    z_len = ENCODING_CONFIG['z_length']
+    max_floors = ENCODING_CONFIG['max_building_floors']
     
-    # Use constraint-based max height if provided, otherwise use default
+    # Use constraint-based max height if provided, otherwise use default (floors × meters/floor)
     if max_height_meters is None:
-        max_height_meters = z_len
+        max_height_meters = int(max_floors * ENCODING_CONFIG['meters_per_floor'])
     
-    # Use constraint-based min distance if provided, otherwise use 0
+    # If no min distance constraint, use 0
     if min_distance_meters is None:
         min_distance_meters = 0.0
     
     buildable_pixels = np.sum(buildable_mask)
-    if buildable_pixels == 0:
-        # Return appropriate default ranges based on feature_set
-        default_ranges = DOMAIN_CONFIG['feat_ranges_planning'] if feature_set == 'planning' else DOMAIN_CONFIG['feat_ranges']
-        return default_ranges, 0.0
-        
     buildable_area_m2 = buildable_pixels * (pixel_size ** 2)
+    
     grid_res = buildable_mask.shape[0]
-    max_dist_pixels = np.sqrt(2) * grid_res  # Diagonal distance
+    max_dist_pixels = np.sqrt(2) * grid_res
     max_dist_meters = max_dist_pixels * pixel_size
     
+    # Maximum possible floor area considering max height
+    max_floors = max_height_meters / ENCODING_CONFIG['meters_per_floor']
+    max_possible_floor_area = buildable_area_m2 * max_floors
+    
     if feature_set == 'planning':
-        # Planning-focused feature ranges (BACKLOG specification)
-        # GRZ and GFZ are FIXED percentage ranges (not dynamically calculated)
-        # GRZ: Site coverage ratio, always 0.0-1.0 (0-100%)
-        # GFZ: Floor area ratio = GRZ × number of floors
-        # Typical GFZ values: 0.4-0.8 (low density), 1.0-3.0 (medium), 3.0-6.0 (high density)
-        # We use 0-10 to allow extreme high-density scenarios
-        max_gfz = 10.0
-        
-        # Street canyon aspect ratio: if min distance is 0, buildings can be very close
-        # Max aspect ratio when buildings are close: H / small_distance
-        # Typical range for H/W is 0.5 to 3.0 in urban contexts
-        max_aspect_ratio = 5.0 if min_distance_meters < 3 else max_height_meters / min_distance_meters
-        
-        new_ranges = [
-            [0.0, 1.0],                                    # 0: GRZ (Site Coverage Ratio) 0-1 FIXED
-            [0.0, max_gfz],                                # 1: GFZ (Floor Area Ratio) 0-10 FIXED
-            [0.0, max_height_meters],                      # 2: Avg Height (m)
-            [0.0, max_height_meters / 2],                  # 3: Height Variability (m)
-            [0.0, ENCODING_CONFIG['max_num_buildings']],   # 4: Number of Buildings (count)
-            [min_distance_meters, max_dist_meters],        # 5: Avg Distance (m)
-            [0.0, max_aspect_ratio],                       # 6: Street Canyon Aspect Ratio (H/W)
-            [0.0, 1.0],                                    # 7: SVF (Sky View Factor) 0-1
+        # Planning feature set: [GRZ, GFZ, height, variability, num_buildings, distance, aspect_ratio, SVF]
+        ranges = [
+            [0.0, 1.0],                              # 0: GRZ (Site Coverage Ratio) - 0 to 100%
+            [0.0, max_floors],                       # 1: GFZ (Floor Area Ratio) - 0 to max floors
+            [0.0, max_height_meters],                # 2: Avg Height (m)
+            [0.0, max_height_meters / 2],            # 3: Height Variability (m)
+            [0.0, ENCODING_CONFIG['max_num_buildings']],  # 4: Number of Buildings (count)
+            [min_distance_meters, max_dist_meters],  # 5: Avg Distance (m)
+            [0.0, 5.0],                              # 6: Street Canyon Aspect Ratio (H/W)
+            [0.0, 1.0],                              # 7: Sky View Factor (SVF) - 0 to 1
         ]
     else:
-        # Original feature ranges
-        max_floors = max_height_meters / 3.0
-        max_possible_floor_area_m2 = buildable_area_m2 * max_floors
-        
-        new_ranges = [
-            [0.0, buildable_area_m2],                      # 0: Built Area (m²)
-            [0.0, max_height_meters],                      # 1: Avg Height (m)
-            [0.0, max_height_meters / 2],                  # 2: Height Variability (m)
-            [0.0, ENCODING_CONFIG['max_num_buildings']],   # 3: Number of Buildings (count)
-            [min_distance_meters, max_dist_meters],        # 4: Avg Distance (m)
-            [0.0, max_possible_floor_area_m2],             # 5: Gross Floor Area (m²)
-            [0.0, 1.0],                                    # 6: Building Mass X (normalized)
-            [0.0, 1.0],                                    # 7: Building Mass Y (normalized)
+        # Original feature set: [built_area, height, variability, num_buildings, distance, GFA, mass_x, mass_y]
+        ranges = [
+            [0.0, buildable_area_m2],                # 0: Built Area (m²)
+            [0.0, max_height_meters],                # 1: Avg Height (m)
+            [0.0, max_height_meters / 2],            # 2: Height Variability (m)
+            [0.0, ENCODING_CONFIG['max_num_buildings']],  # 3: Number of Buildings (count)
+            [min_distance_meters, max_dist_meters],  # 4: Avg Distance (m)
+            [0.0, max_possible_floor_area],          # 5: Gross Floor Area (m²)
+            [0.0, 1.0],                              # 6: Building Mass X (normalized)
+            [0.0, 1.0],                              # 7: Building Mass Y (normalized)
         ]
     
-    return new_ranges, buildable_area_m2
+    return ranges, buildable_area_m2
 
 
 def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, objective_function: str = 'simple_porosity', cached_building_data: dict = None, feature_set: str = 'original', progress_callback=None):
@@ -492,16 +481,20 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
     if qd_hyperparams:
         qd_config.update(qd_hyperparams)
     
-    # Create encoding config with user's max_height
+    # Create encoding config with user's max_height converted to floors
     encoding_config = ENCODING_CONFIG.copy()
-    max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['z_length'])
-    encoding_config['z_length'] = max_height_meters
+    max_height_meters = hard_constraints.get('max_height', ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+    max_height_floors = int(max_height_meters / ENCODING_CONFIG['meters_per_floor'])
+    encoding_config['max_building_floors'] = max_height_floors
     
     encoding_obj = ParametricEncoding(encoding_config)
     
+    # Store encoding config in env_config so it can be retrieved later when saving results
+    env_config['encoding_config'] = encoding_config
+    
     # Generate adaptive initial genome based on parcel size
     x0_adaptive = encoding_obj.get_adaptive_initial_genome(buildable_mask)
-    print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {encoding_config['xy_length']}, max height {encoding_config['z_length']}m")
+    print(f"[ADAPTIVE X0] Generated initial genome biased for grid size {encoding_config['xy_length']}, max height {max_height_floors} floors ({max_height_meters}m)")
     
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     # create_debug_plots(env_config, sample_genome, encoding_obj)

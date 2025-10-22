@@ -50,7 +50,8 @@ def create_debug_plots(env_config: dict, sample_genome: np.ndarray, encoding_obj
     plt.close()
 
     plt.figure(figsize=(8, 8))
-    plt.imshow(sample_design_2d, cmap='viridis', origin='lower', vmin=0, vmax=ENCODING_CONFIG['z_length'])
+    max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+    plt.imshow(sample_design_2d, cmap='viridis', origin='lower', vmin=0, vmax=max_height_meters)
     plt.title("3. Sample Generated Design (Encoding Check)")
     plt.savefig(os.path.join(output_dir, "3_sample_generated_design.png"))
     plt.close()
@@ -63,7 +64,8 @@ def create_debug_plots(env_config: dict, sample_genome: np.ndarray, encoding_obj
     plt.close()
 
     plt.figure(figsize=(8, 8))
-    plt.imshow(sample_design_2d, cmap='viridis', origin='lower', vmin=0, vmax=ENCODING_CONFIG['z_length'])
+    max_height_meters = int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor'])
+    plt.imshow(sample_design_2d, cmap='viridis', origin='lower', vmin=0, vmax=max_height_meters)
     plt.title("5. Area for Feature Calculation (Generated Design Only)")
     plt.savefig(os.path.join(output_dir, "5_feature_calculation_area.png"))
     plt.close()

@@ -20,10 +20,12 @@ def norm2unif(x):
 
 
 @njit(cache=True, nogil=True)
-def _express_jit(genes_uniform, xy_length, z_length, buildable_mask):
+def _express_jit(genes_uniform, xy_length, max_building_floors, meters_per_floor, buildable_mask):
     """
     JIT-optimized phenotype creation.
     Converts genome to heightmap much faster than Python loops.
+    
+    Returns heightmap in METERS (applies meters_per_floor conversion).
     """
     max_num_buildings = genes_uniform.shape[0]
     
@@ -36,7 +38,7 @@ def _express_jit(genes_uniform, xy_length, z_length, buildable_mask):
     active_count = 0
     w = np.zeros(max_num_buildings, dtype=np.int32)
     l = np.zeros(max_num_buildings, dtype=np.int32)
-    h = np.zeros(max_num_buildings, dtype=np.int32)
+    h_floors = np.zeros(max_num_buildings, dtype=np.int32)
     x_c = np.zeros(max_num_buildings, dtype=np.int32)
     y_c = np.zeros(max_num_buildings, dtype=np.int32)
     
@@ -44,12 +46,12 @@ def _express_jit(genes_uniform, xy_length, z_length, buildable_mask):
         if is_active[i]:
             w[active_count] = int(genes_uniform[i, 0] * (xy_length / 2))
             l[active_count] = int(genes_uniform[i, 1] * (xy_length / 2))
-            h[active_count] = int(genes_uniform[i, 2] * z_length)
+            h_floors[active_count] = int(genes_uniform[i, 2] * max_building_floors)  # Height in floors
             x_c[active_count] = int(genes_uniform[i, 3] * xy_length)
             y_c[active_count] = int(genes_uniform[i, 4] * xy_length)
             active_count += 1
     
-    # Create heightmap
+    # Create heightmap (convert floors to meters)
     heightmap = np.zeros((xy_length, xy_length), dtype=np.float32)
     
     for i in range(active_count):
@@ -58,9 +60,12 @@ def _express_jit(genes_uniform, xy_length, z_length, buildable_mask):
         y_start = max(0, y_c[i] - l[i] // 2)
         y_end = min(xy_length, y_c[i] + l[i] // 2)
         
+        # Convert floors to meters
+        height_meters = h_floors[i] * meters_per_floor
+        
         for y in range(y_start, y_end):
             for x in range(x_start, x_end):
-                heightmap[y, x] = h[i]
+                heightmap[y, x] = height_meters
     
     # Apply mask
     for y in range(xy_length):
@@ -126,7 +131,10 @@ class ParametricEncoding:
         """
         Express genome into heightmap using JIT-optimized code.
         ~165× faster than non-JIT version for realistic parcels.
+
+        Returns heightmap in METERS (applies meters_per_floor conversion).
         """
+        
         # Convert genome from normal to uniform distribution
         genes = norm2unif(genome).reshape(self.config['max_num_buildings'], -1)
         
@@ -135,20 +143,21 @@ class ParametricEncoding:
             return _express_jit(
                 genes.astype(np.float32),
                 self.config['xy_length'],
-                self.config['z_length'],
+                self.config['max_building_floors'],
+                self.config['meters_per_floor'],
                 buildable_mask.astype(np.bool_)
             )
         else:
             # Fallback to original implementation if numba not available
             is_active = genes[:, 5] > 0.0
             if not np.any(is_active):
-                return np.zeros_like(buildable_mask)
+                return np.zeros_like(buildable_mask, dtype=np.float32)
 
             active_genes = genes[is_active]
 
             w = (active_genes[:, 0] * (self.config['xy_length'] / 2)).astype(int)
             l = (active_genes[:, 1] * (self.config['xy_length'] / 2)).astype(int)
-            h = (active_genes[:, 2] * self.config['z_length']).astype(int)
+            h_floors = (active_genes[:, 2] * self.config['max_building_floors']).astype(int)
             x_c = (active_genes[:, 3] * self.config['xy_length']).astype(int)
             y_c = (active_genes[:, 4] * self.config['xy_length']).astype(int)
             
@@ -157,9 +166,12 @@ class ParametricEncoding:
             y_start = np.clip(y_c - l // 2, 0, self.config['xy_length'])
             y_end = np.clip(y_c + l // 2, 0, self.config['xy_length'])
             
-            heightmap = np.zeros((self.config['xy_length'], self.config['xy_length']))
+            # Convert floors to meters
+            h_meters = h_floors * self.config['meters_per_floor']
+            
+            heightmap = np.zeros((self.config['xy_length'], self.config['xy_length']), dtype=np.float32)
             for i in range(len(active_genes)):
-                heightmap[y_start[i]:y_end[i], x_start[i]:x_end[i]] = h[i]
+                heightmap[y_start[i]:y_end[i], x_start[i]:x_end[i]] = h_meters[i]
             
             masked_heightmap = heightmap * buildable_mask
             
