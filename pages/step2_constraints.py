@@ -65,7 +65,7 @@ def layout(lang='DE'):
                     dcc.Slider(
                         id='max-height-constraint',
                         min=3,
-                        max=30,
+                        max=60,
                         step=3,
                         value=int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor']),
                         marks={3: '3m', 10: '10m', 20: '20m', 30: '30m'},
@@ -77,7 +77,7 @@ def layout(lang='DE'):
                         min=0,
                         max=30,
                         step=1,
-                        value=0,
+                        value=5,
                         marks={0: '0m', 10: '10m', 20: '20m', 30: '30m'},
                         tooltip={"placement": "bottom", "always_visible": False}
                     ),

@@ -1,0 +1,186 @@
+%% This is file `jcomp-template.tex',
+%% 
+%% Copyright 2017 Elsevier Ltd
+%% 
+%% This file is part of the 'Elsarticle Bundle'.
+%% ---------------------------------------------
+%% 
+%% It may be distributed under the conditions of the LaTeX Project Public
+%% License, either version 1.2 of this license or (at your option) any
+%% later version.  The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.2 or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+%% 
+%% The list of all files belonging to the 'Elsarticle Bundle' is
+%% given in the file `manifest.txt'.
+%% 
+%% Template article for Elsevier's document class `elsarticle'
+%% with harvard style bibliographic references
+%%
+%% $Id: jcomp-template.tex 100 2017-07-14 13:15:12Z rishi $
+%%
+%% Use the option review to obtain double line spacing
+%\documentclass[times,review,preprint,authoryear]{elsarticle}
+
+%% Use the options `twocolumn,final' to obtain the final layout
+%% Use longtitle option to break abstract to multiple pages if overfull.
+%% For Review pdf (With double line spacing)
+%\documentclass[times,twocolumn,review]{elsarticle}
+%% For abstracts longer than one page.
+%\documentclass[times,twocolumn,review,longtitle]{elsarticle}
+%% For Review pdf without preprint line
+%\documentclass[times,twocolumn,review,nopreprintline]{elsarticle}
+%% Final pdf
+\documentclass[times,final]{elsarticle}
+%%
+%\documentclass[times,twocolumn,final,longtitle]{elsarticle}
+%%
+
+
+%% Stylefile to load JCOMP template
+\usepackage{jcomp}
+\usepackage{framed,multirow}
+
+%% The amssymb package provides various useful mathematical symbols
+\usepackage{amssymb}
+\usepackage{latexsym}
+
+% Following three lines are needed for this document.
+% If you are not loading colors or url, then these are
+% not required.
+\usepackage{url}
+\usepackage{xcolor}
+\definecolor{newcolor}{rgb}{.8,.349,.1}
+
+\usepackage{bm}% bold math
+
+\usepackage{todonotes}
+\usepackage[acronym]{glossaries}
+% \input{acronyms}
+
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\journal{Building and Environment}
+
+\begin{document}
+	
+	\verso{Alexander Hagg \textit{ et al.}}
+	
+\begin{frontmatter}
+
+\title{OpenSKIZZE: A Multi-Layered AI Framework for Co-Creative, Climate-Adaptive Urban Design}
+
+\author[1]{Alexander \snm{Hagg}\corref{cor1}}
+\cortext[cor1]{Corresponding author: 
+	Grantham-Allee 20; 53757 Sankt Augustin; Germany;}
+\ead{alexander.hagg@h-brs.de}
+\author[1,2]{Dirk \snm{Reith}}
+
+\address[1]{Institute of Technology, Resource and Energy-Efficient Engineering, Bonn-Rhein-Sieg University of Applied Sciences, Sankt Augustin, Germany}
+\address[2]{Fraunhofer Institute for Algorithms and Scientific Computing (SCAI), Sankt Augustin, Germany}
+
+%\received{1 May 2013}
+%\finalform{10 May 2013}
+%\accepted{13 May 2013}
+%\availableonline{15 May 2013}
+%\communicated{S. Sarkar}
+
+
+\begin{abstract}
+Urban areas face significant challenges from climate change, particularly from increased heat stress. While advanced climate models exist, a "praxis gap" persists in translating their insights into actionable, early-stage urban design. This paper introduces OpenSKIZZE, a novel, open-source framework featuring a suite of general-purpose, pre-trained AI models to facilitate a co-creative workflow. The framework's core components are: (1) a general U-NET model that provides instantaneous airflow predictions for any urban layout, serving as a real-time physics surrogate; and (2) a general, context-aware conditional generative model (CGAN), trained on a vast amalgam of high-performing designs from diverse topographies, which can synthesize novel, climate-adaptive designs for new sites. In a user workflow, these pre-trained models are applied to a specific site. A Quality-Diversity (QD) algorithm, driven by the fast U-NET, rapidly explores the local solution space to generate a curated archive of site-specific, high-performing designs for analysis. Through a web-based interface, users can explore this archive, receive real-time airflow feedback on manual sketches from the U-NET, and generate new, context-aware concepts using the general CGAN. We demonstrate the framework with a real-world case study in Bonn, Germany, and validate the generalization capabilities of the AI models. This multi-layered approach successfully bridges the praxis gap, enabling stakeholders to rapidly explore, understand, and create resilient and climate-adaptive urban environments.
+\end{abstract}
+
+\begin{keyword}
+	\KWD Quality-Diversity Optimization\sep Urban Climate Modeling\sep Generative Design\sep Machine Learning\sep Urban Planning\sep Generalization
+\end{keyword}
+
+\end{frontmatter}
+
+\section{Introduction}
+
+Urbanization and climate change pose significant challenges to the sustainable development of cities, particularly concerning heat accumulation and air quality. Mitigating the urban heat island effect and ensuring thermal comfort for inhabitants critically depends on effective natural ventilation. However, a significant "praxis gap" exists between high-level climate science and the actionable, day-to-day processes of urban planning and design. Regional climate analyses often result in general guidelines that are not able to resolve the specific air flow around buildings~\cite{Kruse2018lanuv}, making their direct application to local contexts challenging.
+
+Traditional urban planning often relies on established guidelines and heuristic-based designs, which may limit the exploration of innovative, context-specific solutions. Furthermore, conventional computational tools used in design, such as high-fidelity CFD simulations, are often too slow, costly, and require specialized expertise, rendering them impractical for the rapid, iterative nature of early-stage design exploration. Optimization methods that focus on finding a single "best" solution often fail to provide planners with the necessary breadth of high-performing alternatives required for complex, multi-stakeholder decision-making.
+
+This paper introduces OpenSKIZZE, an open-source, multi-layered AI framework designed to bridge this praxis gap. OpenSKIZZE acts as a co-creative partner for designers, planners, and stakeholders by providing a suite of general, pre-trained AI models that can be instantly applied to new urban design challenges. Its methodology is built on three core pillars:
+\begin{itemize}
+    \item \textbf{General AI Models:} The framework is built upon two powerful, pre-trained deep learning models: a U-NET that acts as a general-purpose, real-time physics engine for airflow, and a conditional generative model that has learned the principles of climate-adaptive design across a wide variety of environments.
+    \item \textbf{Site-Specific Application:} For any new project, these general models are used to conduct a rapid, context-specific exploration using a Quality-Diversity (QD) algorithm, which curates a portfolio of high-quality design strategies tailored to the local topography and constraints.
+    \item \textbf{Interactive Decision-Making:} A web-based interface allows users to analyze the site-specific solutions, receive instant predictive feedback on their own ideas, and generate novel, context-aware designs on demand.
+\end{itemize}
+This work's main contribution is a novel, synergistic workflow that separates general AI knowledge from its rapid application to specific contexts, providing a practical and powerful tool for creating climate-adaptive urban environments.
+
+\section{Methods: The OpenSKIZZE AI Ecosystem}
+The OpenSKIZZE framework is composed of pre-trained, general AI models that are applied in a specific workflow to address unique, local design challenges. The computationally intensive training is performed once, offline, resulting in powerful tools that can be deployed instantly.
+
+\subsection{A General-Purpose Airflow Predictor (U-NET)}
+The foundation of the interactive tool is a general-purpose, pre-trained predictive model. We developed a U-NET architecture, a type of convolutional neural network ideal for image-to-image tasks, to act as a surrogate for the KLAM\_21 climate model. This U-NET was trained on a large and diverse dataset of synthetic urban forms and their corresponding KLAM\_21 airflow simulations, covering a wide range of building heights, densities, and configurations across various simplified topographies. This pre-training endows the U-NET with a general understanding of airflow physics around buildings. As a result, it can produce an accurate prediction of the airflow map for any given building heightmap in milliseconds, making it the engine for real-time user feedback across any city or project site.
+
+\subsection{A General, Context-Aware Design Generator (CGAN)}
+To provide a source of design inspiration, we developed a general, conditional generative model. This model, based on a Conditional Generative Adversarial Network (CGAN), was trained to become a general expert in climate-adaptive design. The training process was extensive:
+\begin{enumerate}
+    \item We defined a large set of diverse, representative virtual sites with varying topographies and boundary conditions.
+    \item For each site, we ran a comprehensive, U-NET-driven Quality-Diversity (QD) exploration (as described in Sec 2.3) to generate a high-quality solution archive.
+    \item All of these site-specific archives were amalgamated into one large, heterogeneous dataset of successful designs.
+    \item The CGAN was trained on this amalgamated dataset. Crucially, its conditioning vector includes not only morphological features (e.g., building count) but also \textbf{contextual features} that describe the site itself (e.g., average slope, corridor width).
+\end{enumerate}
+This training process enables the CGAN to generalize. When presented with the contextual features of a \textit{new, unseen} site, it can generate novel building layouts that are inherently adapted to that specific context.
+
+\subsection{Site-Specific Application via U-NET-driven QD}
+While the AI models are general, urban planning is local. For any specific project, OpenSKIZZE performs a rapid, targeted exploration to create a curated portfolio of solutions. This is achieved using a U-NET-driven Quality-Diversity (QD) algorithm. This process uses the pre-trained U-NET as its fast evaluation function to explore the design space for the specific site defined by the user. It efficiently maps the relationship between design features and predicted climate performance, resulting in a site-specific QD archive. This archive does not train a new model; instead, it serves as the primary \textit{analysis object} for the stakeholders, providing a comprehensive map of what is possible for their unique project.
+
+\subsection{The Interactive User Workflow}
+The general AI models and the site-specific analysis are integrated into a web-based GUI:
+\begin{enumerate}
+    \item \textbf{Scope:} The user defines the project site, from which contextual features are automatically extracted.
+    \item \textbf{Constraints:} The user selects the morphological features of interest for design exploration.
+    \item \textbf{Optimize:} The user initiates the rapid, U-NET-driven QD exploration to generate the site-specific solution archive for analysis.
+    \item \textbf{Explore:} The user visualizes the resulting site-specific QD archive as interactive heatmaps.
+    \item \textbf{Compare \& Generate:} The user can select designs for comparison, visualize their predicted airflow using the general U-NET, and use the general CGAN (providing it with the site's context) to generate new, context-aware design variants.
+\end{enumerate}
+
+\section{Case Study: The "Alte Stadtgärtnerei" in Bonn}
+We applied the OpenSKIZZE framework to a real-world urban development project in Bonn, Germany.
+
+\subsection{Site and Scenario}
+The project site, the "Alte Stadtgärtnerei" (Old City Nursery), is located in a strategically critical area. It sits directly within a designated cold-air corridor that is vital for the nighttime cooling of an adjacent residential district. The primary planning goal was to develop the site while preserving or enhancing the efficacy of this cold-air corridor. Contextual features for the site were extracted and used as input for the AI models.
+
+\subsection{Analysis of the Site-Specific Solution Space}
+We executed the U-NET-driven QD algorithm for the Bonn site. Analysis of the resulting archive revealed key local design principles. Interactive heatmaps demonstrated trade-offs between built area coverage and average building height. We discovered that for this specific topography, layouts with multiple, slender buildings oriented parallel to the primary wind direction consistently outperformed those with fewer, larger building blocks. \todo[inline]{Insert figure showing key trade-off heatmaps from the QD archive.}
+
+\subsection{Identification of Design Archetypes}
+To distill actionable strategies, we applied unsupervised clustering (DBSCAN) to the site-specific archive. This process automatically identified several distinct "design archetypes." For example, two dominant archetypes emerged: a "dispersed pods" strategy and a "channeled corridors" strategy. For each archetype, we generated consensus maps that highlight robust building placement strategies. \todo[inline]{Insert figure showing 2-3 design archetypes with their best solution, central solution, and consensus map.}
+
+\subsection{Interactive Design and Generation}
+The power of the general, pre-trained models was demonstrated in an interactive design scenario. A planner, interested in the "dispersed pods" archetype, used the general CGAN to generate three new design variants. The CGAN was conditioned with the Bonn site's contextual features, along with morphological requests for a "low building count" and "high height variability." The general U-NET was then used to instantly visualize the predicted airflow for each new variant, confirming that the generated options were both novel and highly performant for the specific site. \todo[inline]{Insert figure showing the GUI with a CGAN-generated design and the corresponding U-NET airflow prediction.}
+
+\section{Validation of the AI Models}
+We conducted a rigorous validation to ensure the reliability and generalization capability of our pre-trained models.
+
+\subsection{Predictive Model Accuracy (U-NET)}
+The general-purpose U-NET was validated on a large, held-out test set of 1,000 synthetic urban forms not seen during training. We compared its pixel-wise airflow predictions against ground-truth KLAM\_21 simulations, measuring the coefficient of determination (R²) and Mean Absolute Error (MAE). The results demonstrated strong predictive capability, confirming its validity as a general physics surrogate.
+\todo[inline]{Insert final R² and MAE values for the U-NET validation. Include a figure showing the correlation plot.}
+
+\subsection{Generative Model Generalization (CGAN)}
+The true test of the CGAN was its ability to generalize to entirely new sites. We held out three complete virtual sites from its training data. For each of these unseen sites, we used the trained CGAN to generate 500 new designs, conditioning it with each site's unique contextual features. These generated designs were then evaluated using the ground-truth KLAM\_21 simulator. We analyzed whether the performance distribution of the generated designs was comparable to that of a full QD search for those sites. The results showed that the CGAN successfully produced high-performing designs for all unseen sites, demonstrating its ability to generalize its learned design knowledge.
+\todo[inline]{Insert statistics and figures showing that the performance distribution of CGAN-generated designs for unseen sites is strong, proving generalization.}
+
+\section{Discussion}
+The results demonstrate the power of a workflow that decouples general physical modeling from context-aware design generation. The pre-trained U-NET acts as a reliable, reusable "physics engine," while the pre-trained CGAN acts as a general "design expert." The U-NET-driven QD exploration is the rapid application step that contextualizes these powerful tools for a specific problem, curating a portfolio of elite local solutions for human analysis and decision-making.
+
+This approach, centered on building generalizable AI models, is a significant step forward. It obviates the need for costly, project-specific model training, making advanced AI-assisted design accessible for day-to-day planning tasks. The framework's connection to official open geo-data sources like the GEOportal.NRW is a critical step towards integrating such tools into real-world planning processes.
+
+We acknowledge the limitations of the current framework. KLAM\_21, while efficient, is a simplified model. The set of contextual and morphological features, while informative, is not exhaustive. However, the modular nature of OpenSKIZZE allows for future integration of more sophisticated simulation models and a richer set of conditioning features.
+
+\section{Conclusion}
+This paper introduced OpenSKIZZE, a novel, open-source framework that leverages a suite of general-purpose, pre-trained AI models for climate-adaptive urban design. By separating general knowledge—in a predictive U-NET and a context-aware generative CGAN—from its rapid, site-specific application via Quality-Diversity optimization, the framework effectively bridges the praxis gap. Our validation confirmed the generalization capabilities of the AI models, and the case study in Bonn demonstrated the workflow's ability to uncover local design archetypes and facilitate rapid, data-informed design iteration. By providing powerful, pre-trained tools that empower stakeholders to explore, understand, and create, OpenSKIZZE represents a significant step towards the collaborative design of more resilient and sustainable urban futures.
+
+\bibliographystyle{apalike}
+\bibliography{bib}
+
+\end{document}

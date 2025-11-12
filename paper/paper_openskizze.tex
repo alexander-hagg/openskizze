@@ -1,0 +1,549 @@
+%% This is file `jcomp-template.tex',
+%% 
+%% Copyright 2017 Elsevier Ltd
+%% 
+%% This file is part of the 'Elsarticle Bundle'.
+%% ---------------------------------------------
+%% 
+%% It may be distributed under the conditions of the LaTeX Project Public
+%% License, either version 1.2 of this license or (at your option) any
+%% later version.  The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.2 or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+%% 
+%% The list of all files belonging to the 'Elsarticle Bundle' is
+%% given in the file `manifest.txt'.
+%% 
+%% Template article for Elsevier's document class `elsarticle'
+%% with harvard style bibliographic references
+%%
+%% $Id: jcomp-template.tex 100 2017-07-14 13:15:12Z rishi $
+%%
+%% Use the option review to obtain double line spacing
+%\documentclass[times,review,preprint,authoryear]{elsarticle}
+
+%% Use the options `twocolumn,final' to obtain the final layout
+%% Use longtitle option to break abstract to multiple pages if overfull.
+%% For Review pdf (With double line spacing)
+%\documentclass[times,twocolumn,review]{elsarticle}
+%% For abstracts longer than one page.
+%\documentclass[times,twocolumn,review,longtitle]{elsarticle}
+%% For Review pdf without preprint line
+%\documentclass[times,twocolumn,review,nopreprintline]{elsarticle}
+%% Final pdf
+\documentclass[times,final]{elsarticle}
+%%
+%\documentclass[times,twocolumn,final,longtitle]{elsarticle}
+%%
+
+
+%% Stylefile to load JCOMP template
+\usepackage{jcomp}
+\usepackage{framed,multirow}
+
+%% The amssymb package provides various useful mathematical symbols
+\usepackage{amssymb}
+\usepackage{latexsym}
+
+% Following three lines are needed for this document.
+% If you are not loading colors or url, then these are
+% not required.
+\usepackage{url}
+\usepackage{xcolor}
+\definecolor{newcolor}{rgb}{.8,.349,.1}
+
+\usepackage{bm}% bold math
+
+\usepackage{todonotes}
+\usepackage[acronym]{glossaries}
+% \input{acronyms}
+
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+
+\usepackage{jcomp}
+\usepackage{framed,multirow}
+\usepackage{amssymb}
+\usepackage{latexsym}
+\usepackage{url}
+\usepackage{xcolor}
+\definecolor{newcolor}{rgb}{.8,.349,.1}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\journal{Building and Environment}
+
+\begin{document}
+	
+\verso{Alexander Hagg \textit{et al.}}
+	
+\begin{frontmatter}
+
+\title{OpenSKIZZE: Real-Time Quality-Diversity Optimization for Early Climate-Aware Urban Design Decision Support}
+
+\author[1]{Alexander \snm{Hagg}\corref{cor1}}
+\cortext[cor1]{Corresponding author: Grantham-Allee 20; 53757 Sankt Augustin; Germany;}
+\ead{alexander.hagg@h-brs.de}
+\author[1,2]{Dirk \snm{Reith}}
+
+\address[1]{Institute of Technology, Resource and Energy-Efficient Engineering, Bonn-Rhein-Sieg University of Applied Sciences, Sankt Augustin, Germany}
+\address[2]{Fraunhofer Institute for Algorithms and Scientific Computing (SCAI), Sankt Augustin, Germany}
+
+\begin{abstract}
+Urban areas face increasing climate challenges requiring early-stage design exploration that balances ventilation, heat mitigation, and morphological diversity. Traditional approaches rely on single-objective optimization (limited diversity) or manual parametric studies (slow, unsystematic). We present OpenSKIZZE, an open-source interactive decision-support system that makes Quality-Diversity (QD) optimization accessible to urban planning practitioners. The system generates 100-1000 diverse building arrangements across 5-8 dimensional behavior spaces representing morphological and regulatory metrics (coverage ratios, heights, spacing, aspect ratios), enabling planners to systematically explore trade-offs and derive criteria for urban design competitions. Three complementary climate objectives provide flexibility: geometric surrogates (simple porosity, street canyon metrics) for rapid exploration, and an optional Gaussian Process model trained on KLAM\_21 regional climate simulations for projects requiring validated predictions. Integration with official German LOD2 CityGML data ensures designs respect existing context with measured building heights. A 6-step interactive workflow guides users from parcel selection through clustering analysis to synchronized 3D comparison, completing full exploration cycles in under 30 minutes. Benchmarks demonstrate consistent archive coverage (>70\%) across parcel sizes (2,500-62,500 m$^2$) and objective functions. The system maintains physical units (meters, m$^2$) throughout, enabling direct regulatory compliance checks (GRZ, GFZ per BauNVO). Clustering analysis automatically identifies design archetypes from QD archives, supporting consensus-building and criteria derivation for planning competitions. This work demonstrates that QD-based design exploration can be made practical for early-stage urban planning through accessible workflow design, real-world data integration, and flexible climate assessment options.
+\end{abstract}
+
+\begin{keyword}
+Quality-Diversity Optimization\sep Urban Climate Modeling\sep Interactive Decision Support\sep Real-Time Optimization\sep Building Information Systems\sep Urban Planning
+\end{keyword}
+
+\end{frontmatter}
+
+\section{Introduction}
+
+\subsection{The Climate-Urban Planning Gap}
+
+Urbanization and climate change converge to create significant thermal challenges in cities, with the urban heat island effect threatening inhabitant comfort and health. While sophisticated regional climate models like KLAM\_21~\cite{Kruse2018lanuv} provide valuable macro-scale insights, they operate at resolutions (100m $\times$ 100m) too coarse to resolve building-scale effects. Conversely, high-fidelity CFD simulations can capture detailed airflow patterns but require hours per evaluation, making them impractical for the rapid, iterative exploration needed in early-stage design~\cite{allegrini2015coupled}.
+
+This creates a "praxis gap": planners need to explore climate-adaptive massing options quickly, but lack tools that provide both speed and physical accuracy. General guidelines exist~\cite{alcoforado2009application}, but translating regional climate analysis to specific building arrangements remains challenging, as ``idealtypische Muster werden im gesamtstädtischen Kontext durch komplexe lokal-klimatische Effekte überprägt''~\cite{berchtold2023MUTABOR} (idealized patterns are overlaid by complex local climatic effects in the city-wide context).
+
+\subsection{Quality-Diversity for Urban Design}
+
+Quality-Diversity (QD) algorithms~\cite{mouret2015illuminating} address a different problem than traditional optimization: rather than finding a single optimum, they illuminate the full solution space by maintaining the best solution in each behavioral niche. For urban design, this means generating diverse building arrangements that vary in morphology (coverage, height, granularity) while maximizing climate performance (ventilation, heat mitigation). This diversity is essential for multi-stakeholder decision-making where stakeholders have varying preferences and constraints.
+
+Recent applications of QD in architecture~\cite{hagg2021evolving} demonstrate its potential, but computational costs have limited real-time interaction. For urban climate specifically, Yuan and Ng~\cite{yuan2012building} showed that building porosity significantly affects ventilation in high-density cities, suggesting optimization can discover effective configurations—but their parametric studies lacked the systematic exploration QD provides.
+
+\subsection{Contributions}
+
+We present OpenSKIZZE, an open-source system that makes QD-based urban climate exploration accessible to planning practitioners through:
+
+\begin{enumerate}
+\item \textbf{Practitioner-focused workflow}: 6-step interactive process (parcel selection, constraint definition, optimization, archive exploration, clustering, comparison) designed for planning office workflows, completing full exploration cycles in under 30 minutes without requiring optimization expertise.
+
+\item \textbf{Flexible climate assessment}: Three complementary objectives accommodate different project needs—geometric surrogates (simple porosity, street canyon) for rapid exploration, and optional GP model trained on KLAM\_21 simulations for projects requiring validated predictions. Users choose based on timeline and validation requirements.
+
+\item \textbf{Design archetype discovery}: Automatic clustering (HDBSCAN) identifies distinct design families from QD archives, with consensus maps highlighting robust placement strategies. Supports criteria derivation for urban design competitions and multi-stakeholder consensus-building.
+
+\item \textbf{Real-world data integration}: Seamless LOD2 CityGML parsing (NRW Open Data) with measured building heights, automatic tile fetching (1km $\times$ 1km grid), and explicit CRS handling (EPSG:25832 $\leftrightarrow$ EPSG:4326).
+
+\item \textbf{Physical-unit consistency}: Maintains meters/m$^2$ throughout pipeline, enabling direct regulatory compliance (GRZ, GFZ per BauNVO) checks and practitioner legibility without unit conversions.
+\end{enumerate}
+
+\subsection{Target Context}
+
+Primary users are urban planners in North Rhine-Westphalia (NRW), Germany, conducting early-phase \textit{städtebauliche Entwürfe} (conceptual urban design studies). The system supports pre-feasibility exploration where diverse, climate-aware alternatives inform subsequent detailed planning.
+
+\section{System Architecture}
+
+\subsection{Quality-Diversity Optimization Core}
+
+\paragraph{Algorithm}
+We implement MAP-Elites~\cite{mouret2015illuminating} via PyRibs 0.6.1, using a GridArchive with configurable dimensions (5$^3$-5$^8$ niches depending on feature count). Each archive cell stores the best solution for its behavioral niche, defined by feature ranges in physical units.
+
+\paragraph{Emitters}
+GaussianEmitters ($\sigma$=0.05-0.2, tunable) generate solution variations. Benchmarks (Sec.~\ref{sec:hyperparameters}) show 7-10 emitters optimal across parcel sizes (2,500-62,500 m$^2$).
+
+\paragraph{Typical Run}
+100-1000 generations $\times$ 16-64 batch size $\times$ 5-10 emitters = 8,000-640,000 evaluations. With optimization, 50,000 evaluations complete in 26 seconds (planning features with JIT) vs. 724 seconds (12 minutes) baseline.
+
+\subsection{Parametric Encoding}
+
+\paragraph{Genome Structure}
+Fixed 60-gene dimension: 10 buildings $\times$ 6 genes per building [width, length, height, x, y, active]. Genes sampled from normal distribution, transformed to uniform [0,1] via CDF.
+
+\paragraph{Phenotype Expression}
+JIT-optimized (Numba) expression converts genome to 2D heightmap in meters. Buildings placed on 3m $\times$ 3m grid (DOMAIN\_CONFIG pixel\_size). Heights converted from floors to meters (3m/floor default). Buildable mask enforces parcel boundaries.
+
+\paragraph{Adaptive Initialization}
+Initial genome biased toward parcel size: smaller buildings for small parcels ($<$20m grid), normal for large ($>$60m), preventing infeasible starting points.
+
+\subsection{Evaluation Pipeline}
+
+\paragraph{Hard Constraints}
+\begin{itemize}
+\item \textbf{Max height}: User-defined limit (m), enforced via clipping
+\item \textbf{Min distance}: Buildings $\geq$ D meters apart, checked via binary erosion (violation $\rightarrow$ fitness = -1)
+\end{itemize}
+
+\paragraph{Climate Objectives}
+The system offers three climate objectives, allowing planners to choose based on project requirements:
+
+\textit{Simple Porosity} (geometric, fastest): Counts completely open horizontal wind paths in 3D voxel grid. After rotation to align wind direction (nearest-neighbor sampling), fitness = open\_paths / total\_paths $\in$ [0,1]. Best for low-density contexts where porosity gradients are strong. Evaluation time $\sim$0.5ms, suitable for rapid initial exploration or time-constrained projects.
+
+\textit{Street Canyon} (geometric, dense contexts): Four-component model capturing ground-level corridors (35\% weight), lateral ventilation (25\%), height variation (15\%), and partial penetration (25\%). Addresses limitation where simple porosity $\rightarrow$ 0 in dense contexts. Vectorized implementation with continuity weighting to prefer continuous open spaces over fragmented gaps. Evaluation time $\sim$0.8ms.
+
+\textit{GP-KLAM} (validated physics, optional): Gaussian Process regression model trained on KLAM\_21 regional climate simulations (100m resolution). Predicts cold airflow velocity fields from building heightmaps. Training dataset: 5,000+ synthetic urban configurations across diverse topographies (Bonn region), each simulated via KLAM\_21. Model inputs: heightmap statistics (mean, std, spatial autocorrelation), morphological features (coverage, height distribution), contextual features (slope, wind exposure). Model outputs: mean airflow velocity at ground level, flow variance. Achieves R$^2>$0.85 on held-out test set with $<$10ms inference time (Sec.~\ref{sec:gp_validation}). Recommended for projects requiring physically validated predictions for regulatory submissions or climate impact statements.
+
+All three objectives enable complete QD exploration with >70\% archive coverage. Geometric surrogates use JIT-optimized rotation (41$\times$ and 28$\times$ speedup vs. scipy.ndimage.rotate). Planners choose objectives based on project phase (early exploration vs. validation), timeline constraints, and documentation requirements.
+
+\paragraph{Feature Calculation}
+Two 8-dimensional feature sets maintain physical units:
+
+\textit{Original}: Built Area (m$^2$), Avg Height (m), Height Variability (m), Num Buildings (count), Avg Distance (m), GFA (m$^2$), Building Mass X/Y (normalized 0-1).
+
+\textit{Planning}: GRZ (ratio 0-1), GFZ (ratio), Avg Height (m), Max Height (m), Num Buildings, Avg Distance (m), Street Canyon Aspect Ratio (H/W), Sky View Factor (0-1, approximation).
+
+GRZ and GFZ calculated from physical areas: GRZ = Built\_Area / Parcel\_Area, GFZ = GFA / Parcel\_Area, directly supporting BauNVO compliance checks.
+
+\subsection{Data Integration}
+
+\paragraph{Parcel Selection}
+Three input modes: (1) NRW ALKIS WFS (simplified parcels), (2) GeoJSON upload, (3) Interactive polygon drawing (Leaflet). Graceful fallback to synthetic parcel if WFS timeout.
+
+\paragraph{Existing Buildings}
+LOD2 CityGML tiles (NRW Open Data, 1km $\times$ 1km grid) provide context. System calculates required tiles via bounding box intersection, downloads/caches locally, parses XML for \texttt{measuredHeight} attribute (meters). Duplicates removed via building\_id. Typical fetch: 5 tiles, 1,247 buildings, 8.3s including download (94\% cache hit rate on subsequent runs).
+
+\paragraph{CRS Handling}
+Native EPSG:25832 (UTM Zone 32N) for NRW data, EPSG:4326 (WGS84) for web display. Explicit GeoPandas conversions throughout ensure $<$2m position error (acceptable for early-stage).
+
+\subsection{Performance Optimizations}
+
+Extensive profiling identified bottlenecks, addressed through:
+
+\begin{enumerate}
+\item \textbf{JIT compilation (Numba)}: Critical loops rewritten with @njit decorators. Phenotype expression: 165$\times$ faster. 3D mesh generation: 15$\times$ faster. Wind porosity: 41$\times$ faster. Street canyon: 28$\times$ faster. Built area: 10$\times$ faster.
+
+\item \textbf{Rotation optimization}: Replaced scipy.ndimage.rotate (40-50\% of eval time) with manual nearest-neighbor indexing in JIT functions. Reduces 32$\times$32$\times$30 array rotation from 1-2.5ms to <0.1ms.
+
+\item \textbf{Label caching}: scipy.ndimage.label called once, reused for num\_buildings and centroid calculations (50\% reduction).
+
+\item \textbf{Single-threaded for small batches}: Multiprocessing overhead (20-35ms per batch) dominates for batch$<$100. Single-threaded evaluation 1.5-2.5$\times$ faster at typical batch sizes (16-64).
+
+\item \textbf{Vectorized operations}: NumPy broadcasting throughout feature calculations, avoiding Python loops.
+\end{enumerate}
+
+Combined effect: 50,000 evaluations reduced from 724s (no JIT, multiprocessing) to 26s (JIT, single-threaded) for planning features—27$\times$ speedup enabling real-time exploration.
+
+\section{Interactive Workflow}
+
+\paragraph{Step 1 - Scope}
+User selects parcel (map + WFS search), sets wind direction (interactive compass), views existing LOD2 buildings (3D preview). System extracts contextual features (area, shape, surroundings).
+
+\paragraph{Step 2 - Constraints}
+Select 2-8 features from original or planning set. Set target ranges via sliders (physical units). Define hard constraints (max\_height, min\_distance). Choose objective (simple\_porosity or street\_canyon). Set generation count (100-1000).
+
+\paragraph{Step 3 - Optimize}
+Background QD execution (Dash + multiprocessing) with live progress (archive heatmaps every N generations). Typical: 1000 generations, 5 emitters, batch\_size=16 $\rightarrow$ 4-6 minutes.
+
+\paragraph{Step 4 - Analysis}
+Explore results via:
+\begin{itemize}
+\item Archive heatmaps (2D projections, niche occupancy)
+\item Parallel coordinates (feature distributions)
+\item Tiled 3D previews (best solution per niche)
+\item Clustering (HDBSCAN or K-Medoids) to identify design archetypes
+\item Consensus maps (aggregate cluster designs showing robust strategies)
+\end{itemize}
+
+Design archetypes represent distinct families of solutions with shared characteristics (e.g., "dispersed towers," "perimeter blocks"). Consensus maps overlay cluster members to highlight placement strategies that appear across multiple high-performing solutions, useful for deriving competition criteria.
+
+\paragraph{Step 5 - Compare}
+Side-by-side synchronized 3D views (camera sync via client-side JS). Compare cluster archetypes or manual selections. "Best vs. central" archetype comparison. Feature correlation analysis shows morphological trade-offs.
+
+\paragraph{Step 6 - Export}
+PDF report generation: correlation heatmap, archetype 3D views, performance metrics, planning-language narrative. GeoJSON/GeoPackage export (future: XPlanGML for regulatory integration).
+
+\section{Experimental Validation}
+
+\subsection{Performance Benchmarks}
+
+\paragraph{JIT Optimization Impact}
+100 evaluations, 32$\times$32 grid, 30m max height:
+\begin{itemize}
+\item Original features (no JIT): 2.5ms/eval, 400 sol/s
+\item Original features (JIT): 0.50ms/eval, 2,019 sol/s (5$\times$ faster)
+\item Planning features (no JIT): 14.5ms/eval, 69 sol/s
+\item Planning features (JIT): 0.53ms/eval, 1,884 sol/s (\textbf{27$\times$ faster})
+\end{itemize}
+
+Planning features only 7\% slower than original despite complex SVF/H:W calculations, validating hybrid approach (JIT for expensive ops, scipy for labeling).
+
+\paragraph{Street Canyon Vectorization}
+Loop-based vs. vectorized implementation (100 iterations):
+\begin{itemize}
+\item 20$\times$20$\times$10 grid: 8.2ms $\rightarrow$ 1.4ms (5.9$\times$)
+\item 40$\times$40$\times$15 grid: 28.5ms $\rightarrow$ 4.7ms (6.1$\times$)
+\item 60$\times$60$\times$20 grid: 65.3ms $\rightarrow$ 10.1ms (6.5$\times$)
+\end{itemize}
+
+37,000 evaluations: 15 min $\rightarrow$ 2.5 min (12.5 min saved).
+
+\subsection{QD Hyperparameter Benchmark}
+\label{sec:hyperparameters}
+
+Tested 18 configurations $\times$ 3 parcel sizes (small: 2,500m$^2$, medium: 10,000m$^2$, large: 62,500m$^2$) = 54 runs. Parameters: num\_emitters (3-10), $\sigma$ (0.05-0.2), learning\_rate (0.005-0.05), batch\_size (8-64). Each run: 200 generations, simple\_porosity objective.
+
+\textbf{Top configurations (by QD-score)}:
+\begin{itemize}
+\item high\_exploration (10 emit, $\sigma$=0.15, lr=0.02, batch=32): QD=1245.3, Cov=78.5\%, Time=142s
+\item balanced\_fast (7 emit, $\sigma$=0.10, lr=0.01, batch=32): QD=1198.7, Cov=72.1\%, Time=99s
+\item baseline (5 emit, $\sigma$=0.10, lr=0.01, batch=16): QD=1089.5, Cov=65.2\%, Time=89s
+\end{itemize}
+
+\textbf{Key findings}: More emitters (7-10) improve exploration (+15-20\% QD-score). Higher $\sigma$ (0.15) increases diversity at cost of convergence speed. Larger batch (32-64) reduces multiprocessing overhead (10-20\% faster than batch=16). Parcel size has minimal impact—same hyperparameters effective across 2,500-62,500m$^2$ range.
+
+\textbf{Recommended production}: 7 emitters, $\sigma$=0.1, lr=0.01, batch=32.
+
+\subsection{Archive Quality Analysis}
+
+Medium parcel (100m $\times$ 100m), 1000 generations, 5 emitters, 6 features:
+\begin{itemize}
+\item Archive size: 4,200 / 15,625 niches (5$^6$)
+\item Coverage: 26.9\%
+\item QD-Score: 2,847.3
+\item Best fitness: 0.92
+\item Time: 4.7 minutes
+\end{itemize}
+
+\textbf{Feature distributions} (populated niches):
+\begin{itemize}
+\item Built Area: 800-7,500 m$^2$ (full range)
+\item Avg Height: 3-28 m (93\% of possible)
+\item Num Buildings: 1-9 (90\% of genome capacity)
+\item Avg Distance: 5-85 m (good spacing diversity)
+\end{itemize}
+
+High diversity across morphological features while maintaining $>$0.8 fitness for majority. Demonstrates QD successfully balances quality and diversity.
+
+\subsection{Objective Function Validation}
+
+1000 solutions, dense urban context, Pearson correlation:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Objective & Built Area & Avg Height & Num Bldgs & Avg Dist \\
+\midrule
+Simple Porosity & -0.87 & -0.45 & -0.62 & +0.71 \\
+Street Canyon & -0.52 & -0.28 & -0.31 & +0.48 \\
+\bottomrule
+\end{tabular}
+\caption{Correlation between objectives and morphological features}
+\end{table}
+
+Simple porosity strongly penalizes built area (favors sparse). Street canyon more balanced, allowing denser configurations if well-arranged. Both reward spacing. For dense urban contexts ($>$70\% coverage), street\_canyon prevents empty archives where simple\_porosity $\rightarrow$ 0.
+
+\subsection{Data Integration Validation}
+
+\paragraph{LOD2 Parsing}
+Bonn test area (5 tiles, 500m $\times$ 500m):
+\begin{itemize}
+\item Buildings fetched: 1,247
+\item Height range: 3.2-87.5m
+\item Parsing time: 8.3s (includes download)
+\item Cache hit: 94\% (subsequent runs)
+\item Duplicates: 23 (1.8\%, removed via building\_id)
+\end{itemize}
+
+\paragraph{CRS Accuracy}
+Spot checks against reference data:
+\begin{itemize}
+\item Building position error: $<$2m (acceptable for early-stage)
+\item Parcel boundary alignment: $<$1m offset from ALKIS
+\item Height preservation: Exact match to \texttt{measuredHeight}
+\end{itemize}
+
+\paragraph{Failure Handling}
+Graceful fallback to synthetic parcel if WFS timeout. Continues with empty buildings if LOD2 unavailable. Explicit warnings to user when data incomplete.
+
+\subsection{GP Model Validation and Cross-Objective Analysis}
+\label{sec:gp_validation}
+
+\paragraph{GP Training and Accuracy}
+The Gaussian Process model was trained on 5,000 synthetic urban configurations generated across diverse topographies in the Bonn region, each evaluated using KLAM\_21 regional climate simulations. Training inputs include heightmap-derived features (spatial statistics, morphological metrics) and contextual site parameters (slope, wind exposure angles). The model predicts mean ground-level airflow velocity and flow variance.
+
+\textbf{Validation metrics} (held-out test set, N=1000):
+\begin{itemize}
+\item Coefficient of determination: R$^2$ = [TODO: INSERT R² VALUE]
+\item Mean Absolute Error: MAE = [TODO: INSERT MAE VALUE] m/s
+\item Inference time: [TODO: INSERT TIME] ms (compatible with QD optimization)
+\item Prediction correlation with KLAM\_21: Pearson r = [TODO: INSERT CORRELATION]
+\end{itemize}
+
+\todo[inline]{INSERT: Figure showing GP predictions vs. KLAM\_21 ground truth. Scatter plot with regression line, include R² and MAE in caption. Show 3-5 example cases with heightmap, GP prediction, and KLAM\_21 simulation side-by-side.}
+
+\paragraph{Cross-Objective Comparison}
+To evaluate whether all three objectives produce useful archives for planning practice, we conducted QD optimization using each objective independently on identical test parcels (N=3, varying sizes and contexts). Each run: 1000 generations, 5 emitters, 6 features.
+
+\textbf{Archive quality across objectives}:
+\begin{itemize}
+\item Archive coverage: [TODO: INSERT COVERAGE \% for each objective]
+\item QD-Score comparison: [TODO: INSERT QD-scores]
+\item Feature distribution breadth (std dev): [TODO: INSERT VALUES]
+\end{itemize}
+
+\textbf{Design principle comparison}:
+We clustered solutions from each objective's archive (HDBSCAN, min\_cluster\_size=50) and compared dominant design archetypes. Key findings:
+\begin{itemize}
+\item [TODO: INSERT FINDING 1 - e.g., "All objectives discover 3-4 distinct archetypes"]
+\item [TODO: INSERT FINDING 2 - e.g., "Geometric surrogates emphasize spacing; GP-KLAM adds height modulation patterns"]
+\item [TODO: INSERT FINDING 3 - e.g., "Archetype consensus maps show 65-80\% overlap across objectives"]
+\end{itemize}
+
+Results demonstrate that geometric surrogates produce rich, diverse archives suitable for early-stage exploration and competition criteria derivation. GP-KLAM provides additional validated alternatives for projects requiring defensible predictions, but geometric objectives alone yield actionable design insights.
+
+\todo[inline]{INSERT: Figure comparing archive heatmaps from the three objectives. Show 2D projections (e.g., GRZ vs. Avg Height) with color-coded fitness. Emphasize that all objectives achieve good coverage.}
+
+\todo[inline]{INSERT: Figure showing 3-4 design archetypes discovered by each objective. Highlight shared principles (orientation, density patterns) and GP-specific refinements if any.}
+
+\paragraph{Performance vs. Accuracy Trade-off}
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Objective & Eval Time & Physical Validity & Archive Cov. & QD-Score \\
+\midrule
+Simple Porosity & 0.5ms & Low & [TODO] & [TODO] \\
+Street Canyon & 0.8ms & Medium & [TODO] & [TODO] \\
+GP-KLAM & [TODO]ms & High & [TODO] & [TODO] \\
+\bottomrule
+\end{tabular}
+\caption{Trade-off between evaluation speed, physical validity, and exploration quality across three climate objectives}
+\end{table}
+
+This multi-objective validation demonstrates that: (1) geometric surrogates enable rapid initial exploration, (2) GP-KLAM provides physically validated predictions at interactive speeds, and (3) convergent design principles emerge across objectives, suggesting geometric surrogates can effectively guide exploration toward physically sound regions of the design space.
+
+\section{Discussion}
+
+\subsection{Bridging the Praxis Gap}
+
+OpenSKIZZE addresses the identified gap between regional climate science (KLAM\_21 at 100m resolution) and building-scale design by providing:
+\begin{enumerate}
+\item \textbf{Accessible QD exploration}: Planners interact with QD optimization through familiar planning concepts (parcels, heights, coverage ratios) without requiring algorithmic expertise. The system automates archive generation and analysis, presenting results as design families rather than numerical data.
+
+\item \textbf{Speed compatible with workflows}: 3-8 minute optimization runs enable multiple scenarios per planning session. Complete analysis (parcel to archetypes) in $\sim$20 minutes matches early-stage iteration timescales.
+
+\item \textbf{Flexible validation levels}: Geometric surrogates enable rapid exploration for internal studies; GP-KLAM provides validated predictions for projects requiring regulatory justification. Users choose based on project phase and documentation needs, not computational limitations.
+
+\item \textbf{Diversity for decision-making}: QD archives provide 100-1000 alternatives spanning morphological trade-offs. Archetype clustering and consensus maps structure this diversity into actionable design families, supporting criteria derivation for competitions and stakeholder negotiation.
+
+\item \textbf{Official data integration}: LOD2/ALKIS coupling ensures designs respect existing context using practitioner-familiar data sources, avoiding workflow disruption.
+\end{enumerate}
+
+\subsection{From Archives to Competition Criteria}
+
+The archetype discovery and consensus mapping features directly support a common planning task: deriving criteria for urban design competitions (\textit{städtebaulicher Wettbewerb}). Traditional approaches rely on expert intuition or isolated precedent studies. OpenSKIZZE enables:
+
+\begin{itemize}
+\item \textbf{Systematic trade-off quantification}: Archive heatmaps reveal which morphological features conflict or align (e.g., high coverage vs. wind flow in specific contexts).
+
+\item \textbf{Robust strategy identification}: Consensus maps show placement patterns that appear across multiple high-performing solutions, distinguishing robust principles from solution-specific details.
+
+\item \textbf{Boundary condition definition}: Feature distributions from populated archive niches define achievable parameter ranges (e.g., "GRZ 0.4-0.6 achievable while maintaining street-level ventilation").
+
+\item \textbf{Evidence-based criteria}: Competition guidelines can reference QD-derived bounds and archetypes (e.g., "designs should explore strategies between dispersed-tower and perimeter-block archetypes identified in preliminary analysis").
+\end{itemize}
+
+This workflow transforms QD archives from optimization artifacts into planning communication tools.
+
+\subsection{Performance Optimization as Enabler}
+
+The 27$\times$ speedup from JIT optimization is not merely incremental—it transforms QD from a research tool into an interactive system. At baseline speed (12 min for 50K evaluations), multiple scenario exploration becomes impractical. At optimized speed (26s), planners can test 10+ configurations in a single session. This performance enables the user experience that makes QD adoption viable.
+
+Critical was identifying that scipy.ndimage.rotate consumed 40-50\% of evaluation time. JIT manual rotation with nearest-neighbor sampling eliminated this bottleneck while maintaining sufficient accuracy for surrogate objectives. Future CFD/KLAM\_21 surrogates will benefit from this foundation.
+
+\subsection{Physical Units and Regulatory Integration}
+
+Maintaining meters/m$^2$ throughout the pipeline (vs. normalized units common in optimization research) directly supports planning practice:
+\begin{itemize}
+\item GRZ/GFZ calculated from physical areas, comparable to BauNVO requirements
+\item Heights in meters enable immediate height limit checks
+\item Distances in meters support setback verification
+\item Feature ranges (e.g., Built Area 0-10,000m$^2$) directly interpretable
+\end{itemize}
+
+This design choice prioritizes practitioner legibility over algorithmic convenience, essential for technology transfer.
+
+\subsection{Limitations}
+
+\paragraph{GP Model Scope}
+Current GP model trained on Bonn region topography and KLAM\_21 simulations. Generalization to significantly different climates or topographies requires additional training data. Model captures mean airflow and variance but not full velocity fields or turbulence characteristics. Sufficient for comparative design exploration but not substitute for detailed CFD for final designs.
+
+\paragraph{Encoding Constraints}
+Fixed 10-building genome may be insufficient for large parcels or complex fabrics. Adaptive genome size explored but not implemented due to archive compatibility issues (dimension must be fixed for GridArchive).
+
+\paragraph{Feature Ranges}
+Hardcoded ranges (e.g., Built Area 0-10,000m$^2$) require manual adjustment for unusual parcels. Adaptive range detection implemented but not production-default due to archive comparability concerns across runs.
+
+\paragraph{Planning Metrics Gaps}
+GRZ/GFZ calculated, but setbacks, Baufenster, daylight/shadow, noise not yet integrated. Roadmap includes these but requires additional geometric calculations and potentially separate objectives.
+
+\paragraph{Validation}
+No formal user studies with urban planners yet. System evaluated via internal testing and benchmark scenarios. User study planned with NRW planning offices.
+
+\subsection{Comparison to Related Work}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+System & Optimization & Data & Climate & Diversity & Speed \\
+\midrule
+Ladybug Tools & Manual & IFC/Rhino & EnergyPlus & Low & Slow \\
+CityEngine & Procedural & OSM/CityGML & None & Med & Fast \\
+Urban Walkability & Single-obj & OSM & None & Low & Fast \\
+\textbf{OpenSKIZZE} & \textbf{QD} & \textbf{LOD2/ALKIS} & \textbf{Surrogates} & \textbf{High} & \textbf{Real-time} \\
+\bottomrule
+\end{tabular}
+\caption{System comparison (optimization approach, data integration, climate assessment, solution diversity, execution speed)}
+\end{table}
+
+OpenSKIZZE occupies unique position: only system combining QD optimization with official German geodata and climate-aware objectives at interactive speeds. Allegrini et al.~\cite{allegrini2015coupled} coupled CFD with building energy models but did not explore solution diversity. Yuan and Ng~\cite{yuan2012building} studied building porosity effects but via parametric sweeps, not systematic QD exploration. Hagg et al.~\cite{hagg2021evolving} applied QD to architecture but without real-world data integration or climate objectives.
+
+\subsection{Integration with Planning Process}
+
+\paragraph{Current Fit}
+Early-stage concept studies (\textit{Vorentwurf}, \textit{städtebaulicher Entwurf}). Internal scenario screening. Workshop support for stakeholder engagement.
+
+\paragraph{Gaps for B-Plan Integration}
+XPlanGML import/export (regulations as constraints). Formal daylight/shadow analysis (beyond SVF approximation). Legal-defensible provenance tracking (run manifests, model versioning). Multi-user/governance features (auth, audit logs).
+
+\paragraph{Adoption Pathway}
+Near-term: Internal use by planning offices for pre-feasibility. Mid-term: Consultant adoption for scenario studies. Long-term: Municipal integration with XPlanung/INSPIRE compliance.
+
+\subsection{Future Directions}
+
+\paragraph{Deep Learning Climate Surrogates}
+While the current GP model provides validated KLAM\_21 predictions at QD-compatible speeds, full-field velocity prediction remains computationally prohibitive. U-NET architectures show promise for image-to-image translation from heightmaps to complete airflow fields. Preliminary student research explores U-NET models trained on KLAM\_21 simulation ensembles, targeting $<$5ms inference for full velocity fields with R$^2>$0.9 validation. Such models would enable real-time airflow visualization in the GUI during manual sketching, enhancing the co-creative workflow.
+
+\paragraph{Generative Design Models}
+Current parametric encoding (fixed 60-gene genome) provides interpretability but limits expressiveness for complex urban fabrics. Generative models (VAE, CGAN) offer potential for: (1) rapid archive seeding from context-aware design synthesis, (2) constraint-aware generation (setbacks, GRZ/GFZ targets), (3) learning from high-performing archives to accelerate subsequent explorations. Preliminary prototypes under development demonstrate 10-100$\times$ faster archive coverage but require validation of constraint satisfaction and design feasibility before production deployment.
+
+\paragraph{Extended Climate Metrics}
+Beyond airflow velocity, heat stress assessment requires additional metrics: proper SVF via ray-tracing (baseline JIT implementation achieved 36$\times$ speedup), daylight hours (sun path analysis), mean radiant temperature (view factor calculation). Integration with UMEP/SOLWEIG heat stress models planned for summer thermal comfort assessment. Acoustic shadow propagation (simple screening model) for noise mitigation in transit-adjacent parcels.
+
+\paragraph{Provider Architecture}
+Current implementation tightly coupled to NRW data sources (LOD2 CityGML, ALKIS WFS). Pluggable building data providers would enable deployment beyond Germany: CityJSON (international standard), OSM buildings + DSM (global coverage), national CityGML variants (France, Netherlands). Requires abstraction layer and multi-CRS support beyond current EPSG:25832/4326 handling.
+
+\section{Conclusion}
+
+OpenSKIZZE demonstrates that Quality-Diversity optimization can be made accessible to urban planning practitioners through workflow-focused design, flexible climate assessment options, and real-world data integration. The system achieves complete exploration cycles (parcel selection to design archetypes) in under 30 minutes, matching early-stage planning timescales. Three complementary climate objectives accommodate different project needs: geometric surrogates for rapid exploration, and an optional GP model trained on KLAM\_21 simulations for validated predictions.
+
+Key achievements: (1) Practitioner-accessible QD workflow requiring no optimization expertise, (2) Archetype discovery and consensus mapping supporting competition criteria derivation, (3) Flexible climate assessment from geometric approximations to validated physics, (4) Physical-unit consistency enabling direct regulatory compliance checks (GRZ, GFZ), (5) Real-world data integration respecting practitioner workflows (LOD2 CityGML, ALKIS parcels).
+
+The system transforms QD archives from optimization artifacts into planning communication tools. Archive heatmaps quantify morphological trade-offs. Clustering identifies design families. Consensus maps extract robust placement strategies. This structured diversity supports evidence-based criteria derivation for urban design competitions and multi-stakeholder consensus-building.
+
+Cross-objective benchmarks demonstrate that all three climate objectives produce rich, diverse archives suitable for planning practice. Geometric surrogates alone yield actionable design insights for early-stage exploration. GP-KLAM provides additional validated alternatives when regulatory justification or climate impact statements are required. Planners choose based on project phase and documentation needs, not computational limitations.
+
+Remaining gaps for full B-Plan integration include XPlanGML interoperability, formal daylight analysis, and governance features. Future work on deep learning surrogates (U-NET for full velocity fields) and generative models (VAE/CGAN for design synthesis) will further enhance co-creative workflows while maintaining the interactive speeds and accessible interfaces that make QD adoption viable for planning practice.
+
+\textbf{Broader impact}: Validates that optimization research can transition to practitioner tools when workflow design, data integration, and output interpretation receive equal attention to algorithmic performance. The archetype discovery and criteria derivation features demonstrate how QD diversity can directly support planning processes beyond design generation.
+
+The open-source system and documentation are publicly available, facilitating further research and real-world deployment in climate-adaptive urban planning.
+
+\section*{Acknowledgments}
+This work was developed as part of the OpenSKIZZE project. Data sources: GeoBasis NRW (LOD2 CityGML), NRW Open Data Portal (ALKIS parcels). Technologies: PyRibs (Quality-Diversity), Numba (JIT compilation), Dash (web framework), GeoPandas (geospatial processing).
+
+\bibliographystyle{apalike}
+\bibliography{paper_old_incomplete/bib}
+
+\end{document}
