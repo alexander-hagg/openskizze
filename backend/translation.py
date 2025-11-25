@@ -55,53 +55,31 @@ T = {
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch-Größe:",
         'STEP2_QD_HYPERPARAMS_INFO': "Höhere Werte = längere Laufzeit, mehr Lösungen. Standard: 1000 Generationen, 5 Emitter.",
 
-        # Original feature set (indices 0-7)
-        'MEASURE_0': 'Bebaute Fläche',
-        'MEASURE_1': 'Durchschnittliche Bauhöhe',
-        'MEASURE_2': 'Maximum Bauhöhe',
-        'MEASURE_3': 'Anzahl der Gebäude',
+        # Consolidated feature set (indices 0-7)
+        'MEASURE_0': 'GRZ (Grundflächenzahl)',
+        'MEASURE_1': 'GFZ (Geschossflächenzahl)',
+        'MEASURE_2': 'Durchschnittliche Bauhöhe',
+        'MEASURE_3': 'Höhenvariabilität',
         'MEASURE_4': 'Durchschnittliche Gebäudedistanz',
-        'MEASURE_5': 'Brutto-Grundfläche',
-        'MEASURE_6': 'Gebäudemasse X-Achse',
-        'MEASURE_7': 'Gebäudemasse Y-Achse',
+        'MEASURE_5': 'Anzahl der Gebäude',
+        'MEASURE_6': 'Kompaktheit (A/V-Verhältnis)',
+        'MEASURE_7': 'Park-Faktor (Grünflächenradius)',
         
-        # Planning-focused feature set (indices 0-7) - BACKLOG
-        'MEASURE_PLANNING_0': 'GRZ (Grundflächenzahl)',
-        'MEASURE_PLANNING_1': 'GFZ (Geschossflächenzahl)',
-        'MEASURE_PLANNING_2': 'Durchschnittliche Bauhöhe',
-        'MEASURE_PLANNING_3': 'Maximum Bauhöhe',
-        'MEASURE_PLANNING_4': 'Anzahl der Gebäude',
-        'MEASURE_PLANNING_5': 'Durchschnittliche Gebäudedistanz',
-        'MEASURE_PLANNING_6': 'Straßenschlucht-Seitenverhältnis (H/W)',
-        'MEASURE_PLANNING_7': 'Sky View Factor (SVF)',
-        
-        # Feature units - Original
-        'MEASURE_0_UNIT': 'm²',
-        'MEASURE_1_UNIT': 'm',
+        # Feature units - Consolidated
+        'MEASURE_0_UNIT': '',  # ratio 0-1
+        'MEASURE_1_UNIT': '',  # ratio
         'MEASURE_2_UNIT': 'm',
-        'MEASURE_3_UNIT': '',  # count, no unit
+        'MEASURE_3_UNIT': 'm',
         'MEASURE_4_UNIT': 'm',
-        'MEASURE_5_UNIT': 'm²',
-        'MEASURE_6_UNIT': '',  # normalized position
-        'MEASURE_7_UNIT': '',  # normalized position
-        
-        # Feature units - Planning-focused
-        'MEASURE_PLANNING_0_UNIT': '',  # ratio 0-1
-        'MEASURE_PLANNING_1_UNIT': '',  # ratio
-        'MEASURE_PLANNING_2_UNIT': 'm',
-        'MEASURE_PLANNING_3_UNIT': 'm',
-        'MEASURE_PLANNING_4_UNIT': '',  # count
-        'MEASURE_PLANNING_5_UNIT': 'm',
-        'MEASURE_PLANNING_6_UNIT': '',  # ratio
-        'MEASURE_PLANNING_7_UNIT': '',  # 0-1
+        'MEASURE_5_UNIT': '',  # count
+        'MEASURE_6_UNIT': '',  # ratio
+        'MEASURE_7_UNIT': 'm',
         
         # Feature set selector
-        'STEP2_FEATURE_SET_HEADER': 'Merkmalsatz auswählen',
-        'STEP2_FEATURE_SET_LABEL': 'Welcher Merkmalsatz soll verwendet werden?',
-        'STEP2_FEATURE_SET_ORIGINAL': 'Original-Merkmale (8)',
-        'STEP2_FEATURE_SET_PLANNING': 'Planungs-Merkmale (BACKLOG)',
-        'STEP2_FEATURE_SET_ORIGINAL_DESC': 'Bebaute Fläche, Höhe, Variabilität, Anzahl, Abstand, GFA, Masse X/Y',
-        'STEP2_FEATURE_SET_PLANNING_DESC': 'GRZ, GFZ, Höhe, Variabilität, Anzahl, Abstand, H/W-Verhältnis, SVF',
+        'STEP2_FEATURE_SET_HEADER': 'Merkmalsatz',
+        'STEP2_FEATURE_SET_LABEL': 'Aktiver Merkmalsatz:',
+        'STEP2_FEATURE_SET_CONSOLIDATED': 'Konsolidierte Merkmale (MVP)',
+        'STEP2_FEATURE_SET_CONSOLIDATED_DESC': 'GRZ, GFZ, Höhe, Variabilität, Distanz, Anzahl, Kompaktheit, Park-Faktor',
         
         'OBJECTIVE_UNIT': '',  # porosity is dimensionless (0-1)
 
@@ -167,8 +145,12 @@ T = {
         'STEP5_NO_CLUSTERS_FOUND': "Keine Cluster gefunden. Versuchen Sie, die Filter oder die Clustering-Parameter anzupassen.",
         'STEP5_NO_SELECTION': "Zum Starten bitte auf 'Analyse starten' klicken.",
         'STEP5_SELECT_LABEL': "Zum Vergleich auswählen",
+        'STEP5_SIMILARITY_METRIC_LABEL': "Ähnlichkeitsmaß:",
+        'STEP5_METRIC_TSNE': "t-SNE (Euklidisch auf Projektion)",
+        'STEP5_METRIC_SSIM': "SSIM (Strukturelle Ähnlichkeit)",
         'STEP5_ALGORITHM_LABEL': "Clustering-Algorithmus:",
         'STEP5_KMEDOIDS_K_LABEL': "Anzahl der Cluster (k):",
+        'STEP5_N_CLUSTERS_LABEL': "Anzahl der Cluster:",
         'STEP5_HDBSCAN_MINCLUSTER': "Minimale Clustergröße:",
         'STEP5_DBSCAN_EPS': "DBSCAN eps (Nachbarschaftsradius):",
         'STEP5_DBSCAN_MINSAMPLES': "DBSCAN min_samples (Min. Clustergröße):",
@@ -176,6 +158,7 @@ T = {
         'STEP5_NO_OPTIMIZATION': "Bitte zuerst in Schritt 3 eine Optimierung durchführen.",
         'STEP5_ALG_KMEDOIDS': "K-Medoids (Fuzzy Konsens-Karten)",
         'STEP5_ALG_HDBSCAN': "HDBSCAN (Klarere Entwürfe in Konsens-Karten)",
+        'STEP5_ALG_HIERARCHICAL': "Hierarchisch (Ward)",
         'STEP5_HDBSCAN_AUTO_NOTE': "HDBSCAN verwendet eine minimale Clustergröße von 5.",
         'STEP5_FILTER_INFO': "Filtern Sie die Lösungen nach ihren Merkmalen und passen Sie die Clustering-Parameter an, um Entwurfstypen zu identifizieren.",
         'STEP5_COMPARE_BUTTON': "Ausgewählte Designs vergleichen",
@@ -274,53 +257,31 @@ T = {
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch Size:",
         'STEP2_QD_HYPERPARAMS_INFO': "Higher values = longer runtime, more solutions. Default: 1000 generations, 5 emitters.",
         
-        # Original feature set (indices 0-7)
-        'MEASURE_0': 'Built Area',
-        'MEASURE_1': 'Average Building Height',
-        'MEASURE_2': 'Maximum Building Height',
-        'MEASURE_3': 'Number of Buildings',
+        # Consolidated feature set (indices 0-7)
+        'MEASURE_0': 'GRZ (Site Coverage Ratio)',
+        'MEASURE_1': 'GFZ (Floor Area Ratio)',
+        'MEASURE_2': 'Average Building Height',
+        'MEASURE_3': 'Height Variability',
         'MEASURE_4': 'Average Building Distance',
-        'MEASURE_5': 'Gross Floor Area',
-        'MEASURE_6': 'Building Mass X-Axis',
-        'MEASURE_7': 'Building Mass Y-Axis',
+        'MEASURE_5': 'Number of Buildings',
+        'MEASURE_6': 'Compactness (A/V Ratio)',
+        'MEASURE_7': 'Park Factor (Green Space Radius)',
         
-        # Planning-focused feature set (indices 0-7) - BACKLOG
-        'MEASURE_PLANNING_0': 'GRZ (Site Coverage Ratio)',
-        'MEASURE_PLANNING_1': 'GFZ (Floor Area Ratio)',
-        'MEASURE_PLANNING_2': 'Average Building Height',
-        'MEASURE_PLANNING_3': 'Maximum Building Height',
-        'MEASURE_PLANNING_4': 'Number of Buildings',
-        'MEASURE_PLANNING_5': 'Average Building Distance',
-        'MEASURE_PLANNING_6': 'Street Canyon Aspect Ratio (H/W)',
-        'MEASURE_PLANNING_7': 'Sky View Factor (SVF)',
-        
-        # Feature units - Original
-        'MEASURE_0_UNIT': 'm²',
-        'MEASURE_1_UNIT': 'm',
+        # Feature units - Consolidated
+        'MEASURE_0_UNIT': '',  # ratio 0-1
+        'MEASURE_1_UNIT': '',  # ratio
         'MEASURE_2_UNIT': 'm',
-        'MEASURE_3_UNIT': '',  # count, no unit
+        'MEASURE_3_UNIT': 'm',
         'MEASURE_4_UNIT': 'm',
-        'MEASURE_5_UNIT': 'm²',
-        'MEASURE_6_UNIT': '',  # normalized position
-        'MEASURE_7_UNIT': '',  # normalized position
-        
-        # Feature units - Planning-focused
-        'MEASURE_PLANNING_0_UNIT': '',  # ratio 0-1
-        'MEASURE_PLANNING_1_UNIT': '',  # ratio
-        'MEASURE_PLANNING_2_UNIT': 'm',
-        'MEASURE_PLANNING_3_UNIT': 'm',
-        'MEASURE_PLANNING_4_UNIT': '',  # count
-        'MEASURE_PLANNING_5_UNIT': 'm',
-        'MEASURE_PLANNING_6_UNIT': '',  # ratio
-        'MEASURE_PLANNING_7_UNIT': '',  # 0-1
+        'MEASURE_5_UNIT': '',  # count
+        'MEASURE_6_UNIT': '',  # ratio
+        'MEASURE_7_UNIT': 'm',
         
         # Feature set selector
-        'STEP2_FEATURE_SET_HEADER': 'Select Feature Set',
-        'STEP2_FEATURE_SET_LABEL': 'Which feature set should be used?',
-        'STEP2_FEATURE_SET_ORIGINAL': 'Original Features (8)',
-        'STEP2_FEATURE_SET_PLANNING': 'Planning-Focused Features (BACKLOG)',
-        'STEP2_FEATURE_SET_ORIGINAL_DESC': 'Built area, height, variability, count, distance, GFA, mass X/Y',
-        'STEP2_FEATURE_SET_PLANNING_DESC': 'GRZ, GFZ, height, variability, count, distance, H/W ratio, SVF',
+        'STEP2_FEATURE_SET_HEADER': 'Feature Set',
+        'STEP2_FEATURE_SET_LABEL': 'Active Feature Set:',
+        'STEP2_FEATURE_SET_CONSOLIDATED': 'Consolidated Features (MVP)',
+        'STEP2_FEATURE_SET_CONSOLIDATED_DESC': 'GRZ, GFZ, Height, Var, Dist, Count, Compactness, Park Factor',
         
         'OBJECTIVE_UNIT': '',  # porosity is dimensionless (0-1)
 
@@ -378,8 +339,12 @@ T = {
         'STEP5_NO_CLUSTERS_FOUND': "No clusters found. Try adjusting the filters or clustering parameters.",
         'STEP5_NO_SELECTION': "Click 'Start Analysis' to begin.",
         'STEP5_SELECT_LABEL': "Select for Comparison",
+        'STEP5_SIMILARITY_METRIC_LABEL': "Similarity Metric:",
+        'STEP5_METRIC_TSNE': "t-SNE (Euclidean on Projection)",
+        'STEP5_METRIC_SSIM': "SSIM (Structural Similarity)",
         'STEP5_ALGORITHM_LABEL': "Clustering Algorithm:",
         'STEP5_KMEDOIDS_K_LABEL': "Number of Clusters (k):",
+        'STEP5_N_CLUSTERS_LABEL': "Number of Clusters:",
         'STEP5_HDBSCAN_MINCLUSTER': "Minimum Cluster Size:",
         'STEP5_DBSCAN_EPS': "DBSCAN eps (Neighborhood Radius):",
         'STEP5_DBSCAN_MINSAMPLES': "DBSCAN min_samples (Min. Cluster Size):",
@@ -387,6 +352,7 @@ T = {
         'STEP5_NO_OPTIMIZATION': "Please run an optimization in Step 3 first.",
         'STEP5_ALG_KMEDOIDS': "K-Medoids (Fuzzy Consensus Maps)",
         'STEP5_ALG_HDBSCAN': "HDBSCAN (Clearer Designs in Consensus Maps)",
+        'STEP5_ALG_HIERARCHICAL': "Hierarchical (Ward)",
         'STEP5_HDBSCAN_AUTO_NOTE': "HDBSCAN uses a minimum cluster size of 5.",
         'STEP5_FILTER_INFO': "Filter solutions by their metrics and adjust clustering parameters to identify design types.",
         'STEP5_COMPARE_BUTTON': "Compare Selected Designs",
@@ -443,23 +409,21 @@ def get_translation(lang='DE'):
     """Helper function to get translations for a specific language"""
     return T.get(lang, T['DE'])
 
-def translate_feature_labels(feature_indices, lang='DE', feature_set='original'):
+def translate_feature_labels(feature_indices, lang='DE', feature_set='consolidated'):
     """
     Translate feature indices to labels based on language and feature set.
     
     Args:
         feature_indices: List of feature indices (0-7)
         lang: Language code ('DE' or 'EN')
-        feature_set: 'original' or 'planning'
+        feature_set: 'consolidated' (default)
     
     Returns:
         List of translated feature labels
     """
     translations = T.get(lang, T['DE'])
-    if feature_set == 'planning':
-        return [translations.get(f'MEASURE_PLANNING_{idx}', f'Feature {idx}') for idx in feature_indices]
-    else:
-        return [translations.get(f'MEASURE_{idx}', f'Feature {idx}') for idx in feature_indices]
+    # Always use MEASURE_X keys for the consolidated set
+    return [translations.get(f'MEASURE_{idx}', f'Feature {idx}') for idx in feature_indices]
 
 def create_breadcrumb(current_step, lang='DE'):
     """

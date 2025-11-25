@@ -7,34 +7,36 @@ from backend.translation import T, translate_feature_labels
 from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG, QD_CONFIG
 import numpy as np
 
-def get_measures_options(lang='DE', feature_set='original'):
-    """Generate measures options with translated labels based on feature set"""
+def get_measures_options(lang='DE'):
+    """Generate measures options with translated labels based on consolidated feature set"""
     feature_indices = list(range(8))  # All 8 features
-    labels = translate_feature_labels(feature_indices, lang, feature_set)
+    labels = translate_feature_labels(feature_indices, lang, 'consolidated')
     return [{'label': label, 'value': i} for i, label in enumerate(labels)]
 
 def get_presets(lang):
     return {
         "suburban": {
             "name": T[lang]['STEP2_PRESET_SUBURBAN'],
-            "features": [0, 1, 3, 4, 5],
+            "features": [0, 1, 2, 4, 5, 7], # GRZ, GFZ, Height, Dist, Count, Park Factor
             "ranges": {
                 '0': [0.1, 0.4],
-                '1': [1, 3],
-                '3': [5, 20],
-                '4': [0.2, 0.8],
-                '5': [0.3, 1.5],
+                '1': [0.2, 0.8],
+                '2': [3, 12],
+                '4': [10, 30],
+                '5': [2, 8],
+                '7': [10, 40],
             }
         },
         "dense_urban": {
             "name": T[lang]['STEP2_PRESET_DENSE'],
-            "features": [0, 1, 2, 3, 5, 6, 7],
+            "features": [0, 1, 2, 4, 6, 7], # GRZ, GFZ, Height, Dist, Compactness, Park Factor
             "ranges": {
                 '0': [0.4, 0.8],
-                '1': [3, 8],
-                '2': [1, 5],
-                '3': [10, 50],
-                '5': [1.5, 5.0],
+                '1': [1.0, 3.0],
+                '2': [12, 24],
+                '4': [5, 15],
+                '6': [0.2, 0.8],
+                '7': [5, 20],
             }
         }
     }
@@ -91,62 +93,8 @@ def layout(lang='DE'):
             ], md=6),
             dbc.Col([
                 
-                html.H5(T[lang]['STEP2_OBJECTIVE_FUNCTION_HEADER'], className="mt-4"),
-                dbc.Card(dbc.CardBody([
-                    dbc.Label(T[lang]['STEP2_OBJECTIVE_FUNCTION_LABEL']),
-                    dbc.RadioItems(
-                        id='objective-function-selector',
-                        options=[
-                            {
-                                'label': html.Div([
-                                    html.Strong(T[lang]['STEP2_OBJECTIVE_SIMPLE_POROSITY']),
-                                    html.Br(),
-                                    html.Small(T[lang]['STEP2_OBJECTIVE_SIMPLE_POROSITY_DESC'], className='text-muted')
-                                ]),
-                                'value': 'simple_porosity'
-                            },
-                            {
-                                'label': html.Div([
-                                    html.Strong(T[lang]['STEP2_OBJECTIVE_STREET_CANYON']),
-                                    html.Br(),
-                                    html.Small(T[lang]['STEP2_OBJECTIVE_STREET_CANYON_DESC'], className='text-muted')
-                                ]),
-                                'value': 'street_canyon'
-                            }
-                        ],
-                        value='simple_porosity',
-                        className='mt-2'
-                    ),
-                ]), color="light"),
-
-                # --- Feature Set Selector ---
-                html.H5(T[lang]['STEP2_FEATURE_SET_HEADER'], className="mt-4"),
-                dbc.Card(dbc.CardBody([
-                    dbc.Label(T[lang]['STEP2_FEATURE_SET_LABEL']),
-                    dbc.RadioItems(
-                        id='feature-set-selector',
-                        options=[
-                            {
-                                'label': html.Div([
-                                    html.Strong(T[lang]['STEP2_FEATURE_SET_ORIGINAL']),
-                                    html.Br(),
-                                    html.Small(T[lang]['STEP2_FEATURE_SET_ORIGINAL_DESC'], className='text-muted')
-                                ]),
-                                'value': 'original'
-                            },
-                            {
-                                'label': html.Div([
-                                    html.Strong(T[lang]['STEP2_FEATURE_SET_PLANNING']),
-                                    html.Br(),
-                                    html.Small(T[lang]['STEP2_FEATURE_SET_PLANNING_DESC'], className='text-muted')
-                                ]),
-                                'value': 'planning'
-                            }
-                        ],
-                        value='original',
-                        className='mt-2'
-                    ),
-                ]), color="light"),
+                # --- Feature Set Selector REMOVED (Consolidated Set is now standard) ---
+                # --- Objective Function Selector REMOVED (Street Canyon is now standard) ---
 
                 dbc.Label(T[lang]['STEP2_MEASURES_LABEL'], className="mt-3"),
                 dbc.Card(dbc.Checklist(
@@ -201,46 +149,14 @@ def layout(lang='DE'):
     ], fluid=True)
 
 @callback(
-    Output('measures-checklist', 'options'),
-    Input('feature-set-selector', 'value'),
-    State('language-store', 'data')
-)
-def update_measures_options(feature_set, lang):
-    """Update measures checklist options when feature set changes"""
-    if lang is None:
-        lang = 'DE'
-    return get_measures_options(lang, feature_set)
-
-@callback(
-    Output('max-height-value', 'children'),
-    Input('max-height-constraint', 'value')
-)
-def update_max_height_display(value):
-    """Update the displayed max height value"""
-    if value is None:
-        return ""
-    return f"({value}m)"
-
-@callback(
-    Output('min-distance-value', 'children'),
-    Input('min-distance-constraint', 'value')
-)
-def update_min_distance_display(value):
-    """Update the displayed min distance value"""
-    if value is None:
-        return ""
-    return f"({value}m)"
-
-@callback(
     Output('measures-checklist', 'value'),
     Output('feature-range-sliders-container', 'children', allow_duplicate=True),
     Input('presets-dropdown', 'value'),
     State('language-store', 'data'),
-    State('feature-set-selector', 'value'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
-def apply_preset(preset_key, lang, feature_set_input, session_data):
+def apply_preset(preset_key, lang, session_data):
     """Apply preset feature selections - uses default ranges, not preset-specific ranges"""
     from backend.units import get_unit_label
     
@@ -249,18 +165,16 @@ def apply_preset(preset_key, lang, feature_set_input, session_data):
     
     if lang is None: lang = 'DE'
     
-    # Determine feature_set
-    feature_set = feature_set_input if feature_set_input else (session_data.get('feature_set', 'original') if session_data else 'original')
+    # Always use consolidated feature set
+    feature_set = 'consolidated'
     
     presets = get_presets(lang)
     preset = presets[preset_key]
     selected_indices = preset['features']
     
     # Re-generate sliders with default (physical unit) ranges from config
-    # Note: Preset-specific ranges are intentionally not applied here anymore
-    # as they were in old normalized format. Users can adjust after selecting preset.
     sliders = []
-    num_buildings_original_index = 3  # The original index for 'Anzahl der Gebäude'
+    num_buildings_index = 5  # Consolidated index for 'Number of Buildings'
     
     # Get translated labels for sorted indices
     sorted_indices = sorted(selected_indices)
@@ -271,15 +185,12 @@ def apply_preset(preset_key, lang, feature_set_input, session_data):
         unit = get_unit_label(index, lang, feature_set)
         label_with_unit = f"{label} ({unit})" if unit else label
         
-        # Use default ranges from config based on feature_set
-        if feature_set == 'planning':
-            default_range = DOMAIN_CONFIG['feat_ranges_planning'][index]
-        else:
-            default_range = DOMAIN_CONFIG['feat_ranges'][index]
+        # Use default ranges from config
+        default_range = DOMAIN_CONFIG['feat_ranges'][index]
         min_val, max_val = default_range[0], default_range[1]
         
         # Create slider based on feature type
-        if index == num_buildings_original_index:  # Number of buildings
+        if index == num_buildings_index:  # Number of buildings
             min_v = int(np.floor(min_val))
             max_v = int(np.ceil(max_val))
             if min_v == max_v: max_v += 1
@@ -291,12 +202,14 @@ def apply_preset(preset_key, lang, feature_set_input, session_data):
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
-        elif index in [6, 7]:  # Building Mass X/Y - normalized
+        elif index in [0, 1, 6]:  # GRZ, GFZ, Compactness (ratios/small values)
+            # Determine step size
+            step = 0.01 if index == 0 else 0.1
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=0.0, max=1.0, step=0.01, value=[0.0, 1.0],
+                    min=min_val, max=max_val, step=step, value=[min_val, max_val],
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
@@ -333,12 +246,11 @@ def apply_preset(preset_key, lang, feature_set_input, session_data):
     Input('url', 'pathname'),
     Input('max-height-constraint', 'value'),
     Input('min-distance-constraint', 'value'),
-    Input('feature-set-selector', 'value'),
     State('language-store', 'data'),
     State('session-store', 'data'),
     prevent_initial_call=True
 )
-def create_range_sliders(selected_indices, pathname, max_height_input, min_distance_input, feature_set_input, lang, session_data):
+def create_range_sliders(selected_indices, pathname, max_height_input, min_distance_input, lang, session_data):
     from backend.units import calculate_dynamic_ranges_physical, get_unit_label
     from backend.optimization_process import _calculate_dynamic_feat_ranges
     import geopandas as gpd
@@ -346,6 +258,9 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
     from dash import ctx
     
     if lang is None: lang = 'DE'
+    
+    # Always use consolidated feature set
+    feature_set = 'consolidated'
     
     # Determine feature_set with correct priority:
     # The restoration callback will fire shortly after URL navigation and set the correct value
@@ -356,15 +271,10 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         if session_data and 'feature_set' in session_data:
             return no_update
         # No session data - use defaults
-        feature_set = 'original'
         if pathname == '/step2':
             return dbc.Alert(T[lang]['STEP2_NO_FEATURES_SELECTED'] if 'STEP2_NO_FEATURES_SELECTED' in T[lang] else "Bitte mindestens ein Merkmal auswählen.", color="info")
         return no_update
     else:
-        # User interaction or restoration callback - use current input value
-        # Prioritize feature_set_input (the component's current value) over session
-        # because this callback fires AFTER the user changes the selector
-        feature_set = feature_set_input if feature_set_input else (session_data.get('feature_set', 'original') if session_data else 'original')
         # Also get selected features from session if available
         if session_data and 'selected_features' in session_data and not selected_indices:
             selected_indices = session_data['selected_features']
@@ -374,7 +284,7 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
 
     sliders = []
     # Number of Buildings index depends on feature set
-    num_buildings_index = 3 if feature_set == 'original' else 4  # Original: index 3, Planning: index 4
+    num_buildings_index = 5  # Consolidated index
 
     # Get translated labels for sorted indices with correct feature set
     sorted_indices = sorted(selected_indices)
@@ -431,12 +341,7 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
             min_distance_meters = min_distance_input if min_distance_input else 0.0
             
             # Calculate dynamic ranges based on feature set
-            if feature_set == 'planning':
-                # Use planning-specific range calculation
-                dynamic_ranges, _ = _calculate_dynamic_feat_ranges(buildable_mask, max_height_meters, min_distance_meters, feature_set='planning')
-            else:
-                # Use original feature range calculation (in physical units)
-                dynamic_ranges = calculate_dynamic_ranges_physical(buildable_mask, max_height_meters, min_distance_meters)
+            dynamic_ranges, _ = _calculate_dynamic_feat_ranges(buildable_mask, max_height_meters, min_distance_meters, feature_set='consolidated')
         except Exception as e:
             print(f"Warning: Could not calculate dynamic ranges: {e}")
             dynamic_ranges = None
@@ -453,12 +358,7 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         unit = get_unit_label(index, lang, feature_set)
         
         # ALWAYS use config defaults for slider min/max limits
-        # Dynamic ranges are only used for initial value suggestions when no saved ranges exist
-        # Use the correct ranges based on feature_set
-        if feature_set == 'planning':
-            default_range = DOMAIN_CONFIG['feat_ranges_planning'][index]
-        else:
-            default_range = DOMAIN_CONFIG['feat_ranges'][index]
+        default_range = DOMAIN_CONFIG['feat_ranges'][index]
         min_val, max_val = default_range[0], default_range[1]
         
         # Add unit to label
@@ -467,13 +367,10 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         # Check if user has previously set a custom range for this feature
         user_range = saved_ranges.get(str(index), None)
         
-        # GRZ and GFZ (planning features 0 and 1) should NEVER use dynamic ranges
-        # They are fixed percentages: GRZ = 0.0-1.0, GFZ = 0.0-1.0 (or higher for multi-story)
-        is_percentage_ratio = (feature_set == 'planning' and index in [0, 1])
+        # GRZ and GFZ (indices 0 and 1) should NEVER use dynamic ranges
+        is_percentage_ratio = (index in [0, 1])
         
         # If no saved range exists, use dynamic range as initial value suggestion (if available)
-        # This gives users a smart starting point while keeping full config range available
-        # EXCEPT for GRZ/GFZ which are always full range
         if user_range is None and dynamic_ranges is not None and not is_percentage_ratio:
             dyn_min, dyn_max = dynamic_ranges[index]
             # Use dynamic range as suggested initial value, but keep it within config limits
@@ -496,18 +393,15 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
-        # Normalized sliders for position features (0-1)
-        # Original set: indices 6, 7 are Building Mass X/Y (0-1)
-        # Planning set: index 7 is SVF (0-1), but index 6 is Street Canyon Aspect Ratio (not 0-1)
-        elif (feature_set == 'original' and index in [6, 7]) or (feature_set == 'planning' and index == 7):
-            min_v = 0.0
-            max_v = 1.0
-            slider_value = user_range if user_range else [0.0, 1.0]
+        # Normalized sliders for position features (0-1) or small ratios
+        elif index in [0, 1, 6]: # GRZ, GFZ, Compactness
+            step = 0.01 if index == 0 else 0.1
+            slider_value = user_range if user_range else [min_val, max_val]
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
                     id={'type': 'feature-range-slider', 'index': index},
-                    min=min_v, max=max_v, step=0.01, value=slider_value,
+                    min=min_val, max=max_val, step=step, value=slider_value,
                     tooltip={"placement": "bottom", "always_visible": True}, marks=None
                 )
             ], className="mb-3")
@@ -518,10 +412,8 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
             if min_v == max_v: max_v = min_v + 1.0
             
             # OVERRIDE: For height features, use max_height_constraint as the max value
-            # Original set: Index 1 (Avg Height), Index 2 (Max Height)
-            # Planning set: Index 2 (Avg Height), Index 3 (Max Height)
-            is_height_feature = (feature_set == 'original' and index in [1, 2]) or \
-                               (feature_set == 'planning' and index in [2, 3])
+            # Index 2 (Avg Height)
+            is_height_feature = (index == 2)
             
             if is_height_feature and max_height_input:
                 max_v = float(max_height_input)
@@ -576,21 +468,17 @@ def toggle_advanced_mode(advanced_mode):
     Output('qd-emitters-input', 'value', allow_duplicate=True),
     Output('qd-niches-input', 'value', allow_duplicate=True),
     Output('qd-batch-size-input', 'value', allow_duplicate=True),
-    Output('objective-function-selector', 'value', allow_duplicate=True),
-    Output('feature-set-selector', 'value', allow_duplicate=True),
     Input('session-store', 'data'),
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
 def restore_step2_from_session(session_data, pathname):
     if pathname != '/step2' or not session_data:
-        return (no_update,) * 9
+        return (no_update,) * 7
     
     selected_features = session_data.get('selected_features')
     hard_constraints = session_data.get('hard_constraints', {})
     qd_params = session_data.get('qd_hyperparams', {})
-    objective_function = session_data.get('objective_function', 'simple_porosity')
-    feature_set = session_data.get('feature_set', 'original')
     
     # Determine which max height to use:
     # Priority 1: User has explicitly set a constraint (stored AND different from any adaptive value)
@@ -622,14 +510,12 @@ def restore_step2_from_session(session_data, pathname):
     
     if selected_features is not None:
         return (selected_features, int(max_height), min_distance, 
-                qd_generations, qd_emitters, qd_niches, qd_batch_size,
-                objective_function, feature_set)
+                qd_generations, qd_emitters, qd_niches, qd_batch_size)
     
     return (no_update, int(max_height), min_distance, 
-            qd_generations, qd_emitters, qd_niches, qd_batch_size,
-            objective_function, feature_set)
+            qd_generations, qd_emitters, qd_niches, qd_batch_size)
 
-# --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters, objective function, and feature set to the session ---
+# --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters to the session ---
 @callback(
     Output('session-store', 'data', allow_duplicate=True),
     Input('measures-checklist', 'value'),
@@ -640,8 +526,6 @@ def restore_step2_from_session(session_data, pathname):
     Input('qd-emitters-input', 'value'),
     Input('qd-niches-input', 'value'),
     Input('qd-batch-size-input', 'value'),
-    Input('objective-function-selector', 'value'),
-    Input('feature-set-selector', 'value'),
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     State('url', 'pathname'),
@@ -650,19 +534,20 @@ def restore_step2_from_session(session_data, pathname):
 def update_session_with_features_and_ranges(
     selected_indices, slider_values, max_height, min_distance,
     qd_generations, qd_emitters, qd_niches, qd_batch_size,
-    objective_function, feature_set,
     slider_ids, session_data, pathname
 ):
     from dash import ctx
     session_data = session_data or {}
     
+    # Always use consolidated feature set and street canyon objective
+    feature_set = 'consolidated'
+    objective_function = 'street_canyon'
     
     # Detect if we're in restoration phase:
     # When returning to page 2, constraint components fire with their default values BEFORE restoration callback sets correct values
     # Key insight: During restoration, the constraint input values DON'T MATCH the session values
     # During normal user interaction, we're updating the session to MATCH the input
     on_step2 = (pathname == '/step2')
-    triggered_by_feature_selector = (ctx.triggered_id == 'feature-set-selector')
     triggered_by_constraint = (ctx.triggered_id in ['max-height-constraint', 'min-distance-constraint'])
     
     # Check if this was triggered by restoration (not user interaction)
@@ -672,42 +557,25 @@ def update_session_with_features_and_ranges(
         if len(ctx.triggered) > 3:
             triggered_by_restoration = True
         # OR if a constraint fired with the system default value while we have a different saved value
-        # AND the feature_set is also wrong (indicating pre-restoration state)
         elif triggered_by_constraint and session_data.get('hard_constraints'):
             saved_max = session_data['hard_constraints'].get('max_height', int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor']))
             saved_min = session_data['hard_constraints'].get('min_distance', 0)
-            saved_feature_set = session_data.get('feature_set', 'original')
-            
-            # Additional check: Is the feature_set also stale (wrong)?
-            # During restoration, BOTH constraints and feature_set are stale
-            # After restoration completes, feature_set is correct
-            feature_set_is_stale = (feature_set != saved_feature_set)
             
             if ctx.triggered_id == 'max-height-constraint':
-                if max_height == int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor']) and saved_max != max_height and feature_set_is_stale:
-                    # Input is default, saved is different, AND feature_set is wrong → pre-restoration
+                if max_height == int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor']) and saved_max != max_height:
                     triggered_by_restoration = True
             elif ctx.triggered_id == 'min-distance-constraint':
-                if min_distance == 0 and saved_min != 0 and feature_set_is_stale:
-                    # Input is default, saved is different, AND feature_set is wrong → pre-restoration
+                if min_distance == 0 and saved_min != 0:
                     triggered_by_restoration = True
     
-    # Use namespaced feature ranges (separate storage for each feature set)
-    # BUT: When feature_set changes, the current slider values belong to the OLD feature set
-    # So we should NOT save them to the NEW feature set's namespace
+    # Use namespaced feature ranges
     ranges_key = f'feature_ranges_{feature_set}'
-    
-    # Check if feature set changed - log it but DON'T clear ranges
-    # Each feature set has its own namespace, so switching doesn't interfere
-    previous_feature_set = session_data.get('feature_set', 'original')
-    feature_set_changed = (feature_set != previous_feature_set and not triggered_by_restoration)
     
     # Save feature selections
     session_data['selected_features'] = selected_indices
     
     # Save feature_ranges to the appropriate namespace
-    # BUT: Skip saving if feature_set just changed (current sliders belong to old feature set)
-    if slider_ids and slider_values and not feature_set_changed:
+    if slider_ids and slider_values:
         new_feature_ranges = {
             str(s_id['index']): s_val for s_id, s_val in zip(slider_ids, slider_values)
         }
@@ -746,16 +614,10 @@ def update_session_with_features_and_ranges(
     }
     
     # Save objective function selection
-    session_data['objective_function'] = objective_function if objective_function else 'simple_porosity'
+    session_data['objective_function'] = objective_function
     
-    # Save feature set selection - BUT only if triggered by the feature-set-selector itself
-    # or by explicit user interaction (not during restoration phase)
-    # This prevents accidentally overwriting with stale component values during page navigation
-    if triggered_by_feature_selector:
-        session_data['feature_set'] = feature_set if feature_set else 'original'
-    else:
-        # Keep existing value - don't overwrite during restoration or other input changes
-        existing_feature_set = session_data.get('feature_set', 'original')
+    # Save feature set selection
+    session_data['feature_set'] = feature_set
     
     return session_data
 

@@ -47,17 +47,37 @@ def layout(lang='DE'):
             # Right column: Clustering Results
             dbc.Col([
                 dbc.Card(dbc.CardBody([
+                    html.H4(T[lang]['STEP5_SIMILARITY_METRIC_LABEL']),
+                    dbc.RadioItems(
+                        id='similarity-metric-selector',
+                        options=[
+                            {'label': T[lang]['STEP5_METRIC_TSNE'], 'value': 'tsne'},
+                            {'label': T[lang]['STEP5_METRIC_SSIM'], 'value': 'ssim'},
+                        ],
+                        value='tsne',
+                        inline=True,
+                        className="mb-3"
+                    ),
+
                     html.H4(T[lang]['STEP5_ALGORITHM_LABEL']),
                     dbc.RadioItems(
                         id='algorithm-selector',
                         options=[
+                            {'label': T[lang]['STEP5_ALG_HIERARCHICAL'], 'value': 'hierarchical'},
                             {'label': T[lang]['STEP5_ALG_HDBSCAN'], 'value': 'hdbscan'},
                             {'label': T[lang]['STEP5_ALG_KMEDOIDS'], 'value': 'kmedoids'},
                         ],
-                        value='hdbscan',
+                        value='hierarchical',
                         inline=True,
                         className="mb-3"
                     ),
+
+                    html.Div(id='hierarchical-params-div', children=[
+                        dbc.Row([
+                            dbc.Col(dbc.Label(T[lang]['STEP5_N_CLUSTERS_LABEL']), width='auto'),
+                            dbc.Col(dcc.Slider(id='hierarchical-k-slider', min=2, max=20, step=1, value=5, marks={i: str(i) for i in range(2, 21, 2)}, tooltip={"placement": "bottom", "always_visible": True})),
+                        ], className="align-items-center mt-2"),
+                    ]),
 
                     html.Div(id='kmedoids-params-div', style={'display': 'none'}, children=[
                         dbc.Row([
@@ -91,14 +111,17 @@ def layout(lang='DE'):
 @callback(
     Output('hdbscan-params-div', 'style'),
     Output('kmedoids-params-div', 'style'),
+    Output('hierarchical-params-div', 'style'),
     Input('algorithm-selector', 'value')
 )
 def toggle_parameter_sliders(selected_algorithm):
     if selected_algorithm == 'kmedoids':
-        return {'display': 'none'}, {'display': 'block'}
+        return {'display': 'none'}, {'display': 'block'}, {'display': 'none'}
     elif selected_algorithm == 'hdbscan':
-        return {'display': 'block'}, {'display': 'none'}
-    return {'display': 'none'}, {'display': 'none'}
+        return {'display': 'block'}, {'display': 'none'}, {'display': 'none'}
+    elif selected_algorithm == 'hierarchical':
+        return {'display': 'none'}, {'display': 'none'}, {'display': 'block'}
+    return {'display': 'none'}, {'display': 'none'}, {'display': 'none'}
 
 
 @callback(
@@ -124,7 +147,7 @@ def create_filter_controls(results_data, language):
     from backend.translation import translate_feature_labels
     from backend.units import get_unit_label
     selected_feature_indices = results_data.get('selected_features_indices', [])
-    feature_set = results_data.get('feature_set', 'original')
+    feature_set = results_data.get('feature_set', 'consolidated')
     if not selected_feature_indices: return no_update
     
     labels = translate_feature_labels(selected_feature_indices, lang, feature_set)
@@ -136,7 +159,7 @@ def create_filter_controls(results_data, language):
     
     # Create filter sliders for each feature
     sliders = []
-    num_buildings_original_index = 3  # Feature index for "Number of Buildings"
+    num_buildings_original_index = 5  # Feature index for "Number of Buildings" in consolidated set
     
     for i, label in enumerate(labels):
         current_feature_index = selected_feature_indices[i]
@@ -155,7 +178,7 @@ def create_filter_controls(results_data, language):
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
-                    id={'type': 'filter-slider', 'index': i},
+                    id={'type': 'filter-slider', 'index': current_feature_index},
                     min=min_v, max=max_v, step=1,
                     value=[min_v, max_v],
                     tooltip={"placement": "bottom", "always_visible": True},
@@ -163,21 +186,14 @@ def create_filter_controls(results_data, language):
                 )
             ], className="mb-2")
         # Normalized sliders for Building Mass X/Y (0-1)
-        elif current_feature_index in [6, 7]:
-            slider_div = html.Div([
-                dbc.Label(label_with_unit),
-                dcc.RangeSlider(
-                    id={'type': 'filter-slider', 'index': i},
-                    min=0.0, max=1.0, step=0.01,
-                    value=[0.0, 1.0],
-                    tooltip={"placement": "bottom", "always_visible": True},
-                    marks=None,
-                )
-            ], className="mb-2")
+        elif current_feature_index in [6, 7] and False: # Disable special handling for now, treat as float
+             pass
         # Physical unit sliders (m, m²)
         else:
-            min_v = round(min_val, 1)
-            max_v = round(max_val, 1)
+            # Use floor/ceil to ensure range covers the data
+            min_v = np.floor(min_val * 10) / 10.0
+            max_v = np.ceil(max_val * 10) / 10.0
+            
             if min_v == max_v: max_v = min_v + 1.0
             
             # Determine appropriate step size
@@ -191,7 +207,7 @@ def create_filter_controls(results_data, language):
             slider_div = html.Div([
                 dbc.Label(label_with_unit),
                 dcc.RangeSlider(
-                    id={'type': 'filter-slider', 'index': i},
+                    id={'type': 'filter-slider', 'index': current_feature_index},
                     min=min_v, max=max_v, step=step,
                     value=[min_v, max_v],
                     tooltip={"placement": "bottom", "always_visible": True},
@@ -213,11 +229,13 @@ def create_filter_controls(results_data, language):
     State({'type': 'filter-slider', 'index': ALL}, 'id'),
     State('algorithm-selector', 'value'),
     State('kmedoids-k-slider', 'value'),
+    State('hierarchical-k-slider', 'value'),
+    State('similarity-metric-selector', 'value'),
     State('language-store', 'data'),
     prevent_initial_call=True
 )
 def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
-                             algorithm, k, lang):
+                             algorithm, k_medoids, k_hierarchical, similarity_metric, lang):
     if not n_clicks: return no_update, no_update
     if lang is None: lang = 'DE'  # Default to German
 
@@ -232,18 +250,20 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     # Translate to show human-readable feature names
     from backend.translation import translate_feature_labels
     selected_feature_indices = results_data.get('selected_features_indices', [])
-    feature_set = results_data.get('feature_set', 'original')
+    feature_set = results_data.get('feature_set', 'consolidated')
     feature_labels = translate_feature_labels(selected_feature_indices, lang, feature_set)
     
 
     params = {}
     if algorithm == 'kmedoids':
-        params = {'n_clusters': k}
+        params = {'n_clusters': k_medoids}
     elif algorithm == 'hdbscan':
         # Use fixed min_cluster_size of 5 to avoid classifying most samples as noise
         params = {'min_cluster_size': 5}
+    elif algorithm == 'hierarchical':
+        params = {'n_clusters': k_hierarchical}
 
-    clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters)
+    clusters = cluster_and_analyze_solutions(results_path, algorithm, params, feature_filters, similarity_metric=similarity_metric)
     
     if not clusters:
         return dbc.Alert(T[lang]['STEP5_NO_CLUSTERS_FOUND'], color="warning"), no_update

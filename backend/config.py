@@ -19,50 +19,31 @@ ENCODING_CONFIG = {
 }
 
 # Feature set definitions
-# Two feature sets available:
-# - 'original': The original 8 features (built area, height, variability, num buildings, distance, GFA, mass X/Y)
-# - 'planning': Planning-focused features from BACKLOG.md (GRZ, GFZ, height, variability, num buildings, distance, aspect ratio, SVF)
-
+# Consolidated feature set for MVP (GRZ, GFZ, Height, Var, Dist, Count, Compactness, Park Factor)
 FEATURE_SETS = {
-    'original': {
-        'name': 'Original Features',
-        'name_de': 'Original-Merkmale',
-        'features': [0, 1, 2, 3, 4, 5, 6, 7],  # Indices into calculate_all_features_original
-        'description': 'Original 8-feature set',
-    },
-    'planning': {
-        'name': 'Planning-Focused Features (BACKLOG)',
-        'name_de': 'Planungs-Merkmale (BACKLOG)',
-        'features': [0, 1, 2, 3, 4, 5, 6, 7],  # Indices into calculate_all_features_planning
-        'description': 'GRZ, GFZ, height metrics, street canyon aspect ratio, SVF',
+    'consolidated': {
+        'name': 'Consolidated Features (MVP)',
+        'name_de': 'Konsolidierte Merkmale (MVP)',
+        'features': [0, 1, 2, 3, 4, 5, 6, 7],
+        'description': 'GRZ, GFZ, Height, Var, Dist, Count, Compactness, Park Factor',
     }
 }
 
 DOMAIN_CONFIG = {
     'wind_direction': 180,
     'pixel_size_in_meters': 3,
-    'feature_set': 'original',  # Default feature set
+    'feature_set': 'consolidated',
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
     'labels': [T['DE'][f'MEASURE_{i}'] for i in range(8)],
     'feat_ranges': [
-        [0.0, 10000.0],  # 0: Built-up Area (m²) - up to 10,000 m²
-        [0.0, 30.0],     # 1: Avg Height (m) - up to 30m
-        [0.0, 15.0],     # 2: Height Variability (m) - up to 15m
-        [0.0, 10.0],     # 3: Number of Buildings (count) - up to 10
-        [0.0, 100.0],    # 4: Avg Distance (m) - up to 100m
-        [0.0, 50000.0],  # 5: Gross Floor Area (m²) - up to 50,000 m²
-        [0.0, 1.0],      # 6: Building Mass X-axis (normalized 0-1)
-        [0.0, 1.0],      # 7: Building Mass Y-axis (normalized 0-1)
-    ],
-    'feat_ranges_planning': [
-        [0.0, 1.0],      # 0: GRZ (Site Coverage Ratio) - FIXED 0-1 (0-100%)
-        [0.0, 10.0],     # 1: GFZ (Floor Area Ratio) - FIXED 0-10
-        [0.0, 30.0],     # 2: Avg Height (m) - up to 30m
-        [0.0, 15.0],     # 3: Height Variability (m) - up to 15m
-        [0.0, 10.0],     # 4: Number of Buildings (count) - up to 10
-        [0.0, 100.0],    # 5: Avg Distance (m) - up to 100m
-        [0.0, 5.0],      # 6: Street Canyon Aspect Ratio (H/W) - up to 5.0
-        [0.0, 1.0],      # 7: Sky View Factor (SVF) - FIXED 0-1
+        [0.0, 1.0],      # 0: GRZ (Site Coverage Ratio) - 0-100%
+        [0.0, 5.0],      # 1: GFZ (Floor Area Ratio) - 0-5.0
+        [0.0, 30.0],     # 2: Avg Height (m)
+        [0.0, 15.0],     # 3: Height Variability (m)
+        [0.0, 50.0],     # 4: Avg Distance (m)
+        [0.0, 10.0],     # 5: Number of Buildings (count)
+        [0.0, 2.0],      # 6: Compactness (A/V Ratio) - Lower is better
+        [0.0, 50.0],     # 7: Park Factor (Max Green Circle Radius in m)
     ],
     'environment_border_size': 1.2,
 }

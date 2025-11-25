@@ -7,10 +7,14 @@ import matplotlib.pyplot as plt
 from shapely.geometry import box, mapping
 import geopandas as gpd
 from sklearn.manifold import TSNE
-from sklearn.cluster import DBSCAN
-from sklearn_extra.cluster import KMedoids # <-- New Import
+from sklearn.cluster import DBSCAN, AgglomerativeClustering # <-- Added AgglomerativeClustering
+from sklearn_extra.cluster import KMedoids
 from sklearn.metrics import pairwise_distances
-import hdbscan # <-- New Import
+from sklearn.preprocessing import StandardScaler
+import hdbscan
+from skimage.metrics import structural_similarity as ssim # <-- Added SSIM
+import torch
+from pytorch_msssim import ssim as ssim_torch
 import pickle
 import os
 import plotly.express as px
@@ -56,15 +60,13 @@ def heightmap_to_geojson(heightmap_2d: np.ndarray, grid_geojson: dict):
         
     return {'type': 'FeatureCollection', 'features': features}
 
-def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None, feature_filters=None):
+def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None, feature_filters=None, similarity_metric='tsne'):
     """
     Loads solutions, filters them, and clusters them using the selected algorithm.
-    - algorithm: 'dbscan' or 'kmedoids'
+    - algorithm: 'dbscan', 'kmedoids', 'hdbscan', or 'hierarchical'
     - params: dict of parameters for the chosen algorithm
     - feature_filters: dict of feature_index -> [min_val, max_val] for additional filtering
-    
-    Note: Solutions should already be filtered during optimization, but this provides
-    an additional filtering layer for user exploration.
+    - similarity_metric: 'tsne' (Euclidean on 2D projection) or 'ssim' (Structural Similarity)
     """
     if not results_path or not os.path.exists(results_path):
         return []
@@ -96,27 +98,127 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
     objectives = np.array([elite['objective'] for elite in filtered_elites])
     original_indices_in_filtered_list = np.arange(len(filtered_elites))
 
-    # 2. t-SNE (used by both for consistency in the 2D space)
-    if len(filtered_elites) < 2: return [] # t-SNE requires at least 2 samples
-    tsne = TSNE(n_components=2, perplexity=min(30, len(filtered_elites) - 1), 
-                random_state=42, n_iter=300, init='pca', learning_rate='auto')
-    tsne_results = tsne.fit_transform(heightmaps_flat)
+    # 2. Similarity / Distance Calculation
+    clustering_input = None
+    metric = 'euclidean'
+    
+    if similarity_metric == 'tsne':
+        # t-SNE (used by both for consistency in the 2D space)
+        if len(filtered_elites) < 2: return [] # t-SNE requires at least 2 samples
+        tsne = TSNE(n_components=2, perplexity=min(30, len(filtered_elites) - 1), 
+                    random_state=42, n_iter=300, init='pca', learning_rate='auto')
+        tsne_results = tsne.fit_transform(heightmaps_flat)
+        
+        # Standardize t-SNE results to ensure consistent scaling for clustering algorithms (especially DBSCAN eps)
+        clustering_input = StandardScaler().fit_transform(tsne_results)
+        metric = 'euclidean'
+        
+    elif similarity_metric == 'ssim':
+        # Calculate pairwise SSIM distance matrix (1 - SSIM)
+        n_samples = len(filtered_elites)
+        if n_samples < 2: return []
+        
+        # Reshape heightmaps to 2D images for SSIM
+        # Assuming square heightmaps
+        dim = int(np.sqrt(heightmaps_flat.shape[1]))
+        images = heightmaps_flat.reshape(n_samples, dim, dim)
+        
+        # Normalize images to data range for SSIM (0-max_height)
+        max_val = images.max()
+        min_val = images.min()
+        data_range = max_val - min_val if max_val > min_val else 1.0
+        
+        # Use PyTorch for batched SSIM calculation if available
+        try:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            # Convert to tensor: (N, C, H, W) -> (N, 1, dim, dim)
+            imgs_tensor = torch.from_numpy(images).float().unsqueeze(1).to(device)
+            
+            # We need pairwise distances. 
+            # pytorch_msssim.ssim computes mean SSIM between two batches.
+            # To get pairwise matrix, we can broadcast.
+            # But N*N might be too large for GPU memory if N is large (e.g. 1000 -> 1000x1000 images).
+            # Let's do it in batches or row by row.
+            
+            dist_matrix = np.zeros((n_samples, n_samples))
+            
+            # Process in batches to avoid OOM
+            batch_size = 100 # Adjust based on GPU memory
+            
+            for i in range(0, n_samples, batch_size):
+                end_i = min(i + batch_size, n_samples)
+                batch_i = imgs_tensor[i:end_i] # (B, 1, H, W)
+                
+                for j in range(0, n_samples, batch_size):
+                    end_j = min(j + batch_size, n_samples)
+                    if j > end_i: # Optimization: only compute upper triangle blocks? 
+                        # Actually, let's just compute full matrix for simplicity of batching logic, 
+                        # or handle symmetry carefully.
+                        pass
+                    
+                    batch_j = imgs_tensor[j:end_j] # (B2, 1, H, W)
+                    
+                    # Expand for broadcasting:
+                    # batch_i: (B, 1, 1, H, W)
+                    # batch_j: (1, B2, 1, H, W)
+                    # This creates (B, B2, 1, H, W) tensor - might be huge!
+                    # 100 * 100 * 32 * 32 * 4 bytes ~ 40MB. This is fine.
+                    
+                    b_i = batch_i.unsqueeze(1).expand(-1, end_j - j, -1, -1, -1).reshape(-1, 1, dim, dim)
+                    b_j = batch_j.unsqueeze(0).expand(end_i - i, -1, -1, -1, -1).reshape(-1, 1, dim, dim)
+                    
+                    # Compute SSIM
+                    # ssim_torch returns (N,) tensor
+                    val_range = float(data_range)
+                    ssim_vals = ssim_torch(b_i, b_j, data_range=val_range, size_average=False)
+                    
+                    # Reshape back to (B, B2)
+                    ssim_block = ssim_vals.view(end_i - i, end_j - j).cpu().numpy()
+                    
+                    dist_matrix[i:end_i, j:end_j] = 1.0 - ssim_block
+
+        except Exception as e:
+            print(f"PyTorch SSIM failed, falling back to CPU loop: {e}")
+            # Fallback to CPU loop
+            dist_matrix = np.zeros((n_samples, n_samples))
+            for i in range(n_samples):
+                for j in range(i + 1, n_samples):
+                    score = ssim(images[i], images[j], data_range=data_range)
+                    dist = 1.0 - score
+                    dist_matrix[i, j] = dist
+                    dist_matrix[j, i] = dist
+                
+        clustering_input = dist_matrix
+        metric = 'precomputed'
 
     # 3. Clustering
     cluster_labels = None
     central_solution_indices = {} # For K-Medoids, this is pre-calculated
 
-    if algorithm == 'dbscan':
+    if algorithm == 'hierarchical':
+        n_clusters = params.get('n_clusters', 5)
+        if len(filtered_elites) < n_clusters: return []
+        
+        if metric == 'precomputed':
+            # Ward linkage requires Euclidean distance. For precomputed (SSIM), we use 'average' linkage.
+            linkage = 'average'
+        else:
+            linkage = 'ward'
+            
+        agg = AgglomerativeClustering(n_clusters=n_clusters, metric=metric, linkage=linkage)
+        cluster_labels = agg.fit_predict(clustering_input)
+
+    elif algorithm == 'dbscan':
         min_samples = params.get('min_samples', 4)
         if len(filtered_elites) < min_samples: return []
-        dbscan = DBSCAN(eps=params.get('eps', 0.5), min_samples=min_samples)
-        cluster_labels = dbscan.fit_predict(tsne_results)
+        dbscan = DBSCAN(eps=params.get('eps', 0.5), min_samples=min_samples, metric=metric)
+        cluster_labels = dbscan.fit_predict(clustering_input)
 
     elif algorithm == 'kmedoids':
         n_clusters = params.get('n_clusters', 3)
         if len(filtered_elites) < n_clusters: return []
-        kmedoids = KMedoids(n_clusters=n_clusters, random_state=42)
-        cluster_labels = kmedoids.fit_predict(tsne_results)
+        kmedoids = KMedoids(n_clusters=n_clusters, random_state=42, metric=metric)
+        cluster_labels = kmedoids.fit_predict(clustering_input)
         # Store the medoid indices, which are the most central points
         for i, medoid_idx in enumerate(kmedoids.medoid_indices_):
             central_solution_indices[i] = medoid_idx
@@ -125,8 +227,8 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
         min_cluster_size = params.get('min_cluster_size', 5)
         if len(filtered_elites) < min_cluster_size: return []
         
-        clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, gen_min_span_tree=True)
-        cluster_labels = clusterer.fit_predict(tsne_results)
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size, gen_min_span_tree=True, metric=metric)
+        cluster_labels = clusterer.fit_predict(clustering_input)
 
     unique_labels = set(cluster_labels)
     
@@ -144,12 +246,25 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
         
         cluster_heightmaps = heightmaps_flat[cluster_indices]
 
-        # For K-Medoids, the central solution is the medoid. For DBSCAN, we calculate it.
+        # For K-Medoids, the central solution is the medoid. For others, we calculate it.
         if algorithm == 'kmedoids':
             central_solution_orig_idx = central_solution_indices[k]
-        else: # dbscan
-            dist_matrix = pairwise_distances(cluster_heightmaps)
-            medoid_local_idx = np.argmin(dist_matrix.sum(axis=0))
+        else: 
+            # Calculate medoid based on the chosen metric
+            if metric == 'precomputed':
+                # Extract sub-matrix for this cluster
+                # cluster_indices are indices into the original filtered list (and thus the distance matrix)
+                sub_dist_matrix = clustering_input[np.ix_(cluster_indices, cluster_indices)]
+                medoid_local_idx = np.argmin(sub_dist_matrix.sum(axis=0))
+            else:
+                # Euclidean distance in feature space (t-SNE or raw heightmaps? usually raw for medoid)
+                # But here we used t-SNE for clustering.
+                # For "central solution", we should probably use the raw heightmap distance (Euclidean)
+                # or the t-SNE distance if that's what we clustered on.
+                # Let's use raw heightmap distance for physical representativeness
+                dist_matrix = pairwise_distances(cluster_heightmaps)
+                medoid_local_idx = np.argmin(dist_matrix.sum(axis=0))
+                
             central_solution_orig_idx = cluster_indices[medoid_local_idx]
 
         boolean_heightmaps = cluster_heightmaps > 0

@@ -88,7 +88,7 @@ def create_filter_sliders(results_data, lang):
         from backend.units import get_unit_label
         
         feature_indices = results_data.get('selected_features_indices', [])
-        feature_set = results_data.get('feature_set', 'original')
+        feature_set = results_data.get('feature_set', 'consolidated')
         feature_labels = translate_feature_labels(feature_indices, lang, feature_set)
         
         # Calculate min/max for each feature from actual data
@@ -346,7 +346,7 @@ def generate_correlation_heatmap(results_data, pathname, language):
     # Translate feature labels based on current language and feature set
     from backend.translation import translate_feature_labels
     feature_indices = results_data.get('selected_features_indices', [])
-    feature_set = results_data.get('feature_set', 'original')
+    feature_set = results_data.get('feature_set', 'consolidated')
     if not feature_indices:
         empty_fig = px.scatter(title=T[lang]['STEP5_NO_LABELS'])
         empty_fig.update_layout(
@@ -472,7 +472,7 @@ def generate_feature_objective_plots(results_data, pathname, language):
             return dbc.Alert(T[lang].get('STEP5_NO_ELITES', 'No elite solutions found'), color="warning")
         
         # Get feature set from results metadata
-        feature_set = results_data.get('feature_set', 'original')
+        feature_set = results_data.get('feature_set', 'consolidated')
         
         # Get feature indices
         feature_indices = results_data.get('selected_features_indices', [])

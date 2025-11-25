@@ -139,7 +139,7 @@ def populate_dropdowns_s3(results_data, language):
         return [], [], None, None
     
     feature_indices = results_data['selected_features_indices']
-    feature_set = results_data.get('feature_set', 'original')
+    feature_set = results_data.get('feature_set', 'consolidated')
     
     # Get current language (default to 'DE')
     lang = language if language else 'DE'
@@ -210,7 +210,7 @@ def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data, language):
     
     # Get feature labels
     from backend.translation import translate_feature_labels
-    feature_set = results_data.get('feature_set', 'original')
+    feature_set = results_data.get('feature_set', 'consolidated')
     labels = translate_feature_labels(selected_features, 'DE', feature_set)
     
     # Calculate axis tick positions and labels
@@ -386,7 +386,7 @@ def update_parallel_coords_s3(results_data, language):
     
     # Get feature indices and feature set from final results
     feature_indices = results_data.get('selected_features_indices', [])
-    feature_set = results_data.get('feature_set', 'original')
+    feature_set = results_data.get('feature_set', 'consolidated')
     
     # Translate labels based on current language and feature set
     labels = translate_feature_labels(feature_indices, lang, feature_set)
@@ -470,8 +470,8 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     user_feature_ranges = session_data.get('feature_ranges', {})
     hard_constraints = session_data.get('hard_constraints', {})
     qd_hyperparams = session_data.get('qd_hyperparams', {})
-    objective_function = session_data.get('objective_function', 'simple_porosity')
-    feature_set = session_data.get('feature_set', 'original')
+    objective_function = session_data.get('objective_function', 'street_canyon')
+    feature_set = session_data.get('feature_set', 'consolidated')
     
     # Retrieve and deserialize cached building data from Step 1 (if available)
     cached_building_data = None

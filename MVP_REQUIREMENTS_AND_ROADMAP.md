@@ -47,6 +47,16 @@ The system uses **Quality-Diversity (QD) optimization** to generate diverse buil
 *   **JIT-First Policy**: All new metrics (e.g., shadow analysis) must be Numba-optimized to maintain the <5 min runtime.
 *   **Repair Heuristics**: Implement generative seeding to prevent "empty archives" in dense urban settings where random initialization fails.
 *   **Clustering Robustness**: Replace pixel-wise Euclidean distance with **Structural Similarity Index (SSIM)** to correctly identify topological typologies (e.g., shifted buildings). Calculate **Intra-Cluster Variance** to derive an **Adaptability Score** (*Spielraum*).
+*   **Consolidated Feature Set**: Use a single, robust 8-dimensional feature set for QD optimization:
+    1.  **GRZ** (Site Coverage)
+    2.  **GFZ** (Floor Area Ratio)
+    3.  **Avg Height**
+    4.  **Height Variability**
+    5.  **Avg Distance** (Porosity)
+    6.  **Building Count** (Grain)
+    7.  **Compactness** (A/V Ratio - Energy)
+    8.  **Park Factor** (Largest Contiguous Green Space - Social)
+*   **Objective Function**: Standardize on **Street Canyon Ventilation** as the sole objective for robustness.
 
 ### C. Data & Interoperability
 *   **Export**: Add DXF/DWG and Shapefile/GeoJSON export for generated geometries.
@@ -68,7 +78,8 @@ The system uses **Quality-Diversity (QD) optimization** to generate diverse buil
 ## 5. Technical Roadmap
 
 1.  **Phase 1: Compliance & Metrics** (Current Priority)
-    *   Implement GRZ/GFZ calculation and visualization.
+    *   Implement the **Consolidated Feature Set** (GRZ, GFZ, Compactness, Park Factor).
+    *   Standardize on "Street Canyon" objective.
     *   Refine German localization.
     *   Replace `pickle` state saving.
 

@@ -16,3 +16,8 @@ pyyaml==6.0.1
 psutil==5.9.8
 dash-leaflet-plugins==1.0.0
 PyLaTeX==1.4.1
+scikit-learn
+scikit-learn-extra
+hdbscan
+scikit-image
+pytorch-msssim
