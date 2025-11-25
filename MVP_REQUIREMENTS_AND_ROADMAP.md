@@ -40,21 +40,28 @@ The system uses **Quality-Diversity (QD) optimization** to generate diverse buil
 
 ### A. Planning Law Integration
 *   **B-Plan Constraints**: Allow users to define *Baugrenzen* (buildable boundaries) and *Baulinien* (mandatory lines), not just bounding boxes.
-*   **Shadow Analysis**: Implement "2-hour shadow" checks (DIN 5034) alongside current Sky View Factor (SVF).
-*   **Metric Visibility**: GRZ/GFZ must be primary sorting/filtering criteria.
+*   **Shadow Analysis**: Implement "2-hour shadow" checks (DIN 5034) using **JIT-compiled Ray Casting**, replacing the current SVF approximation.
+*   **Metric Visibility**: Decouple reporting metrics from optimization objectives. **Always calculate GRZ and GFZ** for every solution, regardless of the selected feature set.
 
 ### B. Performance & Robustness
 *   **JIT-First Policy**: All new metrics (e.g., shadow analysis) must be Numba-optimized to maintain the <5 min runtime.
 *   **Repair Heuristics**: Implement generative seeding to prevent "empty archives" in dense urban settings where random initialization fails.
+*   **Clustering Robustness**: Replace pixel-wise Euclidean distance with **Structural Similarity Index (SSIM)** to correctly identify topological typologies (e.g., shifted buildings). Calculate **Intra-Cluster Variance** to derive an **Adaptability Score** (*Spielraum*).
 
 ### C. Data & Interoperability
 *   **Export**: Add DXF/DWG and Shapefile/GeoJSON export for generated geometries.
 *   **Import**: Support XPlanGML ingestion for automatic constraint setting (Future).
 *   **State Management**: Replace Python `pickle` with JSON/SQLite for secure, version-independent project saving.
+*   **Report Generation**:
+    *   **Adaptability Score**: Rank design families by robustness (Cluster Size / Variance).
+    *   **Consensus Maps**: **Vectorize** consensus heatmaps into GeoJSON polygons to define "Regulatory Blueprints" (Baufenster vs. Ventilation Corridors).
+    *   **Competition Briefs**: Export precise performance benchmarks and morphological guardrails for *Auslobung*.
 
 ### D. User Experience (UX)
 *   **Localization**: Complete German localization using correct *BauNVO* terminology (e.g., *Winddurchlässigkeit*, *Überbaute Fläche*).
 *   **Wizard Workflow**: Maintain the linear 6-step process. Hide complex QD hyperparameters (sigma, mutation rates) behind an "Expert Mode".
+*   **Visual Feedback**: Implement a "Stepper" for process visibility and "Toasts" for error handling (e.g., file load failures).
+*   **Professional Aesthetic**: Upgrade to a cleaner theme (e.g., `dbc.themes.LUX`) to match architectural expectations.
 
 ---
 
@@ -68,7 +75,11 @@ The system uses **Quality-Diversity (QD) optimization** to generate diverse buil
 2.  **Phase 2: Robustness & Speed**
     *   Implement repair heuristics for dense parcels.
     *   Optimize shadow analysis (JIT).
+    *   Implement "Adaptability Score" and "Consensus Map" generation.
+    *   Upgrade clustering metrics: Implement **SSIM** for robust similarity.
 
-3.  **Phase 3: Interoperability**
+3.  **Phase 3: Interoperability & UX Polish**
     *   Develop DXF/Shapefile export modules.
     *   Package as standalone executable/container for local deployment.
+    *   Implement "Expert Mode" toggle and Visual Stepper.
+    *   Finalize Competition Brief export templates.
