@@ -77,7 +77,7 @@
             top: 20px;
             right: 20px;
             z-index: 10;
-            width: 100px;
+            width: 400px;
         }
         
         .title-slide {
@@ -136,10 +136,39 @@
         .compact {
             font-size: 0.8em !important;
         }
+
+        /* Language Switching */
+        .lang-de { display: none; }
+        body.german-mode .lang-en { display: none; }
+        body.german-mode .lang-de { display: block; }
+        
+        span.lang-de { display: none; }
+        body.german-mode span.lang-de { display: inline; }
+        
+        .lang-toggle {
+            position: absolute;
+            top: 20px;
+            right: 440px; /* Left of the logo */
+            z-index: 20;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            color: #333;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .lang-toggle:hover {
+            background: #f8f9fa;
+        }
     </style>
 </head>
 <body>
     <div class="reveal">
+        <button class="lang-toggle" onclick="toggleLanguage()">Auf Deutsch wechseln</button>
         <img src="logo.png" class="logo-container" alt="OpenSKIZZE Logo">
         <div class="slides">
 
@@ -147,39 +176,81 @@
             <section class="title-slide">
                 <img src="logo.png" style="max-width: 200px; border: none; box-shadow: none; margin-bottom: 20px;">
                 <h1>OpenSKIZZE</h1>
-                <p>An interactive decision-support tool for early-stage climate-aware urban design</p>
-                <p style="font-size: 0.8em; margin-top: 50px;">Presentation for Urban Planners</p>
+                <div class="lang-en">
+                    <p>An interactive decision-support tool for early-stage climate-aware urban design</p>
+                    <p style="font-size: 0.8em; margin-top: 50px;">Presentation for Urban Planners</p>
+                </div>
+                <div class="lang-de">
+                    <p>Ein interaktives Entscheidungshilfewerkzeug für klimabewussten Städtebau in frühen Planungsphasen</p>
+                    <p style="font-size: 0.8em; margin-top: 50px;">Präsentation für Stadtplaner</p>
+                </div>
             </section>
 
             <!-- What is OpenSKIZZE? -->
             <section>
-                <h2>What is OpenSKIZZE?</h2>
+                <h2 class="lang-en">What is OpenSKIZZE?</h2>
+                <h2 class="lang-de">Was ist OpenSKIZZE?</h2>
+                
                 <div class="highlight-box">
-                    <strong>An interactive decision-support tool for early-stage climate-aware urban design</strong>
+                    <strong class="lang-en">An interactive decision-support tool for early-stage climate-aware urban design</strong>
+                    <strong class="lang-de">Ein interaktives Entscheidungshilfewerkzeug für klimabewussten Städtebau in frühen Planungsphasen</strong>
                 </div>
-                <p>OpenSKIZZE helps you systematically explore diverse building arrangements for a site while considering climate performance (wind flow, ventilation).</p>
-                <p>Instead of manually testing a few design options, the system automatically generates <strong>1,000–100,000 diverse alternatives</strong> and helps you understand the trade-offs between different morphological choices.</p>
+                
+                <div class="lang-en">
+                    <p>OpenSKIZZE helps you systematically explore diverse building arrangements for a site while considering climate performance (wind flow, ventilation).</p>
+                    <p>Instead of manually testing a few design options, the system automatically generates <strong>1,000–100,000 diverse alternatives</strong> and helps you understand the trade-offs between different morphological choices.</p>
+                </div>
+                <div class="lang-de">
+                    <p>OpenSKIZZE hilft Ihnen, systematisch diverse Bebauungsvarianten für ein Areal zu untersuchen und dabei die Klimaleistung (Windströmung, Durchlüftung) zu berücksichtigen.</p>
+                    <p>Anstatt manuell wenige Entwurfsoptionen zu testen, generiert das System automatisch <strong>1.000–100.000 diverse Alternativen</strong> und hilft Ihnen, die Zielkonflikte zwischen verschiedenen morphologischen Entscheidungen zu verstehen.</p>
+                </div>
             </section>
 
             <!-- The Problem We Solve -->
-            <section>
-                <h2>The Problem We Solve</h2>
-                <h3>The "Praxis Gap"</h3>
-                <ul>
+            <section class="compact">
+                <h2 class="lang-en">The Problem We Solve</h2>
+                <h2 class="lang-de">Das Problem</h2>
+                
+                <h3 class="lang-en">The "Praxis Gap"</h3>
+                <h3 class="lang-de">Die "Praxis-Lücke"</h3>
+                
+                <ul class="lang-en">
                     <li><strong>Regional climate models</strong> (like KLAM_21) provide valuable insights but operate at 100m resolution—too coarse for building-scale decisions</li>
                     <li><strong>Detailed CFD simulations</strong> are accurate but take hours per design—impractical for early-stage exploration</li>
                     <li><strong>Manual iteration</strong> is slow, unsystematic, and prone to bias toward familiar solutions</li>
                 </ul>
+                <ul class="lang-de">
+                    <li><strong>Regionale Klimamodelle</strong> (wie KLAM_21) liefern wertvolle Erkenntnisse, arbeiten aber mit 100m Auflösung – zu grob für Entscheidungen auf Gebäudeebene</li>
+                    <li><strong>Detaillierte CFD-Simulationen</strong> sind genau, dauern aber Stunden pro Entwurf – unpraktisch für die frühe Explorationsphase</li>
+                    <li><strong>Manuelle Iteration</strong> ist langsam, unsystematisch und anfällig für Verzerrungen hin zu bekannten Lösungen</li>
+                </ul>
+                
                 <div class="highlight-box">
-                    <strong>Result:</strong> Planners lack tools to quickly explore climate-adaptive massing options during the critical early design phase.
+                    <span class="lang-en"><strong>Result:</strong> Planners lack tools to quickly explore climate-adaptive massing options during the critical early design phase.</span>
+                    <span class="lang-de"><strong>Ergebnis:</strong> Planern fehlen Werkzeuge, um in der kritischen frühen Entwurfsphase schnell klimaangepasste Massenstudien zu explorieren.</span>
+                </div>
+                
+                <div class="lang-en">
+                    <p style="margin-top: 20px; font-size: 0.9em; font-style: italic;">
+                        Climate analysis is typically performed late in the process, often after key decisions are locked in. We want to know what good solutions look like <strong>before</strong> starting an urban planning design contest.
+                    </p>
+                </div>
+                <div class="lang-de">
+                    <p style="margin-top: 20px; font-size: 0.9em; font-style: italic;">
+                        Klimaanalysen werden typischerweise spät im Prozess durchgeführt, oft nachdem wichtige Entscheidungen bereits feststehen. Wir wollen wissen, wie gute Lösungen aussehen, <strong>bevor</strong> ein städtebaulicher Wettbewerb beginnt.
+                    </p>
                 </div>
             </section>
 
             <!-- How OpenSKIZZE Works -->
             <section>
-                <h2>How OpenSKIZZE Works</h2>
-                <p><strong>6-Step Workflow (Complete in ~30 minutes)</strong></p>
-                <table>
+                <h2 class="lang-en">How OpenSKIZZE Works</h2>
+                <h2 class="lang-de">Funktionsweise von OpenSKIZZE</h2>
+                
+                <p class="lang-en"><strong>6-Step Workflow (Complete in ~30 minutes)</strong></p>
+                <p class="lang-de"><strong>6-Schritte-Workflow (Dauer ca. 30 Minuten)</strong></p>
+                
+                <table class="lang-en">
                     <thead>
                         <tr>
                             <th>Step</th>
@@ -220,31 +291,99 @@
                         </tr>
                     </tbody>
                 </table>
+                
+                <table class="lang-de">
+                    <thead>
+                        <tr>
+                            <th>Schritt</th>
+                            <th>Ihre Aktion</th>
+                            <th>Systemaktion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>1. Umfang</strong></td>
+                            <td>Flurstück auf Karte wählen, Windrichtung setzen</td>
+                            <td>Lädt Bestandsgebäude aus LOD2-Daten</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2. Randbedingungen</strong></td>
+                            <td>Höhenlimits, Abstände, Zielwerte (GRZ, GFZ) definieren</td>
+                            <td>Konfiguriert Optimierungsparameter</td>
+                        </tr>
+                        <tr>
+                            <td><strong>3. Optimieren</strong></td>
+                            <td>"Start" klicken</td>
+                            <td>Generiert 1.000–100.000 diverse Entwürfe (3–8 Min)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4. Analyse</strong></td>
+                            <td>Archiv-Heatmaps erkunden, Ergebnisse clustern</td>
+                            <td>Identifiziert automatisch Entwurfs-Archetypen</td>
+                        </tr>
+                        <tr>
+                            <td><strong>5. Vergleich</strong></td>
+                            <td>Entwürfe nebeneinander auswählen</td>
+                            <td>Synchronisierte 3D-Ansichten zum Vergleich</td>
+                        </tr>
+                        <tr>
+                            <td><strong>6. Export</strong></td>
+                            <td>Bericht herunterladen</td>
+                            <td>PDF mit Archetypen, Zielkonflikten, Empfehlungen</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="margin-top: 15px; font-size: 0.75em; background-color: #f0f7fb; padding: 10px; border-radius: 5px;">
+                    <span class="lang-en"><strong>Coming Soon:</strong> Direct export of reports and <strong>XPlanGML (XPLANUNG)</strong> files, allowing planners to immediately integrate generated knowledge and parameters into their formal planning processes.</span>
+                    <span class="lang-de"><strong>Demnächst:</strong> Direkter Export von Berichten und <strong>XPlanGML (XPLANUNG)</strong> Dateien, was Planern erlaubt, generiertes Wissen und Parameter sofort in ihre formellen Planungsprozesse zu integrieren.</span>
+                </div>
             </section>
 
             <!-- Key Features for Planners -->
             <section>
-                <h2>Key Features for Planners</h2>
+                <h2 class="lang-en">Key Features for Planners</h2>
+                <h2 class="lang-de">Hauptfunktionen für Planer</h2>
+                
                 <div style="font-size: 0.85em;">
-                    <p><strong>🎯 Diversity, Not Just "The Best"</strong><br>
-                    Traditional optimization finds one "optimal" solution. OpenSKIZZE finds <strong>the best solution for every combination of features</strong>—high density vs. low density, tall vs. compact. You see the full range of what's possible.</p>
+                    <div class="lang-en">
+                        <p><strong>🎯 Diversity, Not Just "The Best"</strong><br>
+                        Traditional optimization finds one "optimal" solution. OpenSKIZZE finds <strong>the best solution for every combination of features</strong>—high density vs. low density, tall vs. compact. You see the full range of what's possible.</p>
 
-                    <p><strong>📊 Automatic Archetype Discovery</strong><br>
-                    The system uses advanced clustering (HDBSCAN, K-Medoids, Hierarchical) and similarity metrics (SSIM, t-SNE) to identify <strong>distinct design families</strong>. Consensus maps show placement patterns that appear across multiple high-performing solutions.</p>
+                        <p><strong>📊 Automatic Archetype Discovery</strong><br>
+                        The system uses advanced clustering (HDBSCAN, K-Medoids, Hierarchical) and similarity metrics (SSIM, t-SNE) to identify <strong>distinct design families</strong>. Consensus maps show placement patterns that appear across multiple high-performing solutions.</p>
 
-                    <p><strong>🏗️ Real Data Integration</strong><br>
-                    LOD2 CityGML (NRW data), ALKIS Parcels, Physical Units (meters, m²).</p>
+                        <p><strong>🏗️ Real Data Integration</strong><br>
+                        LOD2 CityGML (NRW data), ALKIS Parcels, Physical Units (meters, m²).</p>
 
-                    <p><strong>⚖️ Regulatory Metrics Built-In</strong><br>
-                    GRZ (Grundflächenzahl), GFZ (Geschossflächenzahl) - Direct comparison to BauNVO requirements.</p>
+                        <p><strong>⚖️ Regulatory Metrics Built-In</strong><br>
+                        GRZ (Grundflächenzahl), GFZ (Geschossflächenzahl) - Direct comparison to BauNVO requirements.</p>
+                    </div>
+                    <div class="lang-de">
+                        <p><strong>🎯 Vielfalt, nicht nur "Das Beste"</strong><br>
+                        Traditionelle Optimierung findet eine "optimale" Lösung. OpenSKIZZE findet <strong>die beste Lösung für jede Kombination von Eigenschaften</strong> – hohe vs. niedrige Dichte, hoch vs. kompakt. Sie sehen das volle Spektrum des Möglichen.</p>
+
+                        <p><strong>📊 Automatische Archetypen-Erkennung</strong><br>
+                        Das System nutzt fortgeschrittenes Clustering (HDBSCAN, K-Medoids, Hierarchisch) und Ähnlichkeitsmetriken (SSIM, t-SNE), um <strong>verschiedene Entwurfsfamilien</strong> zu identifizieren. Konsenskarten zeigen Platzierungsmuster, die in mehreren leistungsstarken Lösungen auftreten.</p>
+
+                        <p><strong>🏗️ Integration realer Daten</strong><br>
+                        LOD2 CityGML (NRW Daten), ALKIS Flurstücke, Physikalische Einheiten (Meter, m²).</p>
+
+                        <p><strong>⚖️ Integrierte regulatorische Metriken</strong><br>
+                        GRZ (Grundflächenzahl), GFZ (Geschossflächenzahl) - Direkter Vergleich mit BauNVO-Anforderungen.</p>
+                    </div>
                 </div>
             </section>
 
             <!-- Climate Assessment Options -->
             <section>
-                <h2>Climate Assessment Options</h2>
-                <p>Choose based on your project needs:</p>
-                <table>
+                <h2 class="lang-en">Climate Assessment Options</h2>
+                <h2 class="lang-de">Optionen zur Klimabewertung</h2>
+                
+                <p class="lang-en">Choose based on your project needs:</p>
+                <p class="lang-de">Wählen Sie je nach Projektbedarf:</p>
+                
+                <table class="lang-en">
                     <thead>
                         <tr>
                             <th>Objective</th>
@@ -265,41 +404,91 @@
                         </tr>
                     </tbody>
                 </table>
-                <p style="font-size: 0.8em; margin-top: 20px;">Both produce rich, diverse archives. Geometric surrogates are sufficient for early-stage exploration; GP-KLAM adds physical validation when documentation requires it.</p>
+                
+                <table class="lang-de">
+                    <thead>
+                        <tr>
+                            <th>Zielgröße</th>
+                            <th>Geschwindigkeit</th>
+                            <th>Anwendungsfall</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Straßenschlucht</strong></td>
+                            <td>Schnell (~0.8ms)</td>
+                            <td>Dichte städtische Kontexte</td>
+                        </tr>
+                        <tr>
+                            <td><strong>GP-KLAM</strong></td>
+                            <td>Moderat (~10ms)</td>
+                            <td>Validierte Physik für behördliche Einreichungen</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="lang-en">
+                    <p style="font-size: 0.8em; margin-top: 20px;">Both produce rich, diverse archives. Geometric surrogates are sufficient for early-stage exploration; GP-KLAM adds physical validation when documentation requires it.</p>
+                </div>
+                <div class="lang-de">
+                    <p style="font-size: 0.8em; margin-top: 20px;">Beide erzeugen reichhaltige, diverse Archive. Geometrische Surrogate reichen für die frühe Exploration; GP-KLAM fügt physikalische Validierung hinzu, wenn die Dokumentation dies erfordert.</p>
+                </div>
             </section>
 
             <!-- What You Can Do With OpenSKIZZE -->
             <section class="compact">
-                <h2>What You Can Do With OpenSKIZZE</h2>
+                <h2 class="lang-en">What You Can Do With OpenSKIZZE</h2>
+                <h2 class="lang-de">Was Sie mit OpenSKIZZE tun können</h2>
+                
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div>
-                        <h4>1. Explore Trade-Offs Systematically</h4>
-                        <p><em>"If I increase coverage from GRZ 0.4 to 0.6, what happens to ventilation?"</em><br>
+                        <h4 class="lang-en">1. Explore Trade-Offs Systematically</h4>
+                        <h4 class="lang-de">1. Systematische Untersuchung von Zielkonflikten</h4>
+                        
+                        <p class="lang-en"><em>"If I increase coverage from GRZ 0.4 to 0.6, what happens to ventilation?"</em><br>
                         Archive heatmaps show exactly where high performance is achievable.</p>
+                        <p class="lang-de"><em>"Wenn ich die GRZ von 0,4 auf 0,6 erhöhe, was passiert mit der Durchlüftung?"</em><br>
+                        Archiv-Heatmaps zeigen genau, wo hohe Leistung erreichbar ist.</p>
                     </div>
                     <div>
-                        <h4>2. Derive Competition Criteria</h4>
-                        <p><em>"What parameter ranges should we specify for the städtebaulicher Wettbewerb?"</em><br>
+                        <h4 class="lang-en">2. Derive Competition Criteria</h4>
+                        <h4 class="lang-de">2. Wettbewerbskriterien ableiten</h4>
+                        
+                        <p class="lang-en"><em>"What parameter ranges should we specify for the städtebaulicher Wettbewerb?"</em><br>
                         Feature distributions define achievable bounds.</p>
+                        <p class="lang-de"><em>"Welche Parameterbereiche sollten wir für den städtebaulichen Wettbewerb vorgeben?"</em><br>
+                        Merkmalsverteilungen definieren erreichbare Grenzen.</p>
                     </div>
                     <div>
-                        <h4>3. Identify Robust Design Principles</h4>
-                        <p><em>"Which placement strategies work across multiple good solutions?"</em><br>
+                        <h4 class="lang-en">3. Identify Robust Design Principles</h4>
+                        <h4 class="lang-de">3. Robuste Entwurfsprinzipien identifizieren</h4>
+                        
+                        <p class="lang-en"><em>"Which placement strategies work across multiple good solutions?"</em><br>
                         Consensus maps extract patterns that appear across top-performing designs.</p>
+                        <p class="lang-de"><em>"Welche Platzierungsstrategien funktionieren über mehrere gute Lösungen hinweg?"</em><br>
+                        Konsenskarten extrahieren Muster, die bei den besten Entwürfen auftreten.</p>
                     </div>
                     <div>
-                        <h4>4. Build Stakeholder Consensus</h4>
-                        <p><em>"How do we show the trade-offs to the Bezirksvertretung?"</em><br>
+                        <h4 class="lang-en">4. Build Stakeholder Consensus</h4>
+                        <h4 class="lang-de">4. Konsens mit Stakeholdern bilden</h4>
+                        
+                        <p class="lang-en"><em>"How do we show the trade-offs to the Bezirksvertretung?"</em><br>
                         PDF reports with archetype comparisons and plain-language summaries.</p>
+                        <p class="lang-de"><em>"Wie zeigen wir der Bezirksvertretung die Zielkonflikte auf?"</em><br>
+                        PDF-Berichte mit Archetypen-Vergleichen und verständlichen Zusammenfassungen.</p>
                     </div>
                 </div>
             </section>
 
             <!-- Example Output: Design Archetypes -->
             <section>
-                <h2>Example Output: Design Archetypes</h2>
-                <p>From a typical run on a 100m × 100m parcel:</p>
-                <table>
+                <h2 class="lang-en">Example Output: Design Archetypes</h2>
+                <h2 class="lang-de">Beispielausgabe: Entwurfs-Archetypen</h2>
+                
+                <p class="lang-en">From a typical run on a 100m × 100m parcel:</p>
+                <p class="lang-de">Aus einem typischen Lauf auf einem 100m × 100m Flurstück:</p>
+                
+                <table class="lang-en">
                     <thead>
                         <tr>
                             <th>Archetype</th>
@@ -340,40 +529,114 @@
                         </tr>
                     </tbody>
                 </table>
-                <p style="font-size: 0.8em;">Each archetype represents a <strong>family of solutions</strong>—the system shows best, central, and consensus versions for each.</p>
+                
+                <table class="lang-de">
+                    <thead>
+                        <tr>
+                            <th>Archetyp</th>
+                            <th>Eigenschaften</th>
+                            <th>GRZ</th>
+                            <th>Mittlere Höhe</th>
+                            <th>Durchlüftung</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Verteilte Hochpunkte</strong></td>
+                            <td>4–6 hohe Gebäude, weiter Abstand</td>
+                            <td>0.25</td>
+                            <td>24m</td>
+                            <td>Exzellent</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Blockrandbebauung</strong></td>
+                            <td>Randentwicklung, Hofmitte</td>
+                            <td>0.45</td>
+                            <td>12m</td>
+                            <td>Gut</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Zeilenbebauung</strong></td>
+                            <td>Parallele Reihen, windausgerichtet</td>
+                            <td>0.40</td>
+                            <td>15m</td>
+                            <td>Sehr gut</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Kompaktes Cluster</strong></td>
+                            <td>Dichtes Zentrum, offene Ränder</td>
+                            <td>0.55</td>
+                            <td>18m</td>
+                            <td>Moderat</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <div class="lang-en">
+                    <p style="font-size: 0.8em;">Each archetype represents a <strong>family of solutions</strong>—the system shows best, central, and consensus versions for each.</p>
+                </div>
+                <div class="lang-de">
+                    <p style="font-size: 0.8em;">Jeder Archetyp repräsentiert eine <strong>Lösungsfamilie</strong> – das System zeigt jeweils die beste, zentrale und Konsens-Version.</p>
+                </div>
             </section>
 
             <!-- Technical Requirements -->
             <section>
-                <h2>Technical Requirements</h2>
-                <ul>
+                <h2 class="lang-en">Technical Requirements</h2>
+                <h2 class="lang-de">Technische Anforderungen</h2>
+                
+                <ul class="lang-en">
                     <li><strong>Web-based</strong>: Runs in browser, no installation required</li>
                     <li><strong>Data</strong>: Automatic LOD2/ALKIS fetching (NRW)</li>
                     <li><strong>Time</strong>: 3–8 minutes per optimization run</li>
                     <li><strong>Output</strong>: PDF reports, GeoJSON export</li>
                 </ul>
+                <ul class="lang-de">
+                    <li><strong>Webbasiert</strong>: Läuft im Browser, keine Installation nötig</li>
+                    <li><strong>Daten</strong>: Automatischer LOD2/ALKIS-Abruf (NRW)</li>
+                    <li><strong>Zeit</strong>: 3–8 Minuten pro Optimierungslauf</li>
+                    <li><strong>Ausgabe</strong>: PDF-Berichte, GeoJSON-Export</li>
+                </ul>
             </section>
 
             <!-- What OpenSKIZZE Is (and Isn't) -->
             <section>
-                <h2>What OpenSKIZZE Is (and Isn't)</h2>
+                <h2 class="lang-en">What OpenSKIZZE Is (and Isn't)</h2>
+                <h2 class="lang-de">Was OpenSKIZZE ist (und was nicht)</h2>
+                
                 <div class="two-col">
                     <div style="background: #e8f8f5; padding: 20px; border-radius: 8px;">
-                        <h3 style="color: #27ae60;">✅ IS:</h3>
-                        <ul>
+                        <h3 style="color: #27ae60;" class="lang-en">✅ IS:</h3>
+                        <h3 style="color: #27ae60;" class="lang-de">✅ IST:</h3>
+                        
+                        <ul class="lang-en">
                             <li>Early-stage exploration tool</li>
                             <li>Trade-off visualization</li>
                             <li>Criteria derivation support</li>
                             <li>Diversity generator</li>
                         </ul>
+                        <ul class="lang-de">
+                            <li>Werkzeug für frühe Exploration</li>
+                            <li>Visualisierung von Zielkonflikten</li>
+                            <li>Unterstützung bei Kriterienableitung</li>
+                            <li>Vielfaltsgenerator</li>
+                        </ul>
                     </div>
                     <div style="background: #fdedec; padding: 20px; border-radius: 8px;">
-                        <h3 style="color: #c0392b;">❌ IS NOT:</h3>
-                        <ul>
+                        <h3 style="color: #c0392b;" class="lang-en">❌ IS NOT:</h3>
+                        <h3 style="color: #c0392b;" class="lang-de">❌ IST NICHT:</h3>
+                        
+                        <ul class="lang-en">
                             <li>Replacement for detailed CFD studies</li>
                             <li>Final design tool</li>
                             <li>Building permit documentation</li>
                             <li>Structural/MEP analysis</li>
+                        </ul>
+                        <ul class="lang-de">
+                            <li>Ersatz für detaillierte CFD-Studien</li>
+                            <li>Werkzeug für den finalen Entwurf</li>
+                            <li>Bauantragsunterlagen</li>
+                            <li>Tragwerks-/TGA-Analyse</li>
                         </ul>
                     </div>
                 </div>
@@ -381,8 +644,10 @@
 
             <!-- Summary: Why OpenSKIZZE? -->
             <section>
-                <h2>Summary: Why OpenSKIZZE?</h2>
-                <table>
+                <h2 class="lang-en">Summary: Why OpenSKIZZE?</h2>
+                <h2 class="lang-de">Zusammenfassung: Warum OpenSKIZZE?</h2>
+                
+                <table class="lang-en">
                     <thead>
                         <tr>
                             <th>Traditional Approach</th>
@@ -412,45 +677,108 @@
                         </tr>
                     </tbody>
                 </table>
+                
+                <table class="lang-de">
+                    <thead>
+                        <tr>
+                            <th>Traditioneller Ansatz</th>
+                            <th>Mit OpenSKIZZE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Testen von 3–5 manuellen Varianten</td>
+                            <td><strong>Systematische Exploration von 1.000–100.000</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Intuitionsbasierte Kriterien</td>
+                            <td><strong>Evidenzbasierte Parameterbereiche</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Eine "optimale" Lösung</td>
+                            <td><strong>Volle Vielfalt der Zielkonflikte</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Stunden pro CFD-Simulation</td>
+                            <td><strong>Minuten für vollständige Exploration</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Getrennt von Geodaten</td>
+                            <td><strong>Integriertes LOD2/ALKIS</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                
                 <div class="highlight-box">
-                    OpenSKIZZE transforms QD optimization from a research technique into a practical planning tool—accessible, fast, and focused on the outputs planners actually need.
+                    <span class="lang-en">OpenSKIZZE transforms QD optimization from a research technique into a practical planning tool—accessible, fast, and focused on the outputs planners actually need.</span>
+                    <span class="lang-de">OpenSKIZZE transformiert QD-Optimierung von einer Forschungstechnik in ein praktisches Planungswerkzeug – zugänglich, schnell und fokussiert auf Ergebnisse, die Planer tatsächlich benötigen.</span>
                 </div>
             </section>
 
             <!-- Contact & Resources -->
             <section>
-                <h2>Contact & Resources</h2>
-                <ul>
+                <h2 class="lang-en">Contact & Resources</h2>
+                <h2 class="lang-de">Kontakt & Ressourcen</h2>
+                
+                <ul class="lang-en">
                     <li><strong>Open Source</strong>: Available for research and deployment</li>
                     <li><strong>Documentation</strong>: Full user guide included</li>
                     <li><strong>Support</strong>: H-BRS / Fraunhofer SCAI</li>
                 </ul>
-                <p style="margin-top: 50px; font-style: italic;">OpenSKIZZE – Systematic climate-aware design exploration for early-stage urban planning</p>
+                <ul class="lang-de">
+                    <li><strong>Open Source</strong>: Verfügbar für Forschung und Einsatz</li>
+                    <li><strong>Dokumentation</strong>: Vollständiges Benutzerhandbuch enthalten</li>
+                    <li><strong>Support</strong>: H-BRS / Fraunhofer SCAI</li>
+                </ul>
+                
+                <div class="lang-en">
+                    <p style="margin-top: 50px; font-style: italic;">OpenSKIZZE – Systematic climate-aware design exploration for early-stage urban planning</p>
+                </div>
+                <div class="lang-de">
+                    <p style="margin-top: 50px; font-style: italic;">OpenSKIZZE – Systematische klima-bewusste Entwurfsexploration für frühe Stadtplanung</p>
+                </div>
             </section>
 
             <!-- TECHNICAL SECTION DIVIDER -->
             <section class="tech-section" data-background-color="#2c3e50">
-                <h1>Technical Deep Dive</h1>
-                <p>System Architecture, Algorithms, and Validation</p>
+                <h1 class="lang-en">Technical Deep Dive</h1>
+                <h1 class="lang-de">Technischer Deep Dive</h1>
+                
+                <p class="lang-en">System Architecture, Algorithms, and Validation</p>
+                <p class="lang-de">Systemarchitektur, Algorithmen und Validierung</p>
             </section>
 
             <!-- System Overview -->
             <section>
-                <h2>System Overview</h2>
-                <p><strong>OpenSKIZZE</strong>: Open-source QD-based decision-support system for climate-aware urban massing exploration</p>
-                <ul>
+                <h2 class="lang-en">System Overview</h2>
+                <h2 class="lang-de">Systemüberblick</h2>
+                
+                <p class="lang-en"><strong>OpenSKIZZE</strong>: Open-source QD-based decision-support system for climate-aware urban massing exploration</p>
+                <p class="lang-de"><strong>OpenSKIZZE</strong>: Open-Source QD-basiertes Entscheidungshilfesystem für klimabewusste städtebauliche Massenstudien</p>
+                
+                <ul class="lang-en">
                     <li><strong>Core Algorithm</strong>: MAP-Elites via PyRibs 0.6.1</li>
                     <li><strong>Interface</strong>: Dash 2.17 + Dash Bootstrap Components (web-based)</li>
                     <li><strong>Backend</strong>: Python 3.12, NumPy, GeoPandas, Numba JIT</li>
                     <li><strong>Data Sources</strong>: NRW LOD2 CityGML, ALKIS WFS</li>
                 </ul>
+                <ul class="lang-de">
+                    <li><strong>Kernalgorithmus</strong>: MAP-Elites via PyRibs 0.6.1</li>
+                    <li><strong>Schnittstelle</strong>: Dash 2.17 + Dash Bootstrap Components (webbasiert)</li>
+                    <li><strong>Backend</strong>: Python 3.12, NumPy, GeoPandas, Numba JIT</li>
+                    <li><strong>Datenquellen</strong>: NRW LOD2 CityGML, ALKIS WFS</li>
+                </ul>
             </section>
 
             <!-- Quality-Diversity Optimization -->
             <section>
-                <h2>Quality-Diversity Optimization</h2>
-                <h3>Why QD Instead of Single-Objective?</h3>
-                <table>
+                <h2 class="lang-en">Quality-Diversity Optimization</h2>
+                <h2 class="lang-de">Quality-Diversity Optimierung</h2>
+                
+                <h3 class="lang-en">Why QD Instead of Single-Objective?</h3>
+                <h3 class="lang-de">Warum QD statt Einzelziel-Optimierung?</h3>
+                
+                <table class="lang-en">
                     <thead>
                         <tr>
                             <th>Approach</th>
@@ -476,6 +804,34 @@
                         </tr>
                     </tbody>
                 </table>
+                
+                <table class="lang-de">
+                    <thead>
+                        <tr>
+                            <th>Ansatz</th>
+                            <th>Ergebnis</th>
+                            <th>Einschränkung</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Einzelziel</td>
+                            <td>Eine "optimale" Lösung</td>
+                            <td>Ignoriert alternative Zielkonflikte</td>
+                        </tr>
+                        <tr>
+                            <td>Mehrziel (Pareto)</td>
+                            <td>Pareto-Front</td>
+                            <td>Hochdimensionale Fronten schwer navigierbar</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Quality-Diversity</strong></td>
+                            <td><strong>Beste Lösung pro Verhaltensnische</strong></td>
+                            <td><strong>Vollständige Ausleuchtung des Lösungsraums</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                
                 <div style="font-size: 0.8em; margin-top: 20px;">
                     <strong>MAP-Elites Implementation:</strong><br>
                     GridArchive: 5^d niches (d = 3-8 features)<br>
@@ -487,24 +843,43 @@
 
             <!-- Parametric Encoding -->
             <section>
-                <h2>Parametric Encoding</h2>
+                <h2 class="lang-en">Parametric Encoding</h2>
+                <h2 class="lang-de">Parametrische Kodierung</h2>
+                
                 <div class="two-col">
                     <div>
-                        <h3>Genome Structure</h3>
-                        <ul>
+                        <h3 class="lang-en">Genome Structure</h3>
+                        <h3 class="lang-de">Genom-Struktur</h3>
+                        
+                        <ul class="lang-en">
                             <li><strong>Fixed dimension</strong>: 60 genes</li>
                             <li><strong>10 buildings × 6 genes each</strong>: [width, length, height, x, y, active]</li>
                             <li><strong>Gene sampling</strong>: Normal distribution → CDF transform to [0,1]</li>
                         </ul>
+                        <ul class="lang-de">
+                            <li><strong>Feste Dimension</strong>: 60 Gene</li>
+                            <li><strong>10 Gebäude × 6 Gene</strong>: [Breite, Länge, Höhe, x, y, aktiv]</li>
+                            <li><strong>Gen-Sampling</strong>: Normalverteilung → CDF-Transformation auf [0,1]</li>
+                        </ul>
                     </div>
                     <div>
-                        <h3>Phenotype Expression</h3>
-                        <p>Genome (60 floats) → 2D Heightmap (meters)</p>
-                        <ul>
+                        <h3 class="lang-en">Phenotype Expression</h3>
+                        <h3 class="lang-de">Phänotyp-Expression</h3>
+                        
+                        <p class="lang-en">Genome (60 floats) → 2D Heightmap (meters)</p>
+                        <p class="lang-de">Genom (60 Floats) → 2D Höhenkarte (Meter)</p>
+                        
+                        <ul class="lang-en">
                             <li>Grid: 3m × 3m pixels</li>
                             <li>Heights: floors × 3m/floor</li>
                             <li>Buildable mask: parcel boundary enforcement</li>
                             <li>JIT-optimized: 165× speedup via Numba</li>
+                        </ul>
+                        <ul class="lang-de">
+                            <li>Raster: 3m × 3m Pixel</li>
+                            <li>Höhen: Geschosse × 3m/Geschoss</li>
+                            <li>Bebaubarkeitsmaske: Einhaltung der Flurstücksgrenzen</li>
+                            <li>JIT-optimiert: 165× Beschleunigung durch Numba</li>
                         </ul>
                     </div>
                 </div>
@@ -512,21 +887,36 @@
 
             <!-- Evaluation Pipeline -->
             <section>
-                <h2>Evaluation Pipeline</h2>
-                <h3>Climate Objectives</h3>
+                <h2 class="lang-en">Evaluation Pipeline</h2>
+                <h2 class="lang-de">Evaluations-Pipeline</h2>
+                
+                <h3 class="lang-en">Climate Objectives</h3>
+                <h3 class="lang-de">Klimaziele</h3>
+                
                 <div style="font-size: 0.8em;">
-                    <p><strong>1. Street Canyon</strong> (geometric, dense contexts, ~0.8ms)<br>
-                    Components: Ground-level corridors (35%), Lateral ventilation (25%), Height variation (15%), Partial penetration (25%).</p>
+                    <div class="lang-en">
+                        <p><strong>1. Street Canyon</strong> (geometric, dense contexts, ~0.8ms)<br>
+                        Components: Ground-level corridors (35%), Lateral ventilation (25%), Height variation (15%), Partial penetration (25%).</p>
 
-                    <p><strong>2. GP-KLAM</strong> (validated physics, <10ms)<br>
-                    Model: Gaussian Process regression. Training: 5,000+ KLAM_21 simulations. Output: Mean airflow velocity, variance. Accuracy: R² > 0.85.</p>
+                        <p><strong>2. GP-KLAM</strong> (validated physics, <10ms)<br>
+                        Model: Gaussian Process regression. Training: 5,000+ KLAM_21 simulations. Output: Mean airflow velocity, variance. Accuracy: R² > 0.85.</p>
+                    </div>
+                    <div class="lang-de">
+                        <p><strong>1. Straßenschlucht</strong> (geometrisch, dichte Kontexte, ~0.8ms)<br>
+                        Komponenten: Bodennahe Korridore (35%), Seitliche Durchlüftung (25%), Höhenvariation (15%), Partielle Durchdringung (25%).</p>
+
+                        <p><strong>2. GP-KLAM</strong> (validierte Physik, <10ms)<br>
+                        Modell: Gauß-Prozess-Regression. Training: 5.000+ KLAM_21 Simulationen. Ausgabe: Mittlere Luftgeschwindigkeit, Varianz. Genauigkeit: R² > 0.85.</p>
+                    </div>
                 </div>
             </section>
 
             <!-- Performance Optimizations -->
             <section>
-                <h2>Performance Optimizations</h2>
-                <table>
+                <h2 class="lang-en">Performance Optimizations</h2>
+                <h2 class="lang-de">Performance-Optimierungen</h2>
+                
+                <table class="lang-en">
                     <thead>
                         <tr>
                             <th>Component</th>
@@ -550,35 +940,85 @@
                         </tr>
                     </tbody>
                 </table>
+                
+                <table class="lang-de">
+                    <thead>
+                        <tr>
+                            <th>Komponente</th>
+                            <th>Baseline</th>
+                            <th>Optimiert</th>
+                            <th>Speedup</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Phänotyp-Expression</td>
+                            <td>82.5ms</td>
+                            <td>0.5ms</td>
+                            <td>165×</td>
+                        </tr>
+                        <tr>
+                            <td>Straßenschlucht</td>
+                            <td>22.4ms</td>
+                            <td>0.8ms</td>
+                            <td>28×</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
                 <div style="font-size: 0.8em; margin-top: 10px;">
-                    <strong>Key Techniques:</strong>
-                    <ul>
-                        <li><strong>Numba JIT Compilation</strong>: Replaces scipy.ndimage.rotate</li>
-                        <li><strong>Label Caching</strong>: Reuse scipy.ndimage.label results</li>
-                        <li><strong>Single-Threaded for Small Batches</strong>: Avoids MP overhead for batch < 100</li>
-                    </ul>
-                    <p><strong>Combined Effect</strong>: 724s → 26s for 50K evaluations (<strong>27× speedup</strong>)</p>
+                    <div class="lang-en">
+                        <strong>Key Techniques:</strong>
+                        <ul>
+                            <li><strong>Numba JIT Compilation</strong>: Replaces scipy.ndimage.rotate</li>
+                            <li><strong>Label Caching</strong>: Reuse scipy.ndimage.label results</li>
+                            <li><strong>Single-Threaded for Small Batches</strong>: Avoids MP overhead for batch < 100</li>
+                        </ul>
+                        <p><strong>Combined Effect</strong>: 724s → 26s for 50K evaluations (<strong>27× speedup</strong>)</p>
+                    </div>
+                    <div class="lang-de">
+                        <strong>Schlüsseltechniken:</strong>
+                        <ul>
+                            <li><strong>Numba JIT Kompilierung</strong>: Ersetzt scipy.ndimage.rotate</li>
+                            <li><strong>Label Caching</strong>: Wiederverwendung von scipy.ndimage.label Ergebnissen</li>
+                            <li><strong>Single-Threaded für kleine Batches</strong>: Vermeidet MP-Overhead bei Batch < 100</li>
+                        </ul>
+                        <p><strong>Kombinierter Effekt</strong>: 724s → 26s für 50K Evaluationen (<strong>27× Beschleunigung</strong>)</p>
+                    </div>
                 </div>
             </section>
 
             <!-- Data Integration -->
             <section>
-                <h2>Data Integration</h2>
-                <h3>LOD2 CityGML Pipeline</h3>
+                <h2 class="lang-en">Data Integration</h2>
+                <h2 class="lang-de">Datenintegration</h2>
+                
+                <h3 class="lang-en">LOD2 CityGML Pipeline</h3>
+                <h3 class="lang-de">LOD2 CityGML Pipeline</h3>
+                
                 <pre><code class="language-text">Bounding Box → Tile Intersection (1km × 1km grid)
             → Download/Cache (cache/lod2_tiles/)
             → XML Parse (measuredHeight attribute)
             → Duplicate removal (building_id)
             → GeoDataFrame (EPSG:25832)</code></pre>
-                <p><strong>Performance</strong>: 5 tiles, 1,247 buildings, 8.3s (94% cache hit)</p>
                 
-                <h3>CRS Handling</h3>
-                <p>NRW native: EPSG:25832 (UTM Zone 32N) ↔ Web display: EPSG:4326 (WGS84)</p>
+                <div class="lang-en">
+                    <p><strong>Performance</strong>: 5 tiles, 1,247 buildings, 8.3s (94% cache hit)</p>
+                    <h3>CRS Handling</h3>
+                    <p>NRW native: EPSG:25832 (UTM Zone 32N) ↔ Web display: EPSG:4326 (WGS84)</p>
+                </div>
+                <div class="lang-de">
+                    <p><strong>Performance</strong>: 5 Kacheln, 1.247 Gebäude, 8.3s (94% Cache-Hit)</p>
+                    <h3>CRS-Handhabung</h3>
+                    <p>NRW nativ: EPSG:25832 (UTM Zone 32N) ↔ Web-Anzeige: EPSG:4326 (WGS84)</p>
+                </div>
             </section>
 
             <!-- Architecture -->
             <section>
-                <h2>Architecture</h2>
+                <h2 class="lang-en">Architecture</h2>
+                <h2 class="lang-de">Architektur</h2>
+                
                 <pre><code class="language-python">openskizze/
 ├── app.py                 # Dash app, routing, callbacks
 ├── backend/
@@ -593,76 +1033,149 @@
 
             <!-- QD Hyperparameter Benchmark -->
             <section>
-                <h2>QD Hyperparameter Benchmark</h2>
-                <p><strong>Findings from 54 runs (18 configs × 3 parcel sizes):</strong></p>
-                <ul>
-                    <li>More emitters (7-10): +15-20% QD-score</li>
-                    <li>Higher σ (0.15): More diversity, slower convergence</li>
-                    <li>Larger batch (32-64): Reduces MP overhead</li>
-                    <li><strong>Parcel size invariant</strong>: Same hyperparameters work across scales</li>
-                </ul>
-                <p><strong>Production recommendation</strong>: 7 emitters, σ=0.1, lr=0.01, batch=32</p>
+                <h2 class="lang-en">QD Hyperparameter Benchmark</h2>
+                <h2 class="lang-de">QD Hyperparameter Benchmark</h2>
+                
+                <div class="lang-en">
+                    <p><strong>Findings from 54 runs (18 configs × 3 parcel sizes):</strong></p>
+                    <ul>
+                        <li>More emitters (7-10): +15-20% QD-score</li>
+                        <li>Higher σ (0.15): More diversity, slower convergence</li>
+                        <li>Larger batch (32-64): Reduces MP overhead</li>
+                        <li><strong>Parcel size invariant</strong>: Same hyperparameters work across scales</li>
+                    </ul>
+                    <p><strong>Production recommendation</strong>: 7 emitters, σ=0.1, lr=0.01, batch=32</p>
+                </div>
+                <div class="lang-de">
+                    <p><strong>Ergebnisse aus 54 Läufen (18 Konfigs × 3 Flurstücksgrößen):</strong></p>
+                    <ul>
+                        <li>Mehr Emitter (7-10): +15-20% QD-Score</li>
+                        <li>Höheres σ (0.15): Mehr Diversität, langsamere Konvergenz</li>
+                        <li>Größerer Batch (32-64): Reduziert MP-Overhead</li>
+                        <li><strong>Flurstücksgrößen-invariant</strong>: Gleiche Hyperparameter funktionieren über Skalen hinweg</li>
+                    </ul>
+                    <p><strong>Produktionsempfehlung</strong>: 7 Emitter, σ=0.1, lr=0.01, Batch=32</p>
+                </div>
             </section>
 
             <!-- Archive Analysis -->
             <section>
-                <h2>Archive Analysis</h2>
+                <h2 class="lang-en">Archive Analysis</h2>
+                <h2 class="lang-de">Archiv-Analyse</h2>
+                
                 <div class="two-col">
                     <div>
-                        <h3>Typical Results</h3>
-                        <p>(100m × 100m parcel, 1000 generations)</p>
-                        <ul>
+                        <h3 class="lang-en">Typical Results</h3>
+                        <h3 class="lang-de">Typische Ergebnisse</h3>
+                        
+                        <p class="lang-en">(100m × 100m parcel, 1000 generations)</p>
+                        <p class="lang-de">(100m × 100m Flurstück, 1000 Generationen)</p>
+                        
+                        <ul class="lang-en">
                             <li>Archive size: 4,200 / 15,625 niches</li>
                             <li>Coverage: 26.9%</li>
                             <li>QD-Score: 2,847.3</li>
                             <li>Time: 4.7 minutes</li>
                         </ul>
+                        <ul class="lang-de">
+                            <li>Archivgröße: 4.200 / 15.625 Nischen</li>
+                            <li>Abdeckung: 26.9%</li>
+                            <li>QD-Score: 2.847,3</li>
+                            <li>Zeit: 4,7 Minuten</li>
+                        </ul>
                     </div>
                     <div>
-                        <h3>Clustering Pipeline</h3>
-                        <p>QD Archive → Algorithm Selection (HDBSCAN, K-Medoids, Hierarchical) → Archetype extraction → Consensus map generation → PDF report</p>
+                        <h3 class="lang-en">Clustering Pipeline</h3>
+                        <h3 class="lang-de">Clustering-Pipeline</h3>
+                        
+                        <p class="lang-en">QD Archive → Algorithm Selection (HDBSCAN, K-Medoids, Hierarchical) → Archetype extraction → Consensus map generation → PDF report</p>
+                        <p class="lang-de">QD Archiv → Algorithmus-Wahl (HDBSCAN, K-Medoids, Hierarchisch) → Archetypen-Extraktion → Konsenskarten-Generierung → PDF-Bericht</p>
                     </div>
                 </div>
             </section>
 
             <!-- Cold Air Flow Optimization -->
             <section class="tech-section" data-background-color="#2c3e50">
-                <h1>Cold Air Flow Optimization</h1>
-                <p>KLAM-21, Surrogate Models, and Flux Objectives</p>
+                <h1 class="lang-en">Cold Air Flow Optimization</h1>
+                <h1 class="lang-de">Kaltluftabfluss-Optimierung</h1>
+                
+                <p class="lang-en">KLAM-21, Surrogate Models, and Flux Objectives</p>
+                <p class="lang-de">KLAM-21, Surrogatmodelle und Fluss-Zielgrößen</p>
             </section>
 
             <!-- KLAM-21 Configuration -->
             <section>
-                <h2>KLAM-21 Configuration</h2>
-                <p><strong>KLAM_21</strong> (KaltLuftAbflussModell) simulates nocturnal katabatic flows.</p>
-                <ul>
-                    <li><strong>Grid</strong>: 3m × 3m cells</li>
-                    <li><strong>Terrain</strong>: 1° slope upwind (cold air source)</li>
-                    <li><strong>Wind</strong>: 5 m/s from west (270°)</li>
-                    <li><strong>Duration</strong>: 4 hours</li>
-                </ul>
-                <p><strong>Output Variables:</strong> Velocity ($u, v$), Cold air layer height ($H_x$), Cold air content ($E_x$)</p>
+                <h2 class="lang-en">KLAM-21 Configuration</h2>
+                <h2 class="lang-de">KLAM-21 Konfiguration</h2>
+                
+                <div class="lang-en">
+                    <p><strong>KLAM_21</strong> (KaltLuftAbflussModell) simulates nocturnal katabatic flows.</p>
+                    <ul>
+                        <li><strong>Grid</strong>: 3m × 3m cells</li>
+                        <li><strong>Terrain</strong>: 1° slope upwind (cold air source)</li>
+                        <li><strong>Wind</strong>: 5 m/s from west (270°)</li>
+                        <li><strong>Duration</strong>: 4 hours</li>
+                    </ul>
+                    <p><strong>Output Variables:</strong> Velocity ($u, v$), Cold air layer height ($H_x$), Cold air content ($E_x$)</p>
+                </div>
+                <div class="lang-de">
+                    <p><strong>KLAM_21</strong> (KaltLuftAbflussModell) simuliert nächtliche katabatische Strömungen.</p>
+                    <ul>
+                        <li><strong>Raster</strong>: 3m × 3m Zellen</li>
+                        <li><strong>Gelände</strong>: 1° Neigung luvseitig (Kaltluftquelle)</li>
+                        <li><strong>Wind</strong>: 5 m/s aus West (270°)</li>
+                        <li><strong>Dauer</strong>: 4 Stunden</li>
+                    </ul>
+                    <p><strong>Ausgabevariablen:</strong> Geschwindigkeit ($u, v$), Kaltluftschichthöhe ($H_x$), Kaltluftgehalt ($E_x$)</p>
+                </div>
             </section>
 
             <!-- Cold Air Flux Objective -->
             <section>
-                <h2>Cold Air Flux Objective (Φ)</h2>
-                <p>Maximize cold air ventilation through the urban parcel.</p>
+                <h2 class="lang-en">Cold Air Flux Objective (Φ)</h2>
+                <h2 class="lang-de">Kaltluftfluss-Zielgröße (Φ)</h2>
+                
+                <div class="lang-en">
+                    <p>Maximize cold air ventilation through the urban parcel.</p>
+                </div>
+                <div class="lang-de">
+                    <p>Maximierung der Kaltluftdurchlüftung durch das städtische Flurstück.</p>
+                </div>
+                
                 <div class="highlight-box" style="text-align: center;">
                     $$\Phi = \bar{E}_x \times \bar{u}_{2m}$$
                 </div>
-                <ul>
-                    <li>$\bar{E}_x$ = Mean cold air content (cooling potential)</li>
-                    <li>$\bar{u}_{2m}$ = Mean wind speed at pedestrian level (transport)</li>
-                    <li><strong>Units</strong>: 100 W/m² (energy flux)</li>
-                </ul>
-                <p><strong>Why?</strong> Combines cooling capacity with transport efficiency. Higher correlation with both wind and thermal content than either alone.</p>
+                
+                <div class="lang-en">
+                    <ul>
+                        <li>$\bar{E}_x$ = Mean cold air content (cooling potential)</li>
+                        <li>$\bar{u}_{2m}$ = Mean wind speed at pedestrian level (transport)</li>
+                        <li><strong>Units</strong>: 100 W/m² (energy flux)</li>
+                    </ul>
+                    <p><strong>Why?</strong> Combines cooling capacity with transport efficiency. Higher correlation with both wind and thermal content than either alone.</p>
+                </div>
+                <div class="lang-de">
+                    <ul>
+                        <li>$\bar{E}_x$ = Mittlerer Kaltluftgehalt (Kühlpotential)</li>
+                        <li>$\bar{u}_{2m}$ = Mittlere Windgeschwindigkeit auf Fußgängerebene (Transport)</li>
+                        <li><strong>Einheiten</strong>: 100 W/m² (Energiefluss)</li>
+                    </ul>
+                    <p><strong>Warum?</strong> Kombiniert Kühlkapazität mit Transporteffizienz. Höhere Korrelation mit sowohl Wind als auch thermischem Gehalt als jeder Faktor allein.</p>
+                </div>
             </section>
 
             <!-- SAIL for Sample Generation -->
             <section>
-                <h2>SAIL for Sample Generation</h2>
-                <p><strong>Surrogate-Assisted Illumination (SAIL)</strong> combines MAP-Elites with a GP surrogate.</p>
+                <h2 class="lang-en">SAIL for Sample Generation</h2>
+                <h2 class="lang-de">SAIL für Stichprobengenerierung</h2>
+                
+                <div class="lang-en">
+                    <p><strong>Surrogate-Assisted Illumination (SAIL)</strong> combines MAP-Elites with a GP surrogate.</p>
+                </div>
+                <div class="lang-de">
+                    <p><strong>Surrogate-Assisted Illumination (SAIL)</strong> kombiniert MAP-Elites mit einem GP-Surrogat.</p>
+                </div>
+                
                 <pre><code class="language-text">┌──────────────┐    ┌──────────────┐    ┌──────────────┐
 │ MAP-Elites   │───▶│ GP Surrogate │───▶│ UCB Selection │
 │ Archive      │◀───│ (Internal)   │◀───│ μ + λσ       │
@@ -677,51 +1190,94 @@
 
             <!-- KISS-GP Surrogate Model -->
             <section>
-                <h2>KISS-GP Surrogate Model</h2>
-                <p><strong>Kernel Interpolation for Scalable Structured Gaussian Processes</strong></p>
-                <ul>
-                    <li><strong>Input</strong>: 62 dimensions (60 genome + width + height)</li>
-                    <li><strong>Kernel</strong>: Matérn 2.5 with ARD (Automatic Relevance Determination)</li>
-                    <li><strong>Approximation</strong>: Grid Interpolation for O(n) scaling</li>
-                    <li><strong>Training Data</strong>: ~97,500 samples across 15 parcel sizes</li>
-                </ul>
-                <div class="highlight-box">
-                    <strong>Performance Targets:</strong><br>
-                    R² > 0.90 | RMSE < 0.5 m/s | Prediction time < 5 ms
+                <h2 class="lang-en">KISS-GP Surrogate Model</h2>
+                <h2 class="lang-de">KISS-GP Surrogatmodell</h2>
+                
+                <div class="lang-en">
+                    <p><strong>Kernel Interpolation for Scalable Structured Gaussian Processes</strong></p>
+                    <ul>
+                        <li><strong>Input</strong>: 62 dimensions (60 genome + width + height)</li>
+                        <li><strong>Kernel</strong>: Matérn 2.5 with ARD (Automatic Relevance Determination)</li>
+                        <li><strong>Approximation</strong>: Grid Interpolation for O(n) scaling</li>
+                        <li><strong>Training Data</strong>: ~97,500 samples across 15 parcel sizes</li>
+                    </ul>
+                    <div class="highlight-box">
+                        <strong>Performance Targets:</strong><br>
+                        R² > 0.90 | RMSE < 0.5 m/s | Prediction time < 5 ms
+                    </div>
+                </div>
+                <div class="lang-de">
+                    <p><strong>Kernel Interpolation for Scalable Structured Gaussian Processes</strong></p>
+                    <ul>
+                        <li><strong>Eingabe</strong>: 62 Dimensionen (60 Genom + Breite + Höhe)</li>
+                        <li><strong>Kernel</strong>: Matérn 2.5 mit ARD (Automatic Relevance Determination)</li>
+                        <li><strong>Approximation</strong>: Gitter-Interpolation für O(n) Skalierung</li>
+                        <li><strong>Trainingsdaten</strong>: ~97.500 Proben über 15 Flurstücksgrößen</li>
+                    </ul>
+                    <div class="highlight-box">
+                        <strong>Performance-Ziele:</strong><br>
+                        R² > 0.90 | RMSE < 0.5 m/s | Vorhersagezeit < 5 ms
+                    </div>
                 </div>
             </section>
 
             <!-- Pipeline Summary -->
             <section>
-                <h2>Pipeline Summary</h2>
-                <ol>
+                <h2 class="lang-en">Pipeline Summary</h2>
+                <h2 class="lang-de">Pipeline-Zusammenfassung</h2>
+                
+                <ol class="lang-en">
                     <li><strong>Parcel Analysis</strong>: Identify 15 representative sizes</li>
                     <li><strong>SAIL Training</strong>: Generate 5000 elites + 1500 random per size (HPC)</li>
                     <li><strong>KISS-GP Training</strong>: Train 62-dim GP on combined dataset</li>
                     <li><strong>Validation</strong>: Test interpolation on unseen sizes</li>
                     <li><strong>Deployment</strong>: Replace KLAM-21 (5-10 min) with GP (~2 ms) in OpenSKIZZE</li>
                 </ol>
+                <ol class="lang-de">
+                    <li><strong>Flurstücksanalyse</strong>: Identifikation von 15 repräsentativen Größen</li>
+                    <li><strong>SAIL-Training</strong>: Generierung von 5000 Eliten + 1500 Zufälligen pro Größe (HPC)</li>
+                    <li><strong>KISS-GP Training</strong>: Training des 62-dim GP auf kombiniertem Datensatz</li>
+                    <li><strong>Validierung</strong>: Test der Interpolation auf ungesehenen Größen</li>
+                    <li><strong>Einsatz</strong>: Ersatz von KLAM-21 (5-10 Min) durch GP (~2 ms) in OpenSKIZZE</li>
+                </ol>
             </section>
 
             <!-- Future Work & Contributions -->
             <section>
-                <h2>Future Work & Contributions</h2>
+                <h2 class="lang-en">Future Work & Contributions</h2>
+                <h2 class="lang-de">Zukünftige Arbeiten & Beiträge</h2>
+                
                 <div class="two-col">
                     <div>
-                        <h3>Key Contributions</h3>
-                        <ul>
+                        <h3 class="lang-en">Key Contributions</h3>
+                        <h3 class="lang-de">Hauptbeiträge</h3>
+                        
+                        <ul class="lang-en">
                             <li><strong>27× speedup</strong> enabling real-time QD</li>
                             <li><strong>Three-objective flexibility</strong></li>
                             <li><strong>Archetype discovery</strong> for planning</li>
                             <li><strong>Physical-unit consistency</strong></li>
                         </ul>
+                        <ul class="lang-de">
+                            <li><strong>27× Beschleunigung</strong> ermöglicht Echtzeit-QD</li>
+                            <li><strong>Drei-Ziel-Flexibilität</strong></li>
+                            <li><strong>Archetypen-Erkennung</strong> für die Planung</li>
+                            <li><strong>Konsistenz physikalischer Einheiten</strong></li>
+                        </ul>
                     </div>
                     <div>
-                        <h3>Future Work</h3>
-                        <ul>
+                        <h3 class="lang-en">Future Work</h3>
+                        <h3 class="lang-de">Zukünftige Arbeiten</h3>
+                        
+                        <ul class="lang-en">
                             <li><strong>Near-term</strong>: GP model integration</li>
                             <li><strong>Mid-term</strong>: XPlanGML integration, U-NET for velocity fields</li>
                             <li><strong>Long-term</strong>: International deployment (CityJSON)</li>
+                        </ul>
+                        <ul class="lang-de">
+                            <li><strong>Kurzfristig</strong>: GP-Modell-Integration</li>
+                            <li><strong>Mittelfristig</strong>: XPlanGML-Integration, U-NET für Geschwindigkeitsfelder</li>
+                            <li><strong>Langfristig</strong>: Internationaler Einsatz (CityJSON)</li>
                         </ul>
                     </div>
                 </div>
@@ -729,14 +1285,23 @@
 
             <!-- Repository -->
             <section>
-                <h2>Repository</h2>
-                <ul>
+                <h2 class="lang-en">Repository</h2>
+                <h2 class="lang-de">Repository</h2>
+                
+                <ul class="lang-en">
                     <li><strong>Open Source</strong>: GitHub (alexander-hagg/openskizze)</li>
                     <li><strong>Requirements</strong>: Python 3.12</li>
                     <li><strong>License</strong>: [TBD]</li>
                 </ul>
+                <ul class="lang-de">
+                    <li><strong>Open Source</strong>: GitHub (alexander-hagg/openskizze)</li>
+                    <li><strong>Anforderungen</strong>: Python 3.12</li>
+                    <li><strong>Lizenz</strong>: [TBD]</li>
+                </ul>
+                
                 <div style="margin-top: 50px; text-align: center;">
-                    <p>Thank You!</p>
+                    <p class="lang-en">Thank You!</p>
+                    <p class="lang-de">Vielen Dank!</p>
                 </div>
             </section>
 
@@ -752,6 +1317,16 @@
             slideNumber: true,
             plugins: [ RevealHighlight, RevealMath.KaTeX ]
         });
+
+        function toggleLanguage() {
+            document.body.classList.toggle('german-mode');
+            const btn = document.querySelector('.lang-toggle');
+            if (document.body.classList.contains('german-mode')) {
+                btn.textContent = 'Switch to English';
+            } else {
+                btn.textContent = 'Auf Deutsch wechseln';
+            }
+        }
     </script>
 </body>
 </html>
