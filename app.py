@@ -22,7 +22,7 @@ external_scripts = [
 # Initialize the Dash app with the external scripts
 app = dash.Dash(
     __name__, 
-    external_stylesheets=[dbc.themes.BOOTSTRAP], 
+    external_stylesheets=[dbc.themes.LUX], 
     suppress_callback_exceptions=True,
     external_scripts=external_scripts
 )
