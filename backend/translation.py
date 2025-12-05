@@ -3,7 +3,7 @@
 T = {
     'DE': {
         # App-wide
-        'APP_TITLE': "OpenSKIZZE - Interaktiver Städtebau Explorer",
+        'APP_TITLE': "OpenSKIZZE - Generativer Städtebau & Klimaresilienz",
         'NEXT_STEP': "Nächster Schritt",
         'PREV_STEP': "Vorheriger Schritt",
         'FILE_MENU': "Datei",
@@ -29,6 +29,10 @@ T = {
         'STEP1_ADD_AREA': "Fläche hinzufügen",
         'STEP1_REMOVE_AREA': "Fläche entfernen",
         'STEP1_EDIT_INSTRUCTIONS': "Nutzen Sie die Werkzeuge links auf der Karte, um die grüne Auswahl anzupassen.",
+        'STEP1_PARCEL_INFO_HEADER': "Flurstück-Informationen",
+        'STEP1_PARCEL_AREA': "Fläche",
+        'STEP1_PARCEL_DIMENSIONS': "Abmessungen (Breite × Länge)",
+        'STEP1_NO_PARCEL_SELECTED': "Kein Flurstück ausgewählt",
 
         # Step 2
         'STEP2_TITLE': "Schritt 2: Leistungsmerkmale und Optimierungsziele festlegen",
@@ -205,7 +209,7 @@ T = {
     },
     'EN': {
         # App-wide
-        'APP_TITLE': "OpenSKIZZE - Interactive Urban Planning Explorer",
+        'APP_TITLE': "OpenSKIZZE - Generative Urban Design & Climate Resilience",
         'NEXT_STEP': "Next Step",
         'PREV_STEP': "Previous Step",
         'FILE_MENU': "File",
@@ -231,6 +235,10 @@ T = {
         'STEP1_ADD_AREA': "Add Area",
         'STEP1_REMOVE_AREA': "Remove Area",
         'STEP1_EDIT_INSTRUCTIONS': "Use the tools on the left of the map to adjust the green selection.",
+        'STEP1_PARCEL_INFO_HEADER': "Parcel Information",
+        'STEP1_PARCEL_AREA': "Area",
+        'STEP1_PARCEL_DIMENSIONS': "Dimensions (Width × Length)",
+        'STEP1_NO_PARCEL_SELECTED': "No parcel selected",
 
         # Step 2
         'STEP2_TITLE': "Step 2: Define Performance Metrics and Optimization Goals",

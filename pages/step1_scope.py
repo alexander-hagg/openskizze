@@ -9,12 +9,53 @@ from dash_extensions.javascript import assign
 from backend.translation import T
 from backend.data_io import fetch_flurstuecke_data, fetch_and_process_buildings_for_area
 from shapely.geometry import shape, mapping, Polygon, MultiPolygon
-from shapely.ops import unary_union
+from shapely.ops import unary_union, transform
+import pyproj
 import math
 import json
 import base64
 import io
 import pickle
+
+def calculate_parcel_info(geometry, lang='DE'):
+    """Calculate and format parcel information for display."""
+    from backend.translation import T
+    
+    print(f"[parcel_info] Calculating parcel info for geometry (empty={geometry.is_empty})")
+    
+    if geometry.is_empty:
+        print(f"[parcel_info] No parcel selected, returning alert")
+        return dbc.Alert(T[lang]['STEP1_NO_PARCEL_SELECTED'], color="light", className="small")
+    
+    # Transform from WGS84 (EPSG:4326) to UTM Zone 32N (EPSG:25832) for accurate area calculation in NRW
+    wgs84 = pyproj.CRS('EPSG:4326')
+    utm32n = pyproj.CRS('EPSG:25832')
+    project = pyproj.Transformer.from_crs(wgs84, utm32n, always_xy=True).transform
+    
+    # Transform the geometry to projected coordinates
+    geometry_projected = transform(project, geometry)
+    
+    # Calculate area in square meters (now accurate because we're in UTM)
+    area_m2 = geometry_projected.area
+    
+    # Get bounding box for dimensions (in projected coordinates)
+    minx, miny, maxx, maxy = geometry_projected.bounds
+    width = maxx - minx
+    length = maxy - miny
+    
+    print(f"[parcel_info] Area: {area_m2:,.1f} m², Dimensions: {width:.1f} m × {length:.1f} m")
+    
+    # Format the display
+    return dbc.Card(dbc.CardBody([
+        html.Div([
+            html.Strong(f"{T[lang]['STEP1_PARCEL_AREA']}: "),
+            html.Span(f"{area_m2:,.1f} m²")
+        ], className="mb-2"),
+        html.Div([
+            html.Strong(f"{T[lang]['STEP1_PARCEL_DIMENSIONS']}: "),
+            html.Span(f"{width:.1f} m × {length:.1f} m")
+        ])
+    ]), className="mb-3", color="light")
 
 # Client-side styling for the selectable parcel layer
 style_handle = assign("""
@@ -99,6 +140,13 @@ def layout(lang='DE'):
                         value='add', id='edit-mode-toggle', inline=True,
                     ),
                     html.P(T[lang]['STEP1_EDIT_INSTRUCTIONS'], className="small fst-italic"),
+                ]),
+                html.Hr(),
+                html.Div([
+                    html.H5(T[lang]['STEP1_PARCEL_INFO_HEADER']),
+                    html.Div(id='parcel-info-display', children=[
+                        dbc.Alert(T[lang]['STEP1_NO_PARCEL_SELECTED'], color="light", className="small")
+                    ])
                 ]),
                 html.Hr(),
                 html.H5(T[lang]['STEP1_WIND_HEADER']),
@@ -238,6 +286,7 @@ def restore_from_session(session_data, pathname):
     Output('active-polygon-layer', 'data', allow_duplicate=True),
     Output('selected-parcels-store', 'data'),
     Output('parcels-layer', 'hideout'),
+    Output('parcel-info-display', 'children'),
     Input('parcels-layer', 'clickData'),
     Input('edit-control', 'geojson'),
     Input('wind-direction-slider', 'value'),
@@ -251,9 +300,12 @@ def restore_from_session(session_data, pathname):
 )
 def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_contents, upload_filename,
                             selected_ids, all_parcels_data, session_data, edit_mode):
+    from backend.translation import T
     session_data = session_data or {}
     ctx = dash.callback_context
     triggered_id = ctx.triggered_id
+    
+    print(f"[handle_all_interactions] Triggered by: {triggered_id}")
 
     last_active_geojson = session_data.get('site_polygon')
     base_geom = shape(last_active_geojson['features'][0]['geometry']) if last_active_geojson and last_active_geojson.get('features') else Polygon()
@@ -261,6 +313,12 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
     new_selected_ids = selected_ids
     hideout = {'selected': selected_ids}
     final_geom = base_geom
+    
+    # If only wind direction changed, skip parcel info update
+    if triggered_id == 'wind-direction-slider':
+        print(f"[handle_all_interactions] Wind direction changed to {wind_direction}, keeping geometry unchanged")
+        session_data['wind_direction'] = wind_direction
+        return session_data, no_update, no_update, no_update, no_update
 
     if triggered_id == 'parcels-layer':
         if click_data is None: return no_update
@@ -269,8 +327,10 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
         new_selected_ids = selected_ids[:]
         if parcel_id in new_selected_ids:
             new_selected_ids.remove(parcel_id)
+            print(f"[handle_all_interactions] Deselected parcel {parcel_id}")
         else:
             new_selected_ids.append(parcel_id)
+            print(f"[handle_all_interactions] Selected parcel {parcel_id}")
         
         hideout = {'selected': new_selected_ids}
 
@@ -278,17 +338,22 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
             selected_features = [f for f in all_parcels_data['features'] if f['properties']['id'] in new_selected_ids]
             geometries = [shape(f['geometry']) for f in selected_features]
             final_geom = unary_union(geometries)
+            print(f"[handle_all_interactions] Combined {len(new_selected_ids)} parcels, area: {final_geom.area:.1f}")
         else:
             final_geom = Polygon()
+            print(f"[handle_all_interactions] No parcels selected, empty geometry")
             
     elif triggered_id == 'edit-control':
         if drawn_geojson and drawn_geojson['features']:
             newly_drawn_geom = shape(drawn_geojson['features'][-1]['geometry'])
+            print(f"[handle_all_interactions] Edit control triggered, mode={edit_mode}, drawn area={newly_drawn_geom.area:.1f}")
             
             if edit_mode == 'add':
                 final_geom = base_geom.union(newly_drawn_geom)
+                print(f"[handle_all_interactions] Added area, new total: {final_geom.area:.1f}")
             else: # subtract
                 final_geom = base_geom.difference(newly_drawn_geom)
+                print(f"[handle_all_interactions] Subtracted area, new total: {final_geom.area:.1f}")
             
             new_selected_ids = []
             hideout = {'selected': []}
@@ -300,11 +365,12 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
             geojson_data = json.load(io.StringIO(decoded.decode('utf-8')))
             geometries = [shape(feature['geometry']) for feature in geojson_data['features']]
             final_geom = unary_union(geometries)
+            print(f"[handle_all_interactions] Uploaded GeoJSON with {len(geometries)} features, total area: {final_geom.area:.1f}")
             # Clear parcel selection when importing a file
             new_selected_ids = []
             hideout = {'selected': []}
         except Exception as e:
-            print(f"Error parsing uploaded file: {e}")
+            print(f"[handle_all_interactions] Error parsing uploaded file: {e}")
             return no_update
     
     if final_geom.is_empty:
@@ -395,6 +461,10 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
             # No polygon selected, clear cached building data
             if 'building_data' in session_data:
                 del session_data['building_data']
-                print("[fetch_buildings] ✗ No polygon selected - cleared building cache")
+                print(f"[fetch_buildings] ✗ No polygon selected - cleared building cache")
 
-    return session_data, final_geojson, new_selected_ids, hideout
+    # Calculate parcel information
+    lang = session_data.get('language', 'DE')
+    parcel_info_component = calculate_parcel_info(final_geom, lang)
+
+    return session_data, final_geojson, new_selected_ids, hideout, parcel_info_component
