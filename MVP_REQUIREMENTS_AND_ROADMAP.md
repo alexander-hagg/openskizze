@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary
 
-OpenSKIZZE is transitioning from a research prototype to a **municipal decision-support tool** for urban planners in North Rhine-Westphalia (NRW). The goal is to enable early-stage *städtebauliche Entwürfe* (urban design concepts) that balance investor density targets with climate resilience mandates.
+OpenSKIZZE is transitioning from a research prototype to a **municipal decision-support tool** for urban planners in North Rhine-Westphalia (NRW). The goal is to enable early-stage *städtebauliche Entwürfe* (urban design concepts) that balance investor targets with climate resilience mandates.
 
 The system uses **Quality-Diversity (QD) optimization** to generate diverse building massing variants, evaluated against real-time climate surrogates (wind flow, heat) and integrated with official GIS data.
 

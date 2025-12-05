@@ -8,7 +8,7 @@
 
 ## Abstract
 
-OpenSKIZZE is an interactive decision-support system for early-stage urban design that combines Quality-Diversity (QD) optimization with real-world GIS data to generate diverse, climate-aware building massing solutions. The system addresses the computational challenge of exploring urban design alternatives that balance ventilation, heat mitigation, and morphological diversity. Key contributions: (1) Real-time QD optimization generating 100-1000 diverse solutions in 3-8 minutes through extensive performance optimization (27× speedup via JIT compilation); (2) Integration with official German LOD2 building data (CityGML) providing measured building heights; (3) Interactive 6-step workflow enabling planners to explore solution archives through clustering, 3D visualization, and automated reporting; (4) Two validated wind flow surrogates (simple porosity, street canyon) for rapid climate assessment. Benchmarks show the system achieves >70% archive coverage across parcel sizes (2,500-62,500 m²) and maintains physical-unit consistency throughout the pipeline (meters, m²).
+OpenSKIZZE is an interactive decision-support system for early-stage urban design that combines Quality-Diversity (QD) optimization with real-world GIS data to generate diverse, climate-aware building massing solutions. The system addresses the computational challenge of exploring urban design alternatives that balance ventilation, heat mitigation, and morphological diversity. Key contributions: (1) Real-time QD optimization generating 100-1000 diverse solutions in 3-8 minutes through extensive performance optimization (27× speedup via JIT compilation); (2) Integration with official German LOD2 building data (CityGML) providing measured building heights; (3) Interactive 6-step workflow enabling planners to explore solution archives through clustering, 3D visualization, and automated reporting; (4) Two validated climate surrogates: street canyon, and a Sparse Variational Gaussian Process (SVGP) model for predicting cold air flux. Benchmarks show the system achieves >70% archive coverage across parcel sizes (2,500-62,500 m²) and maintains physical-unit consistency throughout the pipeline (meters, m²).
 
 ---
 
@@ -35,6 +35,8 @@ Traditional approaches: Single-objective optimization (limited diversity), manua
 4. **Validated surrogate objectives**: Two wind flow approximations (simple porosity for sparse layouts, street canyon for dense urban contexts) with ~40× faster evaluation than rotation-based methods
 
 5. **Extensible architecture**: Parametric encoding (60-gene genome, 10 buildings), configurable QD hyperparameters, support for multiple feature sets (original 8D, planning-focused 8D)
+
+6. **ML-based Cold Air Flux Surrogate**: Offline-trained Sparse Variational Gaussian Process (SVGP) model predicting cold air volume flow ($m^3/s$) based on KLAM_21 simulation data, enabling physics-informed optimization at interactive speeds.
 
 ### 1.3 Target Users
 
@@ -84,6 +86,13 @@ Urban planners in North Rhine-Westphalia (NRW), Germany, conducting early-phase 
 - Captures continuous open spaces at pedestrian level
 - JIT-optimized: 28× faster than scipy rotation
 - Better for dense contexts where simple porosity → 0.0
+
+**Cold Air Flux (SVGP Surrogate)**:
+- Predicts cold air volume flow ($m^3/s$) through the parcel
+- Trained offline on KLAM_21 simulation data (DWD)
+- Model: Sparse Variational Gaussian Process (SVGP) via GPyTorch
+- Inputs: 3D voxel grid features (porosity, frontal area density)
+- Inference: <10ms per evaluation (CPU), enabling real-time QD
 
 #### Features (Archive Axes)
 
@@ -350,9 +359,9 @@ Extensive profiling and optimization achieved 27× speedup:
 
 ### 4.5 Future Directions
 
-**ML Surrogates** (planned):
-- Train GP/NN on KLAM_21 cold airflow simulations (DWD data)
-- Train on UMEP/SOLWEIG heat stress outputs
+**ML Surrogates** (ongoing):
+- *Implemented*: SVGP for cold air flux (KLAM_21 data)
+- *Planned*: Train on UMEP/SOLWEIG heat stress outputs
 - Target: <5ms prediction, R²>0.9 validation
 
 **Generative AI** (prototyped):
