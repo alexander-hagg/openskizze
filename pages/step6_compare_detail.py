@@ -65,7 +65,7 @@ def generate_distinct_colors(n):
 
 def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, height_exaggeration=1.0, 
                             camera_state=None, pixel_size_m=3.0, expanded_bounds_native=None, design_offset=None,
-                            building_function_map=None, function_lookup=None):
+                            building_function_map=None, function_lookup=None, flow_field=None):
     """
     Create a 3D visualization of the building design as voxel blocks in geographic coordinates
     
@@ -625,6 +625,143 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         ]
     )
     
+    # Add flow field visualization if provided
+    if flow_field is not None:
+        try:
+            # Flow field shape: (2, H, W) for (u, v) components
+            u = flow_field[0]  # X-component (m/s)
+            v = flow_field[1]  # Y-component (m/s)
+            
+            # Compute velocity magnitude for ground surface coloring
+            velocity_magnitude = np.sqrt(u**2 + v**2)
+            
+            # Create ground-level velocity surface
+            # Map to geographic coordinates
+            rows, cols = u.shape
+            x_flow = np.linspace(min_x, max_x, cols)
+            y_flow = np.linspace(min_y, max_y, rows)
+            X_flow, Y_flow = np.meshgrid(x_flow, y_flow)
+            
+            # Create velocity surface slightly above ground (z=0.1m)
+            Z_flow = np.full_like(velocity_magnitude, 0.1)
+            
+            fig.add_trace(go.Surface(
+                x=X_flow,
+                y=Y_flow,
+                z=Z_flow,
+                surfacecolor=velocity_magnitude,
+                colorscale='Viridis',
+                opacity=0.7,
+                name='Wind Speed (m/s)',
+                colorbar=dict(
+                    title="Wind Speed (m/s)",
+                    titleside="right",
+                    x=1.02,
+                    len=0.7
+                ),
+                hovertemplate='<b>Wind Speed</b><br>' +
+                            'X: %{x:.1f}m<br>' +
+                            'Y: %{y:.1f}m<br>' +
+                            'Speed: %{surfacecolor:.2f} m/s<extra></extra>',
+                showlegend=True
+            ))
+            
+            # Create 3D streamlines
+            # Sample starting points from left edge of domain
+            step = max(1, rows // 8)  # ~8 streamlines
+            y_starts = np.arange(step//2, rows, step)
+            x_start = 2  # Start from left edge
+            
+            # Function to integrate streamline in 3D
+            def integrate_streamline_3d(x0_idx, y0_idx, max_steps=100):
+                from scipy.interpolate import RegularGridInterpolator
+                
+                # Create interpolators for u and v
+                y_coords_interp = np.arange(rows)
+                x_coords_interp = np.arange(cols)
+                u_interp = RegularGridInterpolator(
+                    (y_coords_interp, x_coords_interp), u, 
+                    bounds_error=False, fill_value=0
+                )
+                v_interp = RegularGridInterpolator(
+                    (y_coords_interp, x_coords_interp), v,
+                    bounds_error=False, fill_value=0
+                )
+                
+                points = []
+                x_idx, y_idx = x0_idx, y0_idx
+                dt = 0.3  # Step size in grid units
+                
+                for _ in range(max_steps):
+                    # Get velocity at current position
+                    u_val = u_interp([y_idx, x_idx])[0]
+                    v_val = v_interp([y_idx, x_idx])[0]
+                    
+                    # Convert to geographic coordinates and add height variation
+                    x_geo = min_x + (x_idx / cols) * (max_x - min_x)
+                    y_geo = min_y + (y_idx / rows) * (max_y - min_y)
+                    
+                    # Add height based on velocity magnitude for visual effect
+                    speed = np.sqrt(u_val**2 + v_val**2)
+                    z_height = 2 + speed * 3  # 2-15m height based on speed
+                    
+                    points.append([x_geo, y_geo, z_height])
+                    
+                    # Update position using RK2
+                    x_mid = x_idx + 0.5 * dt * u_val
+                    y_mid = y_idx + 0.5 * dt * v_val
+                    
+                    u_mid = u_interp([y_mid, x_mid])[0]
+                    v_mid = v_interp([y_mid, x_mid])[0]
+                    
+                    x_new = x_idx + dt * u_mid
+                    y_new = y_idx + dt * v_mid
+                    
+                    # Check bounds and stop conditions
+                    if (x_new < 0 or x_new >= cols or y_new < 0 or y_new >= rows or
+                        speed < 0.1):  # Stop if velocity too small
+                        break
+                    
+                    # Check if hit a building
+                    ix, iy = int(np.round(x_new)), int(np.round(y_new))
+                    if (0 <= ix < cols and 0 <= iy < rows and 
+                        ix < heightmap.shape[1] and iy < heightmap.shape[0] and
+                        heightmap[iy, ix] > 2):  # Stop if hit building
+                        break
+                    
+                    x_idx, y_idx = x_new, y_new
+                
+                return np.array(points)
+            
+            # Generate streamlines
+            colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'cyan']
+            
+            for idx, y_start in enumerate(y_starts):
+                try:
+                    points = integrate_streamline_3d(x_start, y_start)
+                    if len(points) > 1:
+                        color = colors[idx % len(colors)]
+                        
+                        fig.add_trace(go.Scatter3d(
+                            x=points[:, 0],
+                            y=points[:, 1],
+                            z=points[:, 2],
+                            mode='lines+markers',
+                            line=dict(color=color, width=4),
+                            marker=dict(size=2, color=color),
+                            name=f'Streamline {idx+1}',
+                            showlegend=(idx < 3),  # Only show first few in legend
+                            hovertemplate='<b>Streamline</b><br>' +
+                                        'X: %{x:.1f}m<br>' +
+                                        'Y: %{y:.1f}m<br>' +
+                                        'Height: %{z:.1f}m<extra></extra>'
+                        ))
+                except Exception as e:
+                    print(f"Error creating streamline {idx}: {e}")
+                    
+        except Exception as e:
+            print(f"Error adding flow visualization: {e}")
+    
     return fig
 
 def layout(lang='DE'):
@@ -644,6 +781,8 @@ def layout(lang='DE'):
         dcc.Store(id='camera-sync-store', data={}),
         # Store for solution display mode (central vs best) per cluster
         dcc.Store(id='solution-mode-store', data={}),
+        # Store for flow visualization toggle states
+        dcc.Store(id='flow-toggle-store', data={}),
         
         dcc.Loading(html.Div(id='comparison-content'))
     ], fluid=True)
@@ -719,11 +858,12 @@ def create_diversity_grid(cluster, heightmap_res, cluster_index):
     Input('comparison-store', 'data'),
     Input('results-store', 'data'),
     Input('solution-mode-store', 'data'),
+    Input('flow-toggle-store', 'data'),
     Input('clustering-data-store', 'data'),  # Get ACTUAL cluster data from Step 5
     State('language-store', 'data'),
     State('camera-sync-store', 'data')
 )
-def display_comparison(selected_ids, results_data, solution_modes, clustering_data, lang, camera_state):
+def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_states, clustering_data, lang, camera_state):
     if lang is None: lang = 'DE'  # Default to German
     
     if not selected_ids:
@@ -818,6 +958,86 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
         # Create heightmap
         heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
         
+        # Check if flow visualization should be included
+        flow_field = None
+        show_flow = flow_toggle_states.get(str(i), False) if flow_toggle_states else False
+        print(f"DEBUG: Cluster {i}, show_flow = {show_flow}, flow_toggle_states = {flow_toggle_states}")
+        
+        if show_flow and check_unet_model_availability():
+            print(f"DEBUG: Generating flow field for cluster {i}")
+            print(f"DEBUG: Solution keys: {list(sol.keys())}")
+            try:
+                # Generate flow field using U-Net model (regardless of optimization method used)
+                import torch
+                from backend.model_evaluator import create_evaluator
+                from backend.fast_encoding import NumbaFastEncoding
+                
+                # Get solution genome - handle different possible key names
+                genome = None
+                if 'genome' in sol:
+                    genome = sol['genome']
+                elif 'x' in sol:  # Some solutions might store genome as 'x'
+                    genome = sol['x']
+                elif 'solution' in sol:
+                    genome = sol['solution']
+                else:
+                    # Try to reconstruct genome from heightmap if available
+                    print(f"DEBUG: No genome found, available keys: {list(sol.keys())}")
+                    print(f"DEBUG: Attempting to use heightmap to generate dummy genome")
+                    # For now, skip flow generation if no genome available
+                    raise KeyError("No genome data available in solution")
+                
+                print(f"DEBUG: Using genome shape: {genome.shape}")
+                
+                # Create U-Net evaluator
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                print(f"DEBUG: Using device: {device}")
+                unet_eval = create_evaluator('unet', parcel_size=81, device=device)
+                
+                # Generate heightmap using same encoding as in diagnostics
+                encoding = NumbaFastEncoding(parcel_size=81)  # 27x27 grid for 81m parcel
+                heightmap_27x27 = encoding.express_batch(genome.reshape(1, -1))[0]
+                
+                # Create 66x94 grid with parcel in center (matching U-Net's expected input format)
+                full_grid = np.zeros((66, 94), dtype=np.float32)
+                y_start = (66 - 27) // 2  # Center vertically
+                x_start = (94 - 27) // 2  # Center horizontally
+                full_grid[y_start:y_start+27, x_start:x_start+27] = heightmap_27x27
+                
+                # Prepare input tensor
+                X_torch = torch.from_numpy(full_grid).unsqueeze(0).unsqueeze(0).to(device)  # Shape: (1, 1, 66, 94)
+                
+                # Get U-Net predictions
+                with torch.no_grad():
+                    Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, 66, 94)
+                    
+                    # Extract velocity components (channels 2 and 3: uq, vq)
+                    uq_full = Y_pred[0, 2, :, :] * unet_eval.uq_std + unet_eval.uq_mean  # cm/s
+                    vq_full = Y_pred[0, 3, :, :] * unet_eval.vq_std + unet_eval.vq_mean  # cm/s
+                    
+                    # Convert to numpy and from cm/s to m/s
+                    uq_np = uq_full.cpu().numpy() / 100.0  # Convert cm/s to m/s
+                    vq_np = vq_full.cpu().numpy() / 100.0
+                    
+                    # Extract ROI (27x27 region where the parcel is)
+                    uq_roi = uq_np[y_start:y_start+27, x_start:x_start+27]
+                    vq_roi = vq_np[y_start:y_start+27, x_start:x_start+27]
+                    
+                    # Create flow field in expected format: (2, H, W) for (u, v)
+                    flow_field = np.stack([uq_roi, vq_roi], axis=0)  # Shape: (2, 27, 27)
+                    print(f"DEBUG: Generated flow field shape: {flow_field.shape}")
+                    
+            except Exception as e:
+                print(f"Warning: Could not generate flow field with U-Net: {e}")
+                import traceback
+                print(traceback.format_exc())
+                flow_field = None
+        else:
+            if not show_flow:
+                print(f"DEBUG: Flow not requested for cluster {i}")
+            elif not check_unet_model_availability():
+                print(f"DEBUG: U-Net model not available for cluster {i}")
+        
         # Create 3D visualization with geographic context
         fig_3d = create_3d_building_plot(
             heightmap, 
@@ -829,7 +1049,8 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
             expanded_bounds_native=expanded_bounds_native,
             design_offset=design_offset,
             building_function_map=building_function_map,
-            function_lookup=function_lookup
+            function_lookup=function_lookup,
+            flow_field=flow_field
         )
         
         # Format values with physical units and calculate ranges
@@ -1062,52 +1283,67 @@ def export_pdf_report_s6(n_clicks, selected_ids, results_data, clustering_data):
     else:
         return dict(content="Error: Failed to generate PDF report.", filename="error.txt")
 
-# Callback to toggle flow field container visibility based on model type
+def check_unet_model_availability(parcel_size_m=81):
+    """Check if U-Net model is available for the given parcel size."""
+    from pathlib import Path
+    models_dir = Path('models')
+    unet_path = models_dir / f'unet_{parcel_size_m}m.pth'
+    return unet_path.exists()
+
+# Callback to toggle flow field container visibility based on model availability
 @callback(
     Output({'type': 'flow-field-container', 'index': ALL}, 'style'),
-    Input('results-store', 'data')
+    Input('results-store', 'data'),
+    Input('comparison-store', 'data')
 )
-def toggle_flow_field_sections(results_data):
-    """Show flow field sections only if U-Net or Hybrid model was used"""
-    if not results_data:
-        return [{'display': 'none'}]
+def toggle_flow_field_sections(results_data, selected_ids):
+    """Show flow field sections if U-Net model is available (regardless of what was used in optimization)"""
+    # Check if U-Net model is available
+    unet_available = check_unet_model_availability()
     
-    model_type = results_data.get('model_type', 'original')
-    # Show section for U-Net and Hybrid models (they provide flow fields)
-    if model_type in ['unet', 'hybrid']:
-        # We need to return a list with the same length as the number of clusters
-        # Get number of clusters from comparison-store
-        return [{'display': 'block'}]  # Will be broadcast to all matching outputs
+    # Determine how many clusters are being compared
+    num_clusters = len(selected_ids) if selected_ids else 0
+    
+    if unet_available:
+        # Show flow field sections since we can generate flow predictions
+        return [{'display': 'block'}] * num_clusters
     else:
-        return [{'display': 'none'}]
+        # Hide flow field sections since no U-Net model available
+        return [{'display': 'none'}] * num_clusters
 
 # Callback to display flow field visualization
 @callback(
     Output({'type': 'flow-field-display', 'index': MATCH}, 'children'),
     Input({'type': 'show-flow-toggle', 'index': MATCH}, 'value'),
     State('comparison-store', 'data'),
+    State('clustering-data-store', 'data'),
     State('results-store', 'data'),
     State('language-store', 'data'),
     State({'type': 'show-flow-toggle', 'index': MATCH}, 'id')
 )
-def display_flow_field(show_toggle, comparison_data, results_data, lang, component_id):
+def display_flow_field(show_toggle, selected_ids, clustering_data, results_data, lang, component_id):
     """Display flow field visualization when toggle is on"""
     if lang is None:
         lang = 'DE'
     
+    print(f"DEBUG: Flow field callback triggered - show_toggle: {show_toggle}, component_id: {component_id}")
+    
     # Only display if toggle is on
     if not show_toggle or 1 not in show_toggle:
+        print(f"DEBUG: Toggle is off or empty for component {component_id}")
         return html.Div()
     
-    if not comparison_data or not results_data:
+    print(f"DEBUG: Toggle is ON for component {component_id}")
+    
+    if not selected_ids or not clustering_data or not results_data:
+        print(f"DEBUG: Missing data - selected_ids: {bool(selected_ids)}, clustering_data: {bool(clustering_data)}, results_data: {bool(results_data)}")
         return dbc.Alert("No data available", color="warning")
     
     try:
         # Get cluster index from component ID
         cluster_idx = component_id['index']
         
-        # Get selected cluster IDs
-        selected_ids = comparison_data.get('selected_ids', [])
+        # Get selected cluster IDs (comparison_data is just a list of selected IDs)
         if cluster_idx >= len(selected_ids):
             return dbc.Alert("Cluster not found", color="warning")
         
@@ -1118,8 +1354,7 @@ def display_flow_field(show_toggle, comparison_data, results_data, lang, compone
         with open(results_path, 'rb') as f:
             list_of_elites = pickle.load(f)
         
-        # Find the solution for this cluster
-        clustering_data = comparison_data.get('clustering_data', {})
+        # Find the solution for this cluster from clustering data
         clusters = clustering_data.get('clusters', [])
         
         target_cluster = None
@@ -1131,26 +1366,63 @@ def display_flow_field(show_toggle, comparison_data, results_data, lang, compone
         if not target_cluster:
             return dbc.Alert("Cluster data not found", color="warning")
         
-        # Get the displayed solution (best or central)
-        solution_mode_store = comparison_data.get('solution_mode_store', {})
-        display_mode = solution_mode_store.get(str(cluster_id), 'central')
+        # Get the displayed solution (best or central) - default to central
+        solution = target_cluster['central_solution']
         
-        if display_mode == 'best':
-            solution = target_cluster['best_solution']
-        else:
-            solution = target_cluster['central_solution']
-        
-        # Check if flow field data is available
-        if 'flow_field' not in solution:
+        # Generate flow field using U-Net model (regardless of optimization method used)
+        try:
+            # Import necessary modules
+            import torch
+            from backend.model_evaluator import create_evaluator
+            from backend.fast_encoding import NumbaFastEncoding
+            
+            # Get solution genome
+            genome = solution['genome']
+            
+            # Create U-Net evaluator
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            unet_eval = create_evaluator('unet', parcel_size=81, device=device)
+            
+            # Generate heightmap using same encoding as in diagnostics
+            encoding = NumbaFastEncoding(parcel_size=81)  # 27x27 grid for 81m parcel
+            heightmap_27x27 = encoding.express_batch(genome.reshape(1, -1))[0]
+            
+            # Create 66x94 grid with parcel in center (matching U-Net's expected input format)
+            full_grid = np.zeros((66, 94), dtype=np.float32)
+            y_start = (66 - 27) // 2  # Center vertically
+            x_start = (94 - 27) // 2  # Center horizontally
+            full_grid[y_start:y_start+27, x_start:x_start+27] = heightmap_27x27
+            
+            # Prepare input tensor
+            X_torch = torch.from_numpy(full_grid).unsqueeze(0).unsqueeze(0).to(device)  # Shape: (1, 1, 66, 94)
+            
+            # Get U-Net predictions
+            with torch.no_grad():
+                Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, 66, 94)
+                
+                # Extract velocity components (channels 2 and 3: uq, vq)
+                uq_full = Y_pred[0, 2, :, :] * unet_eval.uq_std + unet_eval.uq_mean  # cm/s
+                vq_full = Y_pred[0, 3, :, :] * unet_eval.vq_std + unet_eval.vq_mean  # cm/s
+                
+                # Convert to numpy and from cm/s to m/s
+                uq_np = uq_full.cpu().numpy() / 100.0  # Convert cm/s to m/s
+                vq_np = vq_full.cpu().numpy() / 100.0
+                
+                # Extract ROI (27x27 region where the parcel is)
+                uq_roi = uq_np[y_start:y_start+27, x_start:x_start+27]
+                vq_roi = vq_np[y_start:y_start+27, x_start:x_start+27]
+                
+                # Create flow field in expected format: (2, H, W) for (u, v)
+                flow_field = np.stack([uq_roi, vq_roi], axis=0)  # Shape: (2, 27, 27)
+                
+        except Exception as e:
             return dbc.Alert(
-                "Flow field data not available for this solution. "
-                "Only available when using U-Net or Hybrid surrogate models.",
-                color="info"
+                f"Error generating flow field with U-Net model: {str(e)}",
+                color="warning"
             )
         
         # Get flow field (u, v velocity components)
-        flow_field = solution['flow_field']  # Shape: (2, H, W) for (u, v)
-        u = flow_field[0]  # X-component
+        u = flow_field[0]  # X-component  
         v = flow_field[1]  # Y-component
         
         # Create quiver plot using plotly
@@ -1173,7 +1445,7 @@ def display_flow_field(show_toggle, comparison_data, results_data, lang, compone
         )
         
         fig.update_layout(
-            title=T[lang]['STEP6_FLOW_FIELD_TITLE'],
+            title=T[lang]['STEP6_FLOW_TITLE'],
             height=400,
             margin=dict(l=20, r=20, t=40, b=20),
             xaxis_title="X",
@@ -1189,3 +1461,23 @@ def display_flow_field(show_toggle, comparison_data, results_data, lang, compone
         print(f"[ERROR] {error_msg}")
         print(traceback.format_exc())
         return dbc.Alert(error_msg, color="danger")
+
+
+# Store for flow visualization toggle states
+@callback(
+    Output('flow-toggle-store', 'data'),
+    Input({'type': 'show-flow-toggle', 'index': ALL}, 'value'),
+    State({'type': 'show-flow-toggle', 'index': ALL}, 'id'),
+    prevent_initial_call=True
+)
+def store_flow_toggle_states(toggle_values, toggle_ids):
+    """Store flow toggle states for each cluster"""
+    if not toggle_values or not toggle_ids:
+        return {}
+    
+    flow_states = {}
+    for i, (value, toggle_id) in enumerate(zip(toggle_values, toggle_ids)):
+        cluster_idx = toggle_id['index']
+        flow_states[cluster_idx] = 1 in (value or [])
+    
+    return flow_states

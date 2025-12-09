@@ -33,6 +33,10 @@ T = {
         'STEP1_PARCEL_AREA': "Fläche",
         'STEP1_PARCEL_DIMENSIONS': "Abmessungen (Breite × Länge)",
         'STEP1_NO_PARCEL_SELECTED': "Kein Flurstück ausgewählt",
+        
+        # Model Diagnostics Button (Step 1)
+        'MODEL_DIAG_BUTTON': 'Modelldiagnose öffnen',
+        'MODEL_DIAG_BUTTON_INFO': 'Testen und vergleichen Sie Zielfunktionen auf archetypischen städtischen Mustern.',
 
         # Step 2
         'STEP2_TITLE': "Schritt 2: Leistungsmerkmale und Optimierungsziele festlegen",
@@ -107,6 +111,7 @@ T = {
         
         # Step 6 - Flow Field
         'STEP6_SHOW_FLOW': "Strömungsfeld anzeigen",
+        'STEP6_FLOW_FIELD_HEADER': "Strömungsfeld",
         'STEP6_FLOW_OVERLAY': "Windströmungs-Overlay",
         'STEP6_FLOW_TITLE': "Kaltluftströmung (U-Net Vorhersage)",
         'FLOW_VECTORS': "Strömungsvektoren",
@@ -262,6 +267,43 @@ T = {
         'NEXT_STEP_STEP4': 'Ergebnisse analysieren',
         'NEXT_STEP_STEP5': 'Entwürfe clustern',
         'NEXT_STEP_STEP6': 'Entwürfe vergleichen',
+        
+        # Model Diagnostics Page
+        'MODEL_DIAG_TITLE': 'Modelldiagnose',
+        'MODEL_DIAG_BACK_TO_STEP1': 'Zurück zu Schritt 1',
+        'MODEL_DIAG_GALLERY_HEADER': 'Archetypische Stadtbausteine (81m × 81m)',
+        'MODEL_DIAG_GALLERY_INFO': 'Sechs vordefinierte Gebäudelayouts zum Testen und Vergleichen der Zielfunktionen.',
+        'MODEL_DIAG_RUN_BTN': 'Alle Bewertungen ausführen',
+        'MODEL_DIAG_RANKING': 'Bewertungsranking',
+        'MODEL_DIAG_RANKING_INFO': 'Fitness-Scores für alle Archetypen. Höhere Werte = bessere Kaltluftproduktion.',
+        'MODEL_DIAG_CORRELATION': 'Korrelationsmatrix',
+        'MODEL_DIAG_CORRELATION_INFO': 'Pearson-Korrelation zwischen Zielfunktionen über alle Archetypen.',
+        'MODEL_DIAG_CORRELATION_LABEL': 'Korrelation',
+        'MODEL_DIAG_FLOW_VIZ': 'Strömungsvisualisierung (U-Net)',
+        'MODEL_DIAG_FLOW_VIZ_INFO': 'Windgeschwindigkeitsfeld und Stromlinien vom U-Net-Modell vorhergesagt.',
+        'MODEL_DIAG_SELECT_ARCH': 'Archetyp auswählen:',
+        'MODEL_DIAG_STREAMLINE_DENSITY': 'Stromliniendichte:',
+        'MODEL_DIAG_VELOCITY_HEATMAP': 'Geschwindigkeitsfeld',
+        'MODEL_DIAG_STREAMLINES': 'Stromlinien',
+        'MODEL_DIAG_VELOCITY_MS': 'Geschwindigkeit (m/s)',
+        'MODEL_DIAG_EVAL_COMPLETE': 'Bewertung abgeschlossen!',
+        'MODEL_DIAG_EVAL_ERROR': 'Fehler bei der Bewertung',
+        'MODEL_DIAG_TABLE_ARCHETYPE': 'Archetyp',
+        'MODEL_DIAG_TABLE_POROSITY': 'Porosität',
+        'MODEL_DIAG_TABLE_STREET_CANYON': 'Straßenschlucht',
+        'MODEL_DIAG_TABLE_SVGP': 'SVGP',
+        'MODEL_DIAG_TABLE_UNET': 'U-Net',
+        
+        # Archetype names and descriptions
+        'ARCHETYPE_EMPTY': 'Leer',
+        'ARCHETYPE_SQUARE': 'Quadrat',
+        'ARCHETYPE_TWO_SQUARES': 'Zwei Quadrate',
+        'ARCHETYPE_TWO_SQUARES_ROTATED': 'Zwei Quadrate (90° gedreht)',
+        'ARCHETYPE_U_SHAPE': 'U-Form',
+        'ARCHETYPE_U_SHAPE_ROTATED': 'U-Form (90° gedreht)',
+        'ARCHETYPE_GRID': 'Raster',
+        'ARCHETYPE_STREET_CANYON': 'Straßenschlucht',
+        'ARCHETYPE_STREET_CANYON_ROTATED': 'Straßenschlucht (90° gedreht)',
     },
     'EN': {
         # App-wide
@@ -295,6 +337,10 @@ T = {
         'STEP1_PARCEL_AREA': "Area",
         'STEP1_PARCEL_DIMENSIONS': "Dimensions (Width × Length)",
         'STEP1_NO_PARCEL_SELECTED': "No parcel selected",
+        
+        # Model Diagnostics Button (Step 1)
+        'MODEL_DIAG_BUTTON': 'Open Model Diagnostics',
+        'MODEL_DIAG_BUTTON_INFO': 'Test and compare objective functions on archetypical urban patterns.',
 
         # Step 2
         'STEP2_TITLE': "Step 2: Define Performance Metrics and Optimization Goals",
@@ -369,6 +415,7 @@ T = {
         
         # Step 6 - Flow Field
         'STEP6_SHOW_FLOW': "Show Flow Field",
+        'STEP6_FLOW_FIELD_HEADER': "Flow Field",
         'STEP6_FLOW_OVERLAY': "Wind Flow Overlay",
         'STEP6_FLOW_TITLE': "Cold Air Flow (U-Net Prediction)",
         'FLOW_VECTORS': "Flow Vectors",
@@ -483,6 +530,43 @@ T = {
         'OBJECTIVE_FUNCTION': 'Objective Function',
         'COUNT': 'Count',
         'OBJECTIVE_DISTRIBUTION': 'Objective Distribution',
+        
+        # Model Diagnostics Page
+        'MODEL_DIAG_TITLE': 'Model Diagnostics',
+        'MODEL_DIAG_BACK_TO_STEP1': 'Back to Step 1',
+        'MODEL_DIAG_GALLERY_HEADER': 'Archetypical Urban Patterns (81m × 81m)',
+        'MODEL_DIAG_GALLERY_INFO': 'Six predefined building layouts for testing and comparing objective functions.',
+        'MODEL_DIAG_RUN_BTN': 'Run All Evaluations',
+        'MODEL_DIAG_RANKING': 'Evaluation Ranking',
+        'MODEL_DIAG_RANKING_INFO': 'Fitness scores for all archetypes. Higher values = better cold air production.',
+        'MODEL_DIAG_CORRELATION': 'Correlation Matrix',
+        'MODEL_DIAG_CORRELATION_INFO': 'Pearson correlation between objective functions across all archetypes.',
+        'MODEL_DIAG_CORRELATION_LABEL': 'Correlation',
+        'MODEL_DIAG_FLOW_VIZ': 'Flow Visualization (U-Net)',
+        'MODEL_DIAG_FLOW_VIZ_INFO': 'Wind velocity field and streamlines predicted by U-Net model.',
+        'MODEL_DIAG_SELECT_ARCH': 'Select Archetype:',
+        'MODEL_DIAG_STREAMLINE_DENSITY': 'Streamline Density:',
+        'MODEL_DIAG_VELOCITY_HEATMAP': 'Velocity Field',
+        'MODEL_DIAG_STREAMLINES': 'Streamlines',
+        'MODEL_DIAG_VELOCITY_MS': 'Velocity (m/s)',
+        'MODEL_DIAG_EVAL_COMPLETE': 'Evaluation complete!',
+        'MODEL_DIAG_EVAL_ERROR': 'Error during evaluation',
+        'MODEL_DIAG_TABLE_ARCHETYPE': 'Archetype',
+        'MODEL_DIAG_TABLE_POROSITY': 'Porosity',
+        'MODEL_DIAG_TABLE_STREET_CANYON': 'Street Canyon',
+        'MODEL_DIAG_TABLE_SVGP': 'SVGP',
+        'MODEL_DIAG_TABLE_UNET': 'U-Net',
+        
+        # Archetype names and descriptions
+        'ARCHETYPE_EMPTY': 'Empty',
+        'ARCHETYPE_SQUARE': 'Square',
+        'ARCHETYPE_TWO_SQUARES': 'Two Squares',
+        'ARCHETYPE_TWO_SQUARES_ROTATED': 'Two Squares (90° rotated)',
+        'ARCHETYPE_U_SHAPE': 'U-Shape',
+        'ARCHETYPE_U_SHAPE_ROTATED': 'U-Shape (90° rotated)',
+        'ARCHETYPE_GRID': 'Grid',
+        'ARCHETYPE_STREET_CANYON': 'Street Canyon',
+        'ARCHETYPE_STREET_CANYON_ROTATED': 'Street Canyon (90° rotated)',
         
         # Step 6
         'STEP6_TITLE': "Step 6: Detailed Comparison of Selected Designs",

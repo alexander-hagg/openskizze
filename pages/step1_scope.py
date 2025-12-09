@@ -149,6 +149,26 @@ def layout(lang='DE'):
                     ])
                 ]),
                 html.Hr(),
+                # Model Diagnostics Button
+                dbc.Card([
+                    dbc.CardBody([
+                        html.H6(T[lang].get('MODEL_DIAG_TITLE', 'Model Diagnostics'), className='mb-2'),
+                        html.P(
+                            T[lang].get('MODEL_DIAG_BUTTON_INFO', 
+                                       'Test and compare objective functions on archetypical urban patterns.'),
+                            className='small text-muted mb-3'
+                        ),
+                        dbc.Button(
+                            T[lang].get('MODEL_DIAG_BUTTON', 'Open Model Diagnostics'),
+                            id='open-model-diagnostics-btn',
+                            color='info',
+                            outline=True,
+                            size='sm',
+                            className='w-100'
+                        )
+                    ])
+                ], className='mb-3'),
+                html.Hr(),
                 html.H5(T[lang]['STEP1_WIND_HEADER']),
                 html.Div(T[lang]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
                 create_compass_component(),
@@ -494,3 +514,15 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
     parcel_info_component = calculate_parcel_info(final_geom, lang)
 
     return session_data, final_geojson, new_selected_ids, hideout, parcel_info_component
+
+# Callback to navigate to model diagnostics page
+@callback(
+    Output('url', 'pathname', allow_duplicate=True),
+    Input('open-model-diagnostics-btn', 'n_clicks'),
+    prevent_initial_call=True
+)
+def open_model_diagnostics(n_clicks):
+    """Navigate to model diagnostics page."""
+    if n_clicks:
+        return '/model_diagnostics'
+    return no_update
