@@ -83,19 +83,35 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
     parcel_size_m = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
     print(f"  - parcel_size_bins: {parcel_size_bins}, parcel_size_m: {int(parcel_size_m)}m")
     
-    # Check U-Net model and its normalization file (size-specific, needs exact match)
-    unet_path = models_dir / f"unet_{int(parcel_size_m)}m.pth"
-    unet_norm_path = models_dir / f"unet_{int(parcel_size_m)}m_normalization.json"
-    unet_available = unet_path.exists() and unet_norm_path.exists()
-    print(f"  - U-Net model: {unet_path}")
-    print(f"  - U-Net model exists: {unet_path.exists()}")
-    print(f"  - U-Net normalization: {unet_norm_path}")
-    print(f"  - U-Net normalization exists: {unet_norm_path.exists()}")
-    print(f"  - U-Net available: {unet_available} (size-specific, normalization in JSON)")
+    # Check U-Net model: Find smallest model >= required parcel size
+    # U-Net can handle smaller parcels via ROI masking (centered in training domain)
+    # available_parcel_sizes_unet is in BINS, need to convert to meters for comparison
+    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+    available_unet_sizes_bins = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet'])
+    suitable_unet_sizes_bins = [s for s in available_unet_sizes_bins if s * pixel_size >= parcel_size_m]
     
-    if not unet_available and parcel_size_bins not in SURROGATE_CONFIG['available_parcel_sizes_unet']:
-        print(f"  - WARNING: No U-Net model for {parcel_size_bins} bins ({int(parcel_size_m)}m)")
-        print(f"  - Available U-Net sizes: {SURROGATE_CONFIG['available_parcel_sizes_unet']} bins")
+    unet_available = False
+    selected_unet_size = None
+    if suitable_unet_sizes_bins:
+        # Try each suitable size from smallest to largest
+        for unet_size_bins in suitable_unet_sizes_bins:
+            unet_size_m = unet_size_bins * pixel_size
+            unet_path = models_dir / f"unet_{int(unet_size_m)}m.pth"
+            unet_norm_path = models_dir / f"unet_{int(unet_size_m)}m_normalization.json"
+            if unet_path.exists() and unet_norm_path.exists():
+                unet_available = True
+                selected_unet_size = unet_size_m
+                print(f"  - U-Net model: Using {int(unet_size_m)}m model ({unet_size_bins} bins) for {int(parcel_size_m)}m parcel ({parcel_size_bins} bins)")
+                print(f"  - U-Net model path: {unet_path}")
+                print(f"  - U-Net normalization path: {unet_norm_path}")
+                break
+    
+    if not unet_available:
+        available_sizes_m = [s * pixel_size for s in available_unet_sizes_bins]
+        print(f"  - WARNING: No suitable U-Net model for {int(parcel_size_m)}m parcel ({parcel_size_bins} bins)")
+        print(f"  - Need model >= {int(parcel_size_m)}m. Available sizes: {[int(s) for s in available_sizes_m]}m")
+    
+    print(f"  - U-Net available: {unet_available}")
     
     # Hybrid requires both
     hybrid_available = svgp_available and unet_available
@@ -111,7 +127,8 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
     result = {
         'svgp': svgp_available,
         'unet': unet_available,
-        'hybrid': hybrid_available
+        'hybrid': hybrid_available,
+        'selected_unet_size': selected_unet_size  # Size in meters of the selected U-Net model
     }
     print(f"  - Returning: {result}")
     
@@ -167,9 +184,38 @@ class SurrogateEvaluatorWrapper:
         
         # Initialize evaluator
         models_dir = Path(SURROGATE_CONFIG['models_dir'])
+        
+        # Determine actual model size to use (for U-Net, may be larger than parcel)
+        if model_type in ['unet', 'hybrid']:
+            # Find smallest suitable U-Net model
+            # available_parcel_sizes_unet is in BINS, need to convert to meters
+            pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+            available_unet_sizes_bins = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet'])
+            suitable_sizes_bins = [s for s in available_unet_sizes_bins if s * pixel_size >= self.parcel_size_meters]
+            actual_model_size = None
+            
+            for size_bins in suitable_sizes_bins:
+                size_m = size_bins * pixel_size
+                unet_path = models_dir / f"unet_{int(size_m)}m.pth"
+                unet_norm_path = models_dir / f"unet_{int(size_m)}m_normalization.json"
+                if unet_path.exists() and unet_norm_path.exists():
+                    actual_model_size = size_m
+                    logger.info(f"  Using U-Net model: {int(size_m)}m ({size_bins} bins) for {self.parcel_size_meters}m parcel ({parcel_size_bins} bins)")
+                    break
+            
+            if actual_model_size is None:
+                available_sizes_m = [int(s * pixel_size) for s in available_unet_sizes_bins]
+                raise ValueError(f"No suitable U-Net model found for {self.parcel_size_meters}m parcel. Available: {available_sizes_m}m")
+            
+            # Use the actual model size for U-Net initialization
+            model_parcel_size = actual_model_size
+        else:
+            # SVGP works with any parcel size
+            model_parcel_size = self.parcel_size_meters
+        
         self.evaluator = create_evaluator(
             model_type=model_type,
-            parcel_size=self.parcel_size_meters,
+            parcel_size=model_parcel_size,
             models_dir=models_dir,
             device=self.device,
             ucb_lambda=ucb_lambda
@@ -238,6 +284,7 @@ class SurrogateEvaluatorWrapper:
         # Get selected features based on env_config
         selected_indices = env_config.get('selected_features', list(range(8)))
         selected_features = features[:, selected_indices]  # (N, num_selected)
+    
         
         # Combine into expected output format: [fitness, features..., heightmap_flat]
         output = np.column_stack([

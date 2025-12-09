@@ -383,6 +383,32 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
     session_data['site_polygon'] = final_geojson
     session_data['wind_direction'] = wind_direction
     
+    # Calculate and store grid parameters for model selection
+    if final_geojson and final_geojson.get('features'):
+        from backend.config import DOMAIN_CONFIG
+        import math
+        import geopandas as gpd
+        
+        gdf_user_poly = gpd.GeoDataFrame.from_features(final_geojson, crs="EPSG:4326")
+        gdf_user_poly_native = gdf_user_poly.to_crs("EPSG:25832")
+        min_x, min_y, max_x, max_y = gdf_user_poly_native.total_bounds
+        
+        width = max_x - min_x
+        height = max_y - min_y
+        square_size = max(width, height)
+        border = square_size * (DOMAIN_CONFIG['environment_border_size'] - 1.0) / 2.0
+        grid_side_length = square_size + (2 * border)
+        
+        pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+        xy_length = math.ceil(grid_side_length / pixel_size)
+        
+        session_data['grid_params'] = {
+            'xy_length': xy_length,
+            'grid_side_length': grid_side_length,
+            'pixel_size': pixel_size
+        }
+        print(f"[grid_params] Calculated grid: {xy_length} bins ({grid_side_length:.1f}m)")
+    
     # =========================================================================
     # Fetch and cache building data when area is selected/modified
     # =========================================================================

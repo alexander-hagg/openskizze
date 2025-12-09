@@ -550,6 +550,10 @@ def generate_feature_objective_plots(results_data, pathname, language):
                     title=f'{feature_label} vs {objective_label}'
                 )
                 
+                # Calculate y-axis range
+                max_objective = max(objectives) if objectives else 1.0
+                max_objective_ceil = float(np.ceil(max_objective))
+                
                 # Customize layout
                 fig.update_traces(
                     marker=dict(size=5, color='rgb(55, 126, 184)', line=dict(width=0.5, color='white'))
@@ -564,7 +568,7 @@ def generate_feature_objective_plots(results_data, pathname, language):
                     showlegend=False
                 )
                 fig.update_xaxes(showgrid=True, gridwidth=0.5, gridcolor='lightgray')
-                fig.update_yaxes(showgrid=True, gridwidth=0.5, gridcolor='lightgray')
+                fig.update_yaxes(showgrid=True, gridwidth=0.5, gridcolor='lightgray', range=[0.0, max_objective_ceil])
                 
                 row_plots.append(
                     dbc.Col(dcc.Graph(figure=fig), md=3)

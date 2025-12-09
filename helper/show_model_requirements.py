@@ -24,24 +24,24 @@ def show_requirements():
     print()
     
     # ========================================================================
-    # 1. SVGP Normalization file
+    # 1. SVGP Model
     # ========================================================================
     print("━" * 80)
-    print("1️⃣  SVGP NORMALIZATION FILE")
+    print("1️⃣  SVGP MODEL")
     print("━" * 80)
-    svgp_norm_file = SURROGATE_CONFIG['svgp_normalization_file']
-    print(f"File: {svgp_norm_file}")
+    svgp_model = SURROGATE_CONFIG['svgp_model_name']
+    print(f"File: {svgp_model}")
     print()
     print("Input: genome (60) + parcel width (1) + parcel height (1) = 62 features")
     print("Output: fitness scalar")
     print()
-    print("Expected JSON structure:")
-    print(json.dumps({
-        "train_X_mean": [0.0] * 62,  # 60 genome + 2 parcel dims
-        "train_X_std": [1.0] * 62,
-        "train_y_mean": 0.5,
-        "train_y_std": 0.2
-    }, indent=2))
+    print("Normalization stored IN checkpoint (lowercase keys):")
+    print("  • train_x_mean: (62,) tensor - one per input dimension")
+    print("  • train_x_std: (62,) tensor")
+    print("  • train_y_mean: scalar - flux mean")
+    print("  • train_y_std: scalar - flux std")
+    print()
+    print("✅ Single model works for ALL parcel sizes")
     print()
     
     # ========================================================================
@@ -53,20 +53,28 @@ def show_requirements():
     print("Format: unet_{size_in_meters}m_normalization.json")
     print()
     print("Input: terrain/buildings/landuse grids (3 channels × 66×94)")
-    print("Output: Ex/uq/vq flow fields (3 channels × 66×94)")
+    print("Output: Ex/Hx/uq/vq/uz/vz flow fields (6 channels × 66×94)")
     print()
-    print("Expected JSON structure (same for all sizes):")
+    print("Expected JSON structure (scalar mean/std for each channel):")
     print(json.dumps({
-        "input": {
-            "terrain": {"mean": 0.0, "std": 1.0},
-            "buildings": {"mean": 5.0, "std": 10.0},
-            "landuse": {"mean": 3.5, "std": 2.0}
-        },
-        "output": {
-            "Ex": {"mean": -50.0, "std": 30.0},
-            "uq": {"mean": 0.0, "std": 100.0},
-            "vq": {"mean": 0.0, "std": 100.0}
-        }
+        "terrain_mean": 0.0,
+        "terrain_std": 1.0,
+        "buildings_mean": 5.0,
+        "buildings_std": 10.0,
+        "landuse_mean": 3.5,
+        "landuse_std": 2.0,
+        "ex_mean": -50.0,
+        "ex_std": 30.0,
+        "uq_mean": 0.0,
+        "uq_std": 100.0,
+        "vq_mean": 0.0,
+        "vq_std": 100.0,
+        "uz_mean": 0.0,
+        "uz_std": 50.0,
+        "vz_mean": 0.0,
+        "vz_std": 50.0,
+        "hx_mean": 0.0,
+        "hx_std": 20.0
     }, indent=2))
     print()
     print("Examples:")
@@ -76,25 +84,10 @@ def show_requirements():
     print()
     
     # ========================================================================
-    # 3. SVGP Model
+    # 3. U-Net Models
     # ========================================================================
     print("━" * 80)
-    print("3️⃣  SVGP MODEL (WORKS FOR ALL PARCEL SIZES)")
-    print("━" * 80)
-    svgp_file = SURROGATE_CONFIG['svgp_model_name']
-    print(f"File: {svgp_file}")
-    print()
-    print("✓ Single model works for ALL parcel sizes")
-    print("✓ Takes genome (60) + parcel width (1) + parcel height (1) = 62 inputs")
-    print("✓ Trained on square parcels, generalizes to any size via size features")
-    print("✓ Outputs: fitness mean + uncertainty (for UCB exploration)")
-    print()
-    
-    # ========================================================================
-    # 4. U-Net Models
-    # ========================================================================
-    print("━" * 80)
-    print("4️⃣  U-NET MODELS (ONE PER PARCEL SIZE)")
+    print("3️⃣  U-NET MODELS (ONE PER PARCEL SIZE)")
     print("━" * 80)
     print("Format: unet_{size_in_meters}m.pth")
     print()
@@ -106,14 +99,15 @@ def show_requirements():
     print()
     print("✓ Fixed CNN input dimensions → needs exact size match")
     print("✓ Takes 3-channel input: terrain, buildings, landuse grids (66×94)")
-    print("✓ Outputs: Ex, uq, vq flow fields → fitness computed from cold air flux")
+    print("✓ Outputs: 6 channels (Ex, Hx, uq, vq, uz, vz) flow fields")
+    print("✓ Fitness computed from cold air flux: mean(Ex) × mean(sqrt(uq² + vq²))")
     print()
     
     # ========================================================================
-    # 5. Current Status
+    # 4. Current Status
     # ========================================================================
     print("━" * 80)
-    print("5️⃣  CURRENT STATUS")
+    print("4️⃣  CURRENT STATUS")
     print("━" * 80)
     
     if not models_dir.exists():
@@ -121,15 +115,13 @@ def show_requirements():
         print(f"   → Create: mkdir {models_dir}")
         return
     
-    # Check SVGP normalization
-    svgp_norm_path = models_dir / svgp_norm_file
-    svgp_norm_exists = svgp_norm_path.exists()
-    print(f"{'✅' if svgp_norm_exists else '❌'} {svgp_norm_file}: {'FOUND' if svgp_norm_exists else 'MISSING'}")
-    
-    # Check SVGP model
+    # Check SVGP model (normalization is inside checkpoint)
+    svgp_file = SURROGATE_CONFIG['svgp_model_name']
     svgp_path = models_dir / svgp_file
     svgp_exists = svgp_path.exists()
     print(f"{'✅' if svgp_exists else '❌'} {svgp_file}: {'FOUND' if svgp_exists else 'MISSING'}")
+    if svgp_exists:
+        print("   (contains model + normalization in checkpoint)")
     print()
     
     # Check U-Net models and normalization files
@@ -165,16 +157,16 @@ def show_requirements():
     
     print()
     # ========================================================================
-    # 6. Minimum Setup for Testing
+    # 5. Minimum Setup for Testing
     # ========================================================================
     print("━" * 80)
-    print("6️⃣  MINIMUM SETUP FOR TESTING UI")
+    print("5️⃣  MINIMUM SETUP FOR TESTING UI")
     print("━" * 80)
+    svgp_file = SURROGATE_CONFIG['svgp_model_name']
     print(f"To enable all 5 evaluation methods, create:")
-    print(f"  1. {models_dir}/{svgp_norm_file}")
-    print(f"  2. {models_dir}/{svgp_file}")
+    print(f"  1. {models_dir}/{svgp_file} (contains model + normalization)")
+    print(f"  2. {models_dir}/unet_81m.pth")
     print(f"  3. {models_dir}/unet_81m_normalization.json")
-    print(f"  4. {models_dir}/unet_81m.pth")
     print()
     print("This will enable:")
     print("  ✓ Simple Porosity (geometric, no models needed)")

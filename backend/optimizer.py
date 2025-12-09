@@ -67,6 +67,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
             
             objectives = results[:, 0]
             features = results[:, 1:len(env_config['labels']) + 1]            
+            
             scheduler.tell(objectives, features)
             
             # Print stats at regular intervals (for console output)

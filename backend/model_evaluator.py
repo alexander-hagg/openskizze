@@ -295,27 +295,50 @@ class UNetEvaluator:
         with open(norm_path) as f:
             norm_stats = json.load(f)
         
-        # U-Net normalization: 3 scalar inputs (terrain, buildings, landuse)
-        self.terrain_mean = norm_stats['terrain_mean']     # Scalar
-        self.terrain_std = norm_stats['terrain_std']       # Scalar
-        self.buildings_mean = norm_stats['buildings_mean'] # Scalar
-        self.buildings_std = norm_stats['buildings_std']   # Scalar
-        self.landuse_mean = norm_stats['landuse_mean']     # Scalar
-        self.landuse_std = norm_stats['landuse_std']       # Scalar
-        
-        # U-Net output normalization: 6 scalars (uq, vq, uz, vz, Ex, Hx)
-        self.uq_mean = norm_stats['uq_mean']
-        self.uq_std = norm_stats['uq_std']
-        self.vq_mean = norm_stats['vq_mean']
-        self.vq_std = norm_stats['vq_std']
-        self.uz_mean = norm_stats.get('uz_mean', 0.0)  # Optional
-        self.uz_std = norm_stats.get('uz_std', 1.0)
-        self.vz_mean = norm_stats.get('vz_mean', 0.0)
-        self.vz_std = norm_stats.get('vz_std', 1.0)
-        self.ex_mean = norm_stats['ex_mean']
-        self.ex_std = norm_stats['ex_std']
-        self.hx_mean = norm_stats.get('hx_mean', 0.0)  # Optional
-        self.hx_std = norm_stats.get('hx_std', 1.0)
+        # Handle both flat and nested normalization formats
+        if 'input' in norm_stats and 'output' in norm_stats:
+            # Nested format: {"input": {"terrain": {"mean": ..., "std": ...}}, "output": {...}}
+            self.terrain_mean = norm_stats['input']['terrain']['mean']
+            self.terrain_std = norm_stats['input']['terrain']['std']
+            self.buildings_mean = norm_stats['input']['buildings']['mean']
+            self.buildings_std = norm_stats['input']['buildings']['std']
+            self.landuse_mean = norm_stats['input']['landuse']['mean']
+            self.landuse_std = norm_stats['input']['landuse']['std']
+            
+            # Output normalization
+            self.ex_mean = norm_stats['output']['Ex']['mean']
+            self.ex_std = norm_stats['output']['Ex']['std']
+            self.hx_mean = norm_stats['output'].get('Hx', {}).get('mean', 0.0)
+            self.hx_std = norm_stats['output'].get('Hx', {}).get('std', 1.0)
+            self.uq_mean = norm_stats['output']['uq']['mean']
+            self.uq_std = norm_stats['output']['uq']['std']
+            self.vq_mean = norm_stats['output']['vq']['mean']
+            self.vq_std = norm_stats['output']['vq']['std']
+            self.uz_mean = norm_stats['output'].get('uz', {}).get('mean', 0.0)
+            self.uz_std = norm_stats['output'].get('uz', {}).get('std', 1.0)
+            self.vz_mean = norm_stats['output'].get('vz', {}).get('mean', 0.0)
+            self.vz_std = norm_stats['output'].get('vz', {}).get('std', 1.0)
+        else:
+            # Flat format: {"terrain_mean": ..., "terrain_std": ..., ...}
+            self.terrain_mean = norm_stats['terrain_mean']
+            self.terrain_std = norm_stats['terrain_std']
+            self.buildings_mean = norm_stats['buildings_mean']
+            self.buildings_std = norm_stats['buildings_std']
+            self.landuse_mean = norm_stats['landuse_mean']
+            self.landuse_std = norm_stats['landuse_std']
+            
+            self.uq_mean = norm_stats['uq_mean']
+            self.uq_std = norm_stats['uq_std']
+            self.vq_mean = norm_stats['vq_mean']
+            self.vq_std = norm_stats['vq_std']
+            self.uz_mean = norm_stats.get('uz_mean', 0.0)
+            self.uz_std = norm_stats.get('uz_std', 1.0)
+            self.vz_mean = norm_stats.get('vz_mean', 0.0)
+            self.vz_std = norm_stats.get('vz_std', 1.0)
+            self.ex_mean = norm_stats['ex_mean']
+            self.ex_std = norm_stats['ex_std']
+            self.hx_mean = norm_stats.get('hx_mean', 0.0)
+            self.hx_std = norm_stats.get('hx_std', 1.0)
         
         # Initialize fast encoding
         self.fast_encoding = NumbaFastEncoding(parcel_size=parcel_size)

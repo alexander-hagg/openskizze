@@ -229,6 +229,12 @@ def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data, language):
     x_tick_labels = [f"{val:.1f}" for val in x_tick_values]
     y_tick_labels = [f"{val:.1f}" for val in y_tick_values]
     
+    # Calculate max objective for color range
+    max_objective = np.nanmax(heatmap_grid)
+    if np.isnan(max_objective) or max_objective <= 0:
+        max_objective = 1.0
+    max_objective_ceil = float(np.ceil(max_objective))
+    
     # Create heatmap
     fig = px.imshow(
         heatmap_grid,
@@ -236,8 +242,8 @@ def update_archive_heatmap_s3(x_axis_idx, y_axis_idx, results_data, language):
         color_continuous_scale='Viridis',
         labels={'x': labels[x_axis_idx], 'y': labels[y_axis_idx], 'color': T[lang]['STEP3_HEATMAP_OBJECTIVE_LABEL']},
         title=T[lang]['STEP3_ARCHIVE_HEATMAP_COVERAGE'],
-        zmin=0,  # Fixed color range from 0 to 1
-        zmax=1.0
+        zmin=0.0,
+        zmax=max_objective_ceil
     )
     
     # Update axes with proper labels
@@ -414,6 +420,12 @@ def update_parallel_coords_s3(results_data, language):
     objective_label = T[lang]['STEP6_OBJECTIVE'].replace(':', '')  # Remove colon
     df_for_plot.rename(columns={'objective': objective_label}, inplace=True)
     
+    # Calculate max objective for color range
+    max_objective = df_for_plot[objective_label].max()
+    if pd.isna(max_objective) or max_objective <= 0:
+        max_objective = 1.0
+    max_objective_ceil = float(np.ceil(max_objective))
+    
     # Create dimension labels with line breaks
     all_dims = [objective_label] + labels_with_units
     dim_labels = {dim: dim.replace(" ", "<br>") for dim in all_dims}
@@ -423,7 +435,7 @@ def update_parallel_coords_s3(results_data, language):
         labels=dim_labels,
         title=T[lang]['STEP3_PARALLEL_COORDS_HEADER'],
         color_continuous_scale='Viridis',
-        range_color=[0, 1.0]  # Fixed color range from 0 to 1 for objective
+        range_color=[0.0, max_objective_ceil]
     )
     
     return parallel_fig
@@ -495,7 +507,8 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
         # profiler = cProfile.Profile()
         # profiler.enable()
         
-        # Start optimization with cached building data and feature set
+        # Start optimization with cached building data, feature set, and grid params
+        grid_params = session_data.get('grid_params')  # Use pre-calculated grid from step 1
         archive, labels, env_config = start_optimization(
             session_data['site_polygon'],
             session_data['wind_direction'],
@@ -508,7 +521,8 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
             feature_set=feature_set,
             progress_callback=progress_callback,
             model_type=model_type,
-            ucb_lambda=ucb_lambda
+            ucb_lambda=ucb_lambda,
+            grid_params=grid_params
         )
         
         if archive and not archive.empty:
@@ -529,23 +543,32 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
             
             # Filter solutions to ensure they respect user-defined feature constraints
             # This is needed because the archive might contain solutions slightly outside bounds
+            #
+            # CRITICAL: Use the same encoding that was used during evaluation!
+            # If surrogate model was used, it uses NumbaFastEncoding, not ParametricEncoding
+            use_surrogate = env_config.get('use_surrogate', False)
+            surrogate_wrapper = env_config.get('surrogate_wrapper', None)
+            
+            if use_surrogate and surrogate_wrapper is not None:
+                # Use the fast_encoding from the surrogate wrapper
+                regeneration_encoding = surrogate_wrapper.evaluator.fast_encoding
+            else:
+                # Use the standard ParametricEncoding
+                regeneration_encoding = encoding_obj
+            
             full_list_of_elites = []
             for i in range(len(objectives)):
                 genome = solutions[i]
-                heightmap = encoding_obj.express(env_config['buildable_mask'], genome)
                 
-                # DEBUG: Check heightmap regeneration
-                if i == 0:  # Only for first solution to avoid spam
-                    print(f"\n[REGENERATION DEBUG] First solution:")
-                    print(f"  max_building_floors used by encoding_obj: {encoding_obj.config['max_building_floors']}")
-                    print(f"  Max height in meters: {encoding_obj.config['max_building_floors'] * encoding_obj.config['meters_per_floor']:.1f}m")
-                    print(f"  Genome shape: {genome.shape}")
-                    print(f"  Heightmap shape: {heightmap.shape}")
-                    non_zero = heightmap[heightmap > 0]
-                    if len(non_zero) > 0:
-                        print(f"  Heightmap stats (METERS): min={non_zero.min():.2f}m, max={non_zero.max():.2f}m, mean={non_zero.mean():.2f}m")
-                    print(f"  Measures (archive): {measures[i]}")
-                    print(f"  Objective: {objectives[i]:.4f}\n")
+                # Use correct encoding based on evaluation method
+                if use_surrogate and surrogate_wrapper is not None:
+                    # NumbaFastEncoding uses express_batch, so wrap in batch
+                    heightmaps = regeneration_encoding.express_batch(genome.reshape(1, -1))
+                    heightmap = heightmaps[0]
+                else:
+                    # ParametricEncoding uses express with buildable mask
+                    heightmap = regeneration_encoding.express(env_config['buildable_mask'], genome)
+
                 
                 # Check if this solution respects all feature constraints
                 is_valid = True

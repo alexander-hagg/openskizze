@@ -17,7 +17,7 @@ from rasterio.transform import from_origin
 import json
 
 
-def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None, feature_set: str = 'consolidated', model_type: str = 'original', ucb_lambda: float = 1.0):
+def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None, feature_set: str = 'consolidated', model_type: str = 'original', ucb_lambda: float = 1.0, grid_params: dict = None):
     """
     Create the optimization environment with proper physical unit ranges.
     
@@ -28,6 +28,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         hard_constraints: Dict with 'max_height' (in voxels) and 'min_distance' (in meters)
         cached_building_data: Optional pre-fetched building data from Step 1 (for performance)
         feature_set: 'consolidated' (default)
+        grid_params: Pre-calculated grid parameters from step 1 (to avoid recalculation differences)
         model_type: 'original', 'svgp', 'unet', or 'hybrid'
         ucb_lambda: UCB exploration parameter for SVGP/Hybrid models
     """
@@ -41,6 +42,25 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     gdf_user_poly_native = gdf_user_poly.to_crs("EPSG:25832")
     min_x, min_y, max_x, max_y = gdf_user_poly_native.total_bounds
     
+    # Use pre-calculated grid_params if available (from step 1), otherwise calculate
+    if grid_params and 'xy_length' in grid_params:
+        res = grid_params['xy_length']
+        grid_side_length = grid_params['grid_side_length']
+        pixel_size = grid_params['pixel_size']
+        print(f"[create_environment] Using pre-calculated grid: {res} bins ({grid_side_length:.1f}m)")
+    else:
+        width = max_x - min_x
+        height = max_y - min_y
+        square_size = max(width, height)
+        border = square_size * (DOMAIN_CONFIG['environment_border_size'] - 1.0) / 2.0
+        grid_side_length = square_size + (2 * border)
+        pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
+        res = math.ceil(grid_side_length / pixel_size)
+        print(f"[create_environment] Calculated grid: {res} bins ({grid_side_length:.1f}m)")
+    
+    ENCODING_CONFIG['xy_length'] = res
+    
+    # Calculate grid bounds for buildable mask
     width = max_x - min_x
     height = max_y - min_y
     square_size = max(width, height)
@@ -51,13 +71,8 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     border = square_size * (DOMAIN_CONFIG['environment_border_size'] - 1.0) / 2.0
     grid_min_x = square_min_x - border
     grid_min_y = square_min_y - border
-    grid_side_length = square_size + (2 * border)
     grid_max_x = grid_min_x + grid_side_length
     grid_max_y = grid_min_y + grid_side_length
-    
-    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    res = math.ceil(grid_side_length / pixel_size)
-    ENCODING_CONFIG['xy_length'] = res
     
     x = np.linspace(grid_min_x, grid_max_x, res)
     y = np.linspace(grid_min_y, grid_max_y, res)
@@ -418,7 +433,8 @@ def start_optimization(
     feature_set: str = 'consolidated', 
     progress_callback=None,
     model_type: str = 'street_canyon',
-    ucb_lambda: float = 1.0
+    ucb_lambda: float = 1.0,
+    grid_params: dict = None
 ):
     progress_callback(5, "Creating environment...")
     
@@ -434,8 +450,18 @@ def start_optimization(
         # ML methods: trained on street_canyon, use that as base objective
         actual_objective = 'street_canyon'
     
-    # Pass hard_constraints, cached_building_data, and feature_set to create_environment
-    env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges, hard_constraints, cached_building_data, feature_set)
+    # Pass hard_constraints, cached_building_data, feature_set, and grid_params to create_environment
+    env_config = create_environment(
+        user_polygon_geojson, 
+        selected_features, 
+        user_feature_ranges, 
+        hard_constraints, 
+        cached_building_data, 
+        feature_set,
+        model_type=model_type,
+        ucb_lambda=ucb_lambda,
+        grid_params=grid_params
+    )
     env_config['wind_direction'] = wind_direction
     env_config['hard_constraints'] = hard_constraints
     env_config['objective_function'] = actual_objective
