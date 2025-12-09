@@ -52,8 +52,8 @@ SURROGATE_CONFIG = {
     'models_dir': 'models',
     # SVGP: Single model trained on square parcels, uses parcel width/length as input features
     # Works for ANY parcel size (parcel dimensions added to input)
+    # Normalization stored IN checkpoint: 62D input (60 genome + 2 parcel dims) + scalar output
     'svgp_model_name': 'svgp.pth',
-    'svgp_normalization_file': 'svgp_normalization.json',  # Genome + parcel dims → fitness
     # U-Net: Fixed input dimensions, need separate model per parcel size
     # Trained sizes (in bins): 27, 33, 39, 45, 51, 57, 63, 69, 75, 81, 87, 93, 99
     'available_parcel_sizes_unet': [27, 33, 39, 45, 51, 57, 63, 69, 75, 81, 87, 93, 99],

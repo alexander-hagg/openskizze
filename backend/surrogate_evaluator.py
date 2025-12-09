@@ -59,26 +59,29 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
     print("\n[SURROGATE DEBUG] get_available_models called")
     print(f"  - parcel_size_bins: {parcel_size_bins}")
     
-    if parcel_size_bins is None:
-        print("  - parcel_size_bins is None, returning all False")
-        return {'svgp': False, 'unet': False, 'hybrid': False}
-    
     models_dir = Path(SURROGATE_CONFIG['models_dir'])
-    parcel_size_m = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
-    
     print(f"  - models_dir: {models_dir}")
     print(f"  - models_dir exists: {models_dir.exists()}")
-    print(f"  - parcel_size_bins: {parcel_size_bins}, parcel_size_m: {int(parcel_size_m)}m")
     
-    # Check SVGP model and its normalization file (single model works for ALL parcel sizes)
+    # Check SVGP model (single model works for ALL parcel sizes)
+    # Normalization stored IN checkpoint, not separate file
     svgp_path = models_dir / SURROGATE_CONFIG['svgp_model_name']
-    svgp_norm_path = models_dir / SURROGATE_CONFIG['svgp_normalization_file']
-    svgp_available = svgp_path.exists() and svgp_norm_path.exists()
+    svgp_available = svgp_path.exists()
     print(f"  - SVGP model: {svgp_path}")
     print(f"  - SVGP model exists: {svgp_path.exists()}")
-    print(f"  - SVGP normalization: {svgp_norm_path}")
-    print(f"  - SVGP normalization exists: {svgp_norm_path.exists()}")
-    print(f"  - SVGP available: {svgp_available} (works for ALL parcel sizes)")
+    print(f"  - SVGP available: {svgp_available} (works for ALL parcel sizes, normalization in checkpoint)")
+    
+    # For U-Net, we need to know the parcel size
+    unet_available = False
+    hybrid_available = False
+    
+    if parcel_size_bins is None:
+        print("  - parcel_size_bins is None, U-Net/Hybrid cannot be determined")
+        print(f"  - Returning: {{'svgp': {svgp_available}, 'unet': False, 'hybrid': False}}")
+        return {'svgp': svgp_available, 'unet': False, 'hybrid': False}
+    
+    parcel_size_m = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
+    print(f"  - parcel_size_bins: {parcel_size_bins}, parcel_size_m: {int(parcel_size_m)}m")
     
     # Check U-Net model and its normalization file (size-specific, needs exact match)
     unet_path = models_dir / f"unet_{int(parcel_size_m)}m.pth"
@@ -88,7 +91,7 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
     print(f"  - U-Net model exists: {unet_path.exists()}")
     print(f"  - U-Net normalization: {unet_norm_path}")
     print(f"  - U-Net normalization exists: {unet_norm_path.exists()}")
-    print(f"  - U-Net available: {unet_available} (size-specific)")
+    print(f"  - U-Net available: {unet_available} (size-specific, normalization in JSON)")
     
     if not unet_available and parcel_size_bins not in SURROGATE_CONFIG['available_parcel_sizes_unet']:
         print(f"  - WARNING: No U-Net model for {parcel_size_bins} bins ({int(parcel_size_m)}m)")

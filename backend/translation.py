@@ -98,6 +98,8 @@ T = {
         'MODEL_UNET_UNAVAILABLE': "U-Net/Hybrid nicht verfügbar für Parzellengröße {size}m. SVGP kann verwendet werden.",
         
         # Step 4 - Uncertainty Heatmap
+        'STEP4_UNCERTAINTY_HEADER': "Modell-Unsicherheit",
+        'STEP4_UNCERTAINTY_INFO': "Für SVGP/Hybrid-Modelle zeigt die Unsicherheitskarte, wo das Modell am wenigsten sicher ist.",
         'STEP4_SHOW_UNCERTAINTY': "Unsicherheit anzeigen",
         'STEP4_UNCERTAINTY_OVERLAY': "Unsicherheits-Overlay",
         'STEP4_UNCERTAINTY_HEATMAP_TITLE': "Modell-Unsicherheit",
@@ -358,6 +360,8 @@ T = {
         'MODEL_UNET_UNAVAILABLE': "U-Net/Hybrid not available for parcel size {size}m. SVGP can be used.",
         
         # Step 4 - Uncertainty Heatmap
+        'STEP4_UNCERTAINTY_HEADER': "Model Uncertainty",
+        'STEP4_UNCERTAINTY_INFO': "For SVGP/Hybrid models, the uncertainty map shows where the model is least confident.",
         'STEP4_SHOW_UNCERTAINTY': "Show Uncertainty",
         'STEP4_UNCERTAINTY_OVERLAY': "Uncertainty Overlay",
         'STEP4_UNCERTAINTY_HEATMAP_TITLE': "Model Uncertainty",

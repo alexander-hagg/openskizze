@@ -517,8 +517,10 @@ def update_model_info_card(model_type, lang, session_data):
     parcel_size_bins = None
     if session_data:
         parcel_size_bins = get_parcel_size_bins_from_session(session_data)
+        print(f"  - parcel_size_bins from session: {parcel_size_bins}")
     
-    available_models = get_available_models(parcel_size_bins) if parcel_size_bins else {}
+    # Always check model availability (SVGP works for all sizes, will report if found)
+    available_models = get_available_models(parcel_size_bins)
     print(f"  - available_models: {available_models}")
     
     # Create info card based on model type

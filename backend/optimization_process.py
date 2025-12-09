@@ -496,14 +496,23 @@ def start_optimization(
     if use_surrogate:
         from backend.surrogate_evaluator import create_surrogate_wrapper
         
+        # Extract parcel size from env_config (xy_length is set by create_environment)
+        parcel_size_bins = ENCODING_CONFIG.get('xy_length')
+        if not parcel_size_bins:
+            raise ValueError("Cannot create surrogate: parcel size (xy_length) not found in ENCODING_CONFIG")
+        
         surrogate_wrapper = create_surrogate_wrapper(
             model_type=model_type,
-            session_data={'site_polygon': user_polygon_geojson},
+            parcel_size_bins=parcel_size_bins,
             ucb_lambda=ucb_lambda
         )
+        
+        if surrogate_wrapper is None:
+            raise ValueError(f"Surrogate model '{model_type}' is not available for parcel size {parcel_size_bins} bins")
+        
         env_config['use_surrogate'] = True
         env_config['surrogate_wrapper'] = surrogate_wrapper
-        print(f"Using surrogate model: {model_type} (UCB lambda={ucb_lambda})")
+        print(f"Using surrogate model: {model_type} (UCB lambda={ucb_lambda}, parcel_size={parcel_size_bins} bins)")
     else:
         env_config['use_surrogate'] = False
         env_config['surrogate_wrapper'] = None

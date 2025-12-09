@@ -17,7 +17,7 @@ and a Matérn 2.5 kernel with Automatic Relevance Determination (ARD).
 Architecture:
 - Input: 62D (60D genome + parcel width + parcel height)
 - Kernel: Matérn 2.5 with ARD (62 lengthscales)
-- Inducing points: 2000 (optimal from HPO experiments)
+- Inducing points: 2500 (stored in model state dict)
 - Output: Scalar cold air flux prediction + uncertainty
 
 Performance:
@@ -141,12 +141,13 @@ def load_svgp_model(
     # Load checkpoint
     checkpoint = torch.load(model_path, map_location=device)
     
-    # Extract model configuration
-    num_inducing = checkpoint['num_inducing']
-    input_dim = checkpoint['input_dim']
+    # Extract configuration from model state dict
+    # Inducing points are stored in the variational strategy
+    inducing_points = checkpoint['model_state_dict']['variational_strategy.inducing_points'].to(device)
+    num_inducing = inducing_points.shape[0]
+    input_dim = inducing_points.shape[1]  # Should be 62
     
     # Initialize model with saved inducing points
-    inducing_points = checkpoint['inducing_points'].to(device)
     model = SVGPModel(inducing_points, input_dim=input_dim)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
