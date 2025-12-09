@@ -911,6 +911,23 @@ def display_comparison(selected_ids, results_data, solution_modes, clustering_da
                         html.Div(table, className="compact-table")
                     ], md=4, className="ps-2"),
                 ], className="g-0"),  # Remove gutter spacing
+                
+                # Flow Field Visualization (for U-Net/Hybrid models)
+                html.Div([
+                    html.Hr(className="my-2"),
+                    html.Div([
+                        html.H6(T[lang]['STEP6_FLOW_FIELD_HEADER'], className="d-inline-block mb-2"),
+                        dbc.Checklist(
+                            options=[{"label": T[lang]['STEP6_SHOW_FLOW'], "value": 1}],
+                            value=[],
+                            id={'type': 'show-flow-toggle', 'index': i},
+                            switch=True,
+                            className="float-end"
+                        ),
+                    ], className="clearfix"),
+                    html.Div(id={'type': 'flow-field-display', 'index': i})
+                ], id={'type': 'flow-field-container', 'index': i}, style={'display': 'none'}),
+                
                 # 3x3 Diversity preview below
                 html.Hr(className="my-2"),
                 html.H6(("Diversität (9 zufällige Beispiele)" if lang == 'DE' else "Diversity (9 random samples)"), 
@@ -1044,3 +1061,131 @@ def export_pdf_report_s6(n_clicks, selected_ids, results_data, clustering_data):
         return dict(content=pdf_content, filename="OpenSKIZZE_Vergleichsbericht.zip", base64=True)
     else:
         return dict(content="Error: Failed to generate PDF report.", filename="error.txt")
+
+# Callback to toggle flow field container visibility based on model type
+@callback(
+    Output({'type': 'flow-field-container', 'index': ALL}, 'style'),
+    Input('results-store', 'data')
+)
+def toggle_flow_field_sections(results_data):
+    """Show flow field sections only if U-Net or Hybrid model was used"""
+    if not results_data:
+        return [{'display': 'none'}]
+    
+    model_type = results_data.get('model_type', 'original')
+    # Show section for U-Net and Hybrid models (they provide flow fields)
+    if model_type in ['unet', 'hybrid']:
+        # We need to return a list with the same length as the number of clusters
+        # Get number of clusters from comparison-store
+        return [{'display': 'block'}]  # Will be broadcast to all matching outputs
+    else:
+        return [{'display': 'none'}]
+
+# Callback to display flow field visualization
+@callback(
+    Output({'type': 'flow-field-display', 'index': MATCH}, 'children'),
+    Input({'type': 'show-flow-toggle', 'index': MATCH}, 'value'),
+    State('comparison-store', 'data'),
+    State('results-store', 'data'),
+    State('language-store', 'data'),
+    State({'type': 'show-flow-toggle', 'index': MATCH}, 'id')
+)
+def display_flow_field(show_toggle, comparison_data, results_data, lang, component_id):
+    """Display flow field visualization when toggle is on"""
+    if lang is None:
+        lang = 'DE'
+    
+    # Only display if toggle is on
+    if not show_toggle or 1 not in show_toggle:
+        return html.Div()
+    
+    if not comparison_data or not results_data:
+        return dbc.Alert("No data available", color="warning")
+    
+    try:
+        # Get cluster index from component ID
+        cluster_idx = component_id['index']
+        
+        # Get selected cluster IDs
+        selected_ids = comparison_data.get('selected_ids', [])
+        if cluster_idx >= len(selected_ids):
+            return dbc.Alert("Cluster not found", color="warning")
+        
+        cluster_id = selected_ids[cluster_idx]
+        
+        # Load full results to access flow field data
+        results_path = results_data['full_results_path']
+        with open(results_path, 'rb') as f:
+            list_of_elites = pickle.load(f)
+        
+        # Find the solution for this cluster
+        clustering_data = comparison_data.get('clustering_data', {})
+        clusters = clustering_data.get('clusters', [])
+        
+        target_cluster = None
+        for cluster in clusters:
+            if cluster['cluster_id'] == cluster_id:
+                target_cluster = cluster
+                break
+        
+        if not target_cluster:
+            return dbc.Alert("Cluster data not found", color="warning")
+        
+        # Get the displayed solution (best or central)
+        solution_mode_store = comparison_data.get('solution_mode_store', {})
+        display_mode = solution_mode_store.get(str(cluster_id), 'central')
+        
+        if display_mode == 'best':
+            solution = target_cluster['best_solution']
+        else:
+            solution = target_cluster['central_solution']
+        
+        # Check if flow field data is available
+        if 'flow_field' not in solution:
+            return dbc.Alert(
+                "Flow field data not available for this solution. "
+                "Only available when using U-Net or Hybrid surrogate models.",
+                color="info"
+            )
+        
+        # Get flow field (u, v velocity components)
+        flow_field = solution['flow_field']  # Shape: (2, H, W) for (u, v)
+        u = flow_field[0]  # X-component
+        v = flow_field[1]  # Y-component
+        
+        # Create quiver plot using plotly
+        import plotly.figure_factory as ff
+        
+        # Downsample for visualization (every 2nd point)
+        step = 2
+        y_coords, x_coords = np.mgrid[0:u.shape[0]:step, 0:u.shape[1]:step]
+        u_sampled = u[::step, ::step]
+        v_sampled = v[::step, ::step]
+        
+        # Create quiver plot
+        fig = ff.create_quiver(
+            x_coords, y_coords,
+            u_sampled, v_sampled,
+            scale=0.1,
+            arrow_scale=0.3,
+            name='Flow Field',
+            line=dict(width=1)
+        )
+        
+        fig.update_layout(
+            title=T[lang]['STEP6_FLOW_FIELD_TITLE'],
+            height=400,
+            margin=dict(l=20, r=20, t=40, b=20),
+            xaxis_title="X",
+            yaxis_title="Y",
+            yaxis=dict(scaleanchor="x", scaleratio=1)
+        )
+        
+        return dcc.Graph(figure=fig)
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"Error displaying flow field: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        print(traceback.format_exc())
+        return dbc.Alert(error_msg, color="danger")

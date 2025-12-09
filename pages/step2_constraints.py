@@ -144,6 +144,40 @@ def layout(lang='DE'):
                     html.Small(T[lang]['STEP2_QD_HYPERPARAMS_INFO'], className="text-muted mt-2 d-block")
                     ]), color="light")
                 ], style={'display': 'none'}),  # Hidden by default
+                
+                # --- NEW: Surrogate Model Selector (shown only in advanced mode) ---
+                html.Div(id='surrogate-model-container', children=[
+                    html.H5(T[lang]['STEP2_SURROGATE_MODEL_HEADER'], className="mt-4"),
+                    dbc.Card(dbc.CardBody([
+                        dbc.Label(T[lang]['STEP2_MODEL_TYPE_LABEL']),
+                        dbc.RadioItems(
+                            id='model-type-selector',
+                            options=[
+                                {'label': T[lang]['STEP2_MODEL_SIMPLE_POROSITY'], 'value': 'simple_porosity'},
+                                {'label': T[lang]['STEP2_MODEL_STREET_CANYON'], 'value': 'street_canyon'},
+                                {'label': T[lang]['STEP2_MODEL_SVGP'], 'value': 'svgp'},
+                                {'label': T[lang]['STEP2_MODEL_UNET'], 'value': 'unet'},
+                                {'label': T[lang]['STEP2_MODEL_HYBRID'], 'value': 'hybrid'},
+                            ],
+                            value='street_canyon',
+                            inline=False,
+                        ),
+                        html.Div(id='model-info-card', className="mt-3"),
+                        html.Div(id='ucb-lambda-container', children=[
+                            dbc.Label([T[lang]['STEP2_UCB_LAMBDA_LABEL'], html.Span(id='ucb-lambda-value', className='ms-2 text-primary fw-bold')], className="mt-3"),
+                            dcc.Slider(
+                                id='ucb-lambda-slider',
+                                min=0.0,
+                                max=3.0,
+                                step=0.1,
+                                value=1.0,
+                                marks={0: '0', 1: '1', 2: '2', 3: '3'},
+                                tooltip={"placement": "bottom", "always_visible": False}
+                            ),
+                            html.Small(T[lang]['STEP2_UCB_LAMBDA_INFO'], className="text-muted mt-1 d-block")
+                        ], style={'display': 'none'}),
+                    ]), color="light")
+                ], style={'display': 'none'}),  # Hidden by default
             ], md=6),
         ])
     ], fluid=True)
@@ -452,12 +486,116 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
 # Callback to toggle advanced mode visibility
 @callback(
     Output('qd-hyperparams-container', 'style'),
-    Input('advanced-mode-toggle', 'value'),
+    Output('surrogate-model-container', 'style'),
+    Input('advanced-mode-toggle', 'value')
 )
 def toggle_advanced_mode(advanced_mode):
     if advanced_mode and 1 in advanced_mode:
-        return {'display': 'block'}
-    return {'display': 'none'}
+        return {'display': 'block'}, {'display': 'block'}
+    return {'display': 'none'}, {'display': 'none'}
+
+@callback(
+    Output('model-info-card', 'children'),
+    Output('ucb-lambda-container', 'style'),
+    Input('model-type-selector', 'value'),
+    State('language-store', 'data'),
+    State('session-store', 'data')
+)
+def update_model_info_card(model_type, lang, session_data):
+    """Update model info card and toggle UCB lambda slider"""
+    from backend.surrogate_evaluator import get_available_models, get_parcel_size_bins_from_session
+    
+    print("\n[STEP2 DEBUG] update_model_info_card callback triggered")
+    print(f"  - model_type: {model_type}")
+    print(f"  - lang: {lang}")
+    print(f"  - session_data keys: {list(session_data.keys()) if session_data else 'None'}")
+    
+    if lang is None:
+        lang = 'DE'
+    
+    # Check model availability for current parcel
+    parcel_size_bins = None
+    if session_data:
+        parcel_size_bins = get_parcel_size_bins_from_session(session_data)
+    
+    available_models = get_available_models(parcel_size_bins) if parcel_size_bins else {}
+    print(f"  - available_models: {available_models}")
+    
+    # Create info card based on model type
+    if model_type == 'simple_porosity':
+        card = dbc.Alert([
+            html.H6(T[lang]['MODEL_INFO_SIMPLE_POROSITY_TITLE'], className="alert-heading"),
+            html.P(T[lang]['MODEL_INFO_SIMPLE_POROSITY_DESC'])
+        ], color="info", className="mb-0")
+        ucb_style = {'display': 'none'}
+    
+    elif model_type == 'street_canyon':
+        card = dbc.Alert([
+            html.H6(T[lang]['MODEL_INFO_STREET_CANYON_TITLE'], className="alert-heading"),
+            html.P(T[lang]['MODEL_INFO_STREET_CANYON_DESC'])
+        ], color="info", className="mb-0")
+        ucb_style = {'display': 'none'}
+    
+    elif model_type == 'svgp':
+        is_available = available_models.get('svgp', False)
+        if is_available:
+            card = dbc.Alert([
+                html.H6(T[lang]['MODEL_INFO_SVGP_TITLE'], className="alert-heading"),
+                html.P(T[lang]['MODEL_INFO_SVGP_DESC']),
+                html.Small(T[lang]['MODEL_INFO_SVGP_SPEED'], className="text-muted")
+            ], color="success", className="mb-0")
+        else:
+            card = dbc.Alert([
+                html.H6(T[lang]['MODEL_INFO_SVGP_TITLE'], className="alert-heading"),
+                html.P(T[lang]['MODEL_UNAVAILABLE'])
+            ], color="warning", className="mb-0")
+        ucb_style = {'display': 'block'}
+    
+    elif model_type == 'unet':
+        is_available = available_models.get('unet', False)
+        if is_available:
+            card = dbc.Alert([
+                html.H6(T[lang]['MODEL_INFO_UNET_TITLE'], className="alert-heading"),
+                html.P(T[lang]['MODEL_INFO_UNET_DESC']),
+                html.Small(T[lang]['MODEL_INFO_UNET_SPEED'], className="text-muted")
+            ], color="success", className="mb-0")
+        else:
+            card = dbc.Alert([
+                html.H6(T[lang]['MODEL_INFO_UNET_TITLE'], className="alert-heading"),
+                html.P(T[lang]['MODEL_UNAVAILABLE'])
+            ], color="warning", className="mb-0")
+        ucb_style = {'display': 'none'}
+    
+    elif model_type == 'hybrid':
+        is_available = available_models.get('hybrid', False)
+        if is_available:
+            card = dbc.Alert([
+                html.H6(T[lang]['MODEL_INFO_HYBRID_TITLE'], className="alert-heading"),
+                html.P(T[lang]['MODEL_INFO_HYBRID_DESC']),
+                html.Small(T[lang]['MODEL_INFO_HYBRID_SPEED'], className="text-muted")
+            ], color="success", className="mb-0")
+        else:
+            card = dbc.Alert([
+                html.H6(T[lang]['MODEL_INFO_HYBRID_TITLE'], className="alert-heading"),
+                html.P(T[lang]['MODEL_UNAVAILABLE'])
+            ], color="warning", className="mb-0")
+        ucb_style = {'display': 'block'}
+    
+    else:
+        card = dbc.Alert("Unknown model type", color="danger", className="mb-0")
+        ucb_style = {'display': 'none'}
+    
+    return card, ucb_style
+
+@callback(
+    Output('ucb-lambda-value', 'children'),
+    Input('ucb-lambda-slider', 'value')
+)
+def update_ucb_lambda_display(value):
+    """Update UCB lambda display value"""
+    if value is None:
+        return "1.0"
+    return f"{value:.1f}"
 
 # Callback to restore settings from loaded session data
 @callback(
@@ -468,13 +606,15 @@ def toggle_advanced_mode(advanced_mode):
     Output('qd-emitters-input', 'value', allow_duplicate=True),
     Output('qd-niches-input', 'value', allow_duplicate=True),
     Output('qd-batch-size-input', 'value', allow_duplicate=True),
+    Output('model-type-selector', 'value', allow_duplicate=True),
+    Output('ucb-lambda-slider', 'value', allow_duplicate=True),
     Input('session-store', 'data'),
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
 def restore_step2_from_session(session_data, pathname):
     if pathname != '/step2' or not session_data:
-        return (no_update,) * 7
+        return (no_update,) * 9
     
     selected_features = session_data.get('selected_features')
     hard_constraints = session_data.get('hard_constraints', {})
@@ -508,12 +648,17 @@ def restore_step2_from_session(session_data, pathname):
     qd_niches = qd_params.get('num_niches', QD_CONFIG['num_niches'])
     qd_batch_size = qd_params.get('batch_size', QD_CONFIG['batch_size'])
     
+    model_type = session_data.get('model_type', 'street_canyon')
+    ucb_lambda = session_data.get('ucb_lambda', 1.0)
+    
     if selected_features is not None:
         return (selected_features, int(max_height), min_distance, 
-                qd_generations, qd_emitters, qd_niches, qd_batch_size)
+                qd_generations, qd_emitters, qd_niches, qd_batch_size,
+                model_type, ucb_lambda)
     
     return (no_update, int(max_height), min_distance, 
-            qd_generations, qd_emitters, qd_niches, qd_batch_size)
+            qd_generations, qd_emitters, qd_niches, qd_batch_size,
+            model_type, ucb_lambda)
 
 # --- UPDATED: Callback to save selections, ranges, constraints, QD hyperparameters to the session ---
 @callback(
@@ -526,6 +671,8 @@ def restore_step2_from_session(session_data, pathname):
     Input('qd-emitters-input', 'value'),
     Input('qd-niches-input', 'value'),
     Input('qd-batch-size-input', 'value'),
+    Input('model-type-selector', 'value'),
+    Input('ucb-lambda-slider', 'value'),
     State({'type': 'feature-range-slider', 'index': ALL}, 'id'),
     State('session-store', 'data'),
     State('url', 'pathname'),
@@ -534,6 +681,7 @@ def restore_step2_from_session(session_data, pathname):
 def update_session_with_features_and_ranges(
     selected_indices, slider_values, max_height, min_distance,
     qd_generations, qd_emitters, qd_niches, qd_batch_size,
+    model_type, ucb_lambda,
     slider_ids, session_data, pathname
 ):
     from dash import ctx
@@ -618,6 +766,10 @@ def update_session_with_features_and_ranges(
     
     # Save feature set selection
     session_data['feature_set'] = feature_set
+    
+    # Save surrogate model settings
+    session_data['model_type'] = model_type if model_type is not None else 'street_canyon'
+    session_data['ucb_lambda'] = ucb_lambda if ucb_lambda is not None else 1.0
     
     return session_data
 

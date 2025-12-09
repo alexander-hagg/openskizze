@@ -470,8 +470,11 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     user_feature_ranges = session_data.get('feature_ranges', {})
     hard_constraints = session_data.get('hard_constraints', {})
     qd_hyperparams = session_data.get('qd_hyperparams', {})
-    objective_function = session_data.get('objective_function', 'street_canyon')
     feature_set = session_data.get('feature_set', 'consolidated')
+    model_type = session_data.get('model_type', 'street_canyon')
+    ucb_lambda = session_data.get('ucb_lambda', 1.0)
+    
+    print(f"[run_optimization] Model settings: type={model_type}, ucb_lambda={ucb_lambda}")
     
     # Retrieve and deserialize cached building data from Step 1 (if available)
     cached_building_data = None
@@ -500,10 +503,12 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
             user_feature_ranges,
             hard_constraints,
             qd_hyperparams,
-            objective_function,
+            objective_function='street_canyon',  # Keep for backward compatibility, but model_type takes precedence
             cached_building_data=cached_building_data,
             feature_set=feature_set,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
+            model_type=model_type,
+            ucb_lambda=ucb_lambda
         )
         
         if archive and not archive.empty:

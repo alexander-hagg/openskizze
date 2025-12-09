@@ -48,6 +48,21 @@ DOMAIN_CONFIG = {
     'environment_border_size': 1.2,
 }
 
+SURROGATE_CONFIG = {
+    'models_dir': 'models',
+    # SVGP: Single model trained on square parcels, uses parcel width/length as input features
+    # Works for ANY parcel size (parcel dimensions added to input)
+    'svgp_model_name': 'svgp.pth',
+    'svgp_normalization_file': 'svgp_normalization.json',  # Genome + parcel dims → fitness
+    # U-Net: Fixed input dimensions, need separate model per parcel size
+    # Trained sizes (in bins): 27, 33, 39, 45, 51, 57, 63, 69, 75, 81, 87, 93, 99
+    'available_parcel_sizes_unet': [27, 33, 39, 45, 51, 57, 63, 69, 75, 81, 87, 93, 99],
+    # U-Net normalization: Size-specific (e.g., unet_81m_normalization.json)
+    # Each parcel size may have different terrain/building statistics
+    'default_ucb_lambda': 1.0,
+    'default_model_type': 'street_canyon',
+}
+
 
 def calculate_adaptive_phenotype_config(buildable_mask: np.ndarray, 
                                         buildable_area_m2: float,

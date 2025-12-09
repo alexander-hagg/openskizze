@@ -59,6 +59,60 @@ T = {
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch-Größe:",
         'STEP2_QD_HYPERPARAMS_INFO': "Höhere Werte = längere Laufzeit, mehr Lösungen. Standard: 1000 Generationen, 5 Emitter.",
 
+        # Surrogate Model Selection
+        'STEP2_SURROGATE_MODEL_HEADER': "Evaluierungsmethode",
+        'STEP2_MODEL_TYPE_LABEL': "Wählen Sie die Berechnungsmethode:",
+        'STEP2_MODEL_SIMPLE_POROSITY': "Einfache Porosität (Geometrisch)",
+        'STEP2_MODEL_STREET_CANYON': "Street Canyon (Geometrisch)",
+        'STEP2_MODEL_SVGP': "SVGP (ML + Unsicherheit)",
+        'STEP2_MODEL_UNET': "U-Net (ML + Strömung)",
+        'STEP2_MODEL_HYBRID': "Hybrid (ML + Beides)",
+        'STEP2_UCB_LAMBDA_LABEL': "Explorationsparameter (λ):",
+        'STEP2_UCB_LAMBDA_INFO': "Höhere Werte fördern die Erkundung unsicherer Regionen",
+        
+        # Model Info Cards
+        'MODEL_INFO_SIMPLE_POROSITY_TITLE': "Einfache Porosität",
+        'MODEL_INFO_SIMPLE_POROSITY_DESC': "Zählt offene horizontale Windkorridore. Schnelle geometrische Berechnung, gut für offene Layouts.",
+        'MODEL_INFO_STREET_CANYON_TITLE': "Street Canyon",
+        'MODEL_INFO_STREET_CANYON_DESC': "Berücksichtigt Straßenschluchten, Querbelüftung und Höhenvariation. Besser für dichte urbane Umgebungen.",
+        'MODEL_INFO_SVGP_TITLE': "SVGP - Sparse Variational Gaussian Process",
+        'MODEL_INFO_SVGP_DESC': "Probabilistisches ML-Modell trainiert auf KLAM_21 Simulationen. Liefert Unsicherheitsschätzungen für gezielte Exploration. ~10× schneller.",
+        'MODEL_INFO_UNET_TITLE': "U-Net - Neuronales Netz",
+        'MODEL_INFO_UNET_DESC': "Tiefes neuronales Netz trainiert auf KLAM_21 Simulationen. Liefert Strömungsfelder für Visualisierung. ~100× schneller.",
+        'MODEL_INFO_HYBRID_TITLE': "Hybrid - Kombination aus U-Net und SVGP",
+        'MODEL_INFO_HYBRID_DESC': "Nutzt U-Net Fitness (KLAM-genau) und SVGP Unsicherheit. Beste Qualitätsdiversitäts-Ergebnisse mit Strömungsvisualisierung. ~50× schneller.",
+        
+        'MODEL_INFO_SVGP_SPEED': "~10× schneller, KLAM-Genauigkeit + Unsicherheit",
+        'MODEL_INFO_UNET_SPEED': "~100× schneller, KLAM-Genauigkeit + Strömungsfelder",
+        'MODEL_INFO_HYBRID_SPEED': "~50× schneller, volle KLAM-Genauigkeit + Unsicherheit + Strömung",
+        
+        'MODEL_INFO_SPEED': "Geschwindigkeit:",
+        'MODEL_INFO_ACCURACY': "Genauigkeit:",
+        'MODEL_INFO_UNCERTAINTY': "Unsicherheit:",
+        'MODEL_INFO_FLOW': "Strömungsfeld:",
+        
+        'MODEL_UNAVAILABLE': "Nicht verfügbar",
+        'MODEL_SELECT_PARCEL_FIRST': "Bitte wählen Sie zuerst eine Parzelle in Schritt 1.",
+        'MODEL_CANNOT_DETERMINE_SIZE': "Parzellengröße konnte nicht ermittelt werden.",
+        'MODEL_NONE_AVAILABLE': "Keine Surrogate-Modelle für Parzellengröße {size}m verfügbar.",
+        'MODEL_UNET_UNAVAILABLE': "U-Net/Hybrid nicht verfügbar für Parzellengröße {size}m. SVGP kann verwendet werden.",
+        
+        # Step 4 - Uncertainty Heatmap
+        'STEP4_SHOW_UNCERTAINTY': "Unsicherheit anzeigen",
+        'STEP4_UNCERTAINTY_OVERLAY': "Unsicherheits-Overlay",
+        'STEP4_UNCERTAINTY_HEATMAP_TITLE': "Modell-Unsicherheit",
+        'UNCERTAINTY_LABEL': "Unsicherheit (σ)",
+        
+        # Step 6 - Flow Field
+        'STEP6_SHOW_FLOW': "Strömungsfeld anzeigen",
+        'STEP6_FLOW_OVERLAY': "Windströmungs-Overlay",
+        'STEP6_FLOW_TITLE': "Kaltluftströmung (U-Net Vorhersage)",
+        'FLOW_VECTORS': "Strömungsvektoren",
+        'POSITION_X': "Position X (m)",
+        'POSITION_Y': "Position Y (m)",
+        'FEATURE_X': "Merkmal X",
+        'FEATURE_Y': "Merkmal Y",
+
         # Consolidated feature set (indices 0-7)
         'MEASURE_0': 'GRZ (Grundflächenzahl)',
         'MEASURE_1': 'GFZ (Geschossflächenzahl)',
@@ -264,6 +318,60 @@ T = {
         'STEP2_QD_NICHES_LABEL': "Archive Size (Niches per Dimension):",
         'STEP2_QD_BATCH_SIZE_LABEL': "Batch Size:",
         'STEP2_QD_HYPERPARAMS_INFO': "Higher values = longer runtime, more solutions. Default: 1000 generations, 5 emitters.",
+        
+        # Surrogate Model Selection
+        'STEP2_SURROGATE_MODEL_HEADER': "Evaluation Method",
+        'STEP2_MODEL_TYPE_LABEL': "Choose calculation method:",
+        'STEP2_MODEL_SIMPLE_POROSITY': "Simple Porosity (Geometric)",
+        'STEP2_MODEL_STREET_CANYON': "Street Canyon (Geometric)",
+        'STEP2_MODEL_SVGP': "SVGP (ML + Uncertainty)",
+        'STEP2_MODEL_UNET': "U-Net (ML + Flow)",
+        'STEP2_MODEL_HYBRID': "Hybrid (ML + Both)",
+        'STEP2_UCB_LAMBDA_LABEL': "Exploration Parameter (λ):",
+        'STEP2_UCB_LAMBDA_INFO': "Higher values encourage exploring uncertain regions",
+        
+        # Model Info Cards
+        'MODEL_INFO_SIMPLE_POROSITY_TITLE': "Simple Porosity",
+        'MODEL_INFO_SIMPLE_POROSITY_DESC': "Counts open horizontal wind corridors. Fast geometric calculation, good for open layouts.",
+        'MODEL_INFO_STREET_CANYON_TITLE': "Street Canyon",
+        'MODEL_INFO_STREET_CANYON_DESC': "Considers street canyons, cross-ventilation, and height variation. Better for dense urban environments.",
+        'MODEL_INFO_SVGP_TITLE': "SVGP - Sparse Variational Gaussian Process",
+        'MODEL_INFO_SVGP_DESC': "Probabilistic ML model trained on KLAM_21 simulations. Provides uncertainty estimates for targeted exploration. ~10× faster.",
+        'MODEL_INFO_UNET_TITLE': "U-Net - Neural Network",
+        'MODEL_INFO_UNET_DESC': "Deep neural network trained on KLAM_21 simulations. Provides flow fields for visualization. ~100× faster.",
+        'MODEL_INFO_HYBRID_TITLE': "Hybrid - Combination of U-Net and SVGP",
+        'MODEL_INFO_HYBRID_DESC': "Uses U-Net fitness (KLAM-accurate) and SVGP uncertainty. Best quality-diversity results with flow visualization. ~50× faster.",
+        
+        'MODEL_INFO_SVGP_SPEED': "~10× faster, KLAM accuracy + uncertainty",
+        'MODEL_INFO_UNET_SPEED': "~100× faster, KLAM accuracy + flow fields",
+        'MODEL_INFO_HYBRID_SPEED': "~50× faster, full KLAM accuracy + uncertainty + flow",
+        
+        'MODEL_INFO_SPEED': "Speed:",
+        'MODEL_INFO_ACCURACY': "Accuracy:",
+        'MODEL_INFO_UNCERTAINTY': "Uncertainty:",
+        'MODEL_INFO_FLOW': "Flow field:",
+        
+        'MODEL_UNAVAILABLE': "Not available",
+        'MODEL_SELECT_PARCEL_FIRST': "Please select a parcel in Step 1 first.",
+        'MODEL_CANNOT_DETERMINE_SIZE': "Could not determine parcel size.",
+        'MODEL_NONE_AVAILABLE': "No surrogate models available for parcel size {size}m.",
+        'MODEL_UNET_UNAVAILABLE': "U-Net/Hybrid not available for parcel size {size}m. SVGP can be used.",
+        
+        # Step 4 - Uncertainty Heatmap
+        'STEP4_SHOW_UNCERTAINTY': "Show Uncertainty",
+        'STEP4_UNCERTAINTY_OVERLAY': "Uncertainty Overlay",
+        'STEP4_UNCERTAINTY_HEATMAP_TITLE': "Model Uncertainty",
+        'UNCERTAINTY_LABEL': "Uncertainty (σ)",
+        
+        # Step 6 - Flow Field
+        'STEP6_SHOW_FLOW': "Show Flow Field",
+        'STEP6_FLOW_OVERLAY': "Wind Flow Overlay",
+        'STEP6_FLOW_TITLE': "Cold Air Flow (U-Net Prediction)",
+        'FLOW_VECTORS': "Flow Vectors",
+        'POSITION_X': "Position X (m)",
+        'POSITION_Y': "Position Y (m)",
+        'FEATURE_X': "Feature X",
+        'FEATURE_Y': "Feature Y",
         
         # Consolidated feature set (indices 0-7)
         'MEASURE_0': 'GRZ (Site Coverage Ratio)',

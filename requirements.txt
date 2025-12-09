@@ -21,3 +21,5 @@ scikit-learn-extra
 hdbscan
 scikit-image
 pytorch-msssim
+torch>=2.0.0
+gpytorch>=1.11

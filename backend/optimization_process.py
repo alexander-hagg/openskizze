@@ -17,7 +17,7 @@ from rasterio.transform import from_origin
 import json
 
 
-def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None, feature_set: str = 'consolidated'):
+def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None, feature_set: str = 'consolidated', model_type: str = 'original', ucb_lambda: float = 1.0):
     """
     Create the optimization environment with proper physical unit ranges.
     
@@ -28,6 +28,8 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         hard_constraints: Dict with 'max_height' (in voxels) and 'min_distance' (in meters)
         cached_building_data: Optional pre-fetched building data from Step 1 (for performance)
         feature_set: 'consolidated' (default)
+        model_type: 'original', 'svgp', 'unet', or 'hybrid'
+        ucb_lambda: UCB exploration parameter for SVGP/Hybrid models
     """
     if hard_constraints is None:
         hard_constraints = {}
@@ -334,6 +336,27 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         grid_res=res
     )
     
+    # === SURROGATE MODEL SETUP ===
+    use_surrogate = model_type != 'original'
+    surrogate_wrapper = None
+    
+    if use_surrogate:
+        from backend.surrogate_evaluator import create_surrogate_wrapper
+        
+        # Calculate parcel size in bins
+        parcel_size_bins = res  # res is already calculated above
+        
+        surrogate_wrapper = create_surrogate_wrapper(
+            model_type=model_type,
+            parcel_size_bins=parcel_size_bins,
+            ucb_lambda=ucb_lambda
+        )
+        
+        if surrogate_wrapper is None:
+            print(f"[create_environment] WARNING: Could not create surrogate wrapper for {model_type}")
+            print("[create_environment] Falling back to original evaluation")
+            use_surrogate = False
+    
     return {
         'buildable_mask': buildable_mask, 
         'env_3d_fixed': env_3d_fixed,  # Original size for optimization
@@ -350,6 +373,10 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         'expanded_bounds_native': (expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y),  # Expanded visualization bounds
         'design_offset': (start_idx, start_idx),  # Where design grid sits within expanded grid
         'phenotype_config': phenotype_config,  # NEW: Adaptive phenotype parameters
+        'use_surrogate': use_surrogate,  # NEW: Whether using surrogate model
+        'model_type': model_type,  # NEW: Model type ('original', 'svgp', 'unet', 'hybrid')
+        'ucb_lambda': ucb_lambda,  # NEW: UCB exploration parameter
+        'surrogate_wrapper': surrogate_wrapper,  # NEW: Surrogate evaluator wrapper instance
     }
 
 
@@ -379,13 +406,39 @@ def _calculate_dynamic_feat_ranges(buildable_mask: np.ndarray, max_height_meters
     return ranges, buildable_area_m2
 
 
-def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected_features: list, user_feature_ranges: dict, hard_constraints: dict, qd_hyperparams: dict = None, objective_function: str = 'street_canyon', cached_building_data: dict = None, feature_set: str = 'consolidated', progress_callback=None):
+def start_optimization(
+    user_polygon_geojson: dict, 
+    wind_direction: int, 
+    selected_features: list, 
+    user_feature_ranges: dict, 
+    hard_constraints: dict, 
+    qd_hyperparams: dict = None, 
+    objective_function: str = 'street_canyon', 
+    cached_building_data: dict = None, 
+    feature_set: str = 'consolidated', 
+    progress_callback=None,
+    model_type: str = 'street_canyon',
+    ucb_lambda: float = 1.0
+):
     progress_callback(5, "Creating environment...")
+    
+    # Map unified model_type to objective_function and surrogate settings
+    # Geometric methods: simple_porosity, street_canyon
+    # ML methods: svgp, unet, hybrid (all use street_canyon objective, but via surrogate)
+    use_surrogate = model_type in ['svgp', 'unet', 'hybrid']
+    
+    if model_type in ['simple_porosity', 'street_canyon']:
+        # Geometric methods: use specified objective directly
+        actual_objective = model_type
+    else:
+        # ML methods: trained on street_canyon, use that as base objective
+        actual_objective = 'street_canyon'
+    
     # Pass hard_constraints, cached_building_data, and feature_set to create_environment
     env_config = create_environment(user_polygon_geojson, selected_features, user_feature_ranges, hard_constraints, cached_building_data, feature_set)
     env_config['wind_direction'] = wind_direction
     env_config['hard_constraints'] = hard_constraints
-    env_config['objective_function'] = objective_function
+    env_config['objective_function'] = actual_objective
     
     # --- PRE-ROTATE ENVIRONMENT HEIGHTMAP (ONCE) ---
     # Extract 2D heightmap from 3D environment (max height at each position)
@@ -438,6 +491,23 @@ def start_optimization(user_polygon_geojson: dict, wind_direction: int, selected
     
     # Generate adaptive initial genome based on parcel size
     x0_adaptive = encoding_obj.get_adaptive_initial_genome(buildable_mask)
+    
+    # Configure surrogate model if using ML methods
+    if use_surrogate:
+        from backend.surrogate_evaluator import create_surrogate_wrapper
+        
+        surrogate_wrapper = create_surrogate_wrapper(
+            model_type=model_type,
+            session_data={'site_polygon': user_polygon_geojson},
+            ucb_lambda=ucb_lambda
+        )
+        env_config['use_surrogate'] = True
+        env_config['surrogate_wrapper'] = surrogate_wrapper
+        print(f"Using surrogate model: {model_type} (UCB lambda={ucb_lambda})")
+    else:
+        env_config['use_surrogate'] = False
+        env_config['surrogate_wrapper'] = None
+        print(f"Using geometric evaluation: {model_type}")
     
     sample_genome = np.random.randn(encoding_obj.get_dimension())
     # create_debug_plots(env_config, sample_genome, encoding_obj)

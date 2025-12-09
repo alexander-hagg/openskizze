@@ -1,0 +1,12 @@
+{
+    "python.analysis.extraPaths": [
+        "./qd/util",
+        "./qd/domain/nsg_cppn",
+        "./qd/domain/utils",
+        "./qd/templates",
+        "./qd/domain/cppn"
+    ],
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": []
+}

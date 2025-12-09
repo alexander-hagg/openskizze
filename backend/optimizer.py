@@ -6,6 +6,9 @@ from ribs.schedulers import Scheduler
 import multiprocessing
 import psutil
 from backend.evaluation import eval_batch
+import logging
+
+logger = logging.getLogger(__name__)
 
 def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adaptive=None, progress_callback=None):
     solution_dim = encoding_obj.get_dimension()
@@ -43,10 +46,25 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
     print("Starting QD Optimization...")
     live_update_interval = qd_config.get('live_update_interval', 100)  # Default to every 50 generations
     
+    # Check if using surrogate model
+    use_surrogate = env_config.get('use_surrogate', False)
+    surrogate_wrapper = env_config.get('surrogate_wrapper', None)
+    
+    if use_surrogate and surrogate_wrapper is not None:
+        logger.info(f"Using SURROGATE evaluation: {surrogate_wrapper.model_type}")
+    else:
+        logger.info("Using ORIGINAL physics-based evaluation")
+    
     for gen in range(1, qd_config['num_generations'] + 1):
         try:
             genomes = scheduler.ask()
-            results = eval_batch(genomes, encoding_obj, env_config, pool)            
+            
+            # Branch: Surrogate (GPU batch) vs Original (multiprocess)
+            if use_surrogate and surrogate_wrapper is not None:
+                results = surrogate_wrapper.evaluate_batch(genomes, encoding_obj, env_config)
+            else:
+                results = eval_batch(genomes, encoding_obj, env_config, pool)
+            
             objectives = results[:, 0]
             features = results[:, 1:len(env_config['labels']) + 1]            
             scheduler.tell(objectives, features)
@@ -76,5 +94,15 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
             
     pool.close()
     pool.join()
+    
+    # Log surrogate performance stats if used
+    if use_surrogate and surrogate_wrapper is not None:
+        stats = surrogate_wrapper.get_performance_stats()
+        logger.info(f"Surrogate Performance Summary:")
+        logger.info(f"  Total evaluations: {stats['total_evaluations']}")
+        logger.info(f"  Total time: {stats['total_time_s']:.2f}s")
+        logger.info(f"  Avg per evaluation: {stats['avg_ms_per_eval']:.2f}ms")
+        logger.info(f"  Throughput: {stats['evals_per_second']:.1f} evals/sec")
+    
     print("Finished QD Optimization.")
     return archive

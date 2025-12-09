@@ -59,6 +59,28 @@ def layout(lang='DE'):
             ], md=6),
         ], className="mb-4"),
         
+        # Uncertainty Heatmap Section (for SVGP/Hybrid models)
+        html.Div(id='uncertainty-heatmap-container', children=[
+            dbc.Row([
+                dbc.Col([
+                    dbc.Card(dbc.CardBody([
+                        html.Div([
+                            html.H4(T[lang]['STEP4_UNCERTAINTY_HEADER'], className="d-inline-block"),
+                            dbc.Checklist(
+                                options=[{"label": T[lang]['STEP4_SHOW_UNCERTAINTY'], "value": 1}],
+                                value=[],
+                                id="show-uncertainty-toggle",
+                                switch=True,
+                                className="float-end"
+                            ),
+                        ], className="clearfix"),
+                        html.P(T[lang]['STEP4_UNCERTAINTY_INFO'], className="text-muted small"),
+                        dcc.Loading(html.Div(id='uncertainty-heatmap-display')),
+                    ]), className="mb-3"),
+                ], md=12),
+            ])
+        ], style={'display': 'none'}),  # Hidden by default, shown only when surrogate model was used
+        
     ], fluid=True)
 
 
@@ -555,6 +577,84 @@ def generate_feature_objective_plots(results_data, pathname, language):
     except Exception as e:
         import traceback
         error_msg = f"Error generating feature-objective plots: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        print(traceback.format_exc())
+        return dbc.Alert(error_msg, color="danger")
+
+@callback(
+    Output('uncertainty-heatmap-container', 'style'),
+    Input('results-store', 'data')
+)
+def toggle_uncertainty_section(results_data):
+    """Show uncertainty section only if surrogate model was used"""
+    if not results_data:
+        return {'display': 'none'}
+    
+    model_type = results_data.get('model_type', 'original')
+    # Show section for SVGP and Hybrid models (they provide uncertainties)
+    if model_type in ['svgp', 'hybrid']:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+@callback(
+    Output('uncertainty-heatmap-display', 'children'),
+    Input('show-uncertainty-toggle', 'value'),
+    State('results-store', 'data'),
+    State('language-store', 'data')
+)
+def display_uncertainty_heatmap(show_toggle, results_data, lang):
+    """Display uncertainty heatmap when toggle is on"""
+    if lang is None:
+        lang = 'DE'
+    
+    # Only display if toggle is on
+    if not show_toggle or 1 not in show_toggle:
+        return html.Div()
+    
+    if not results_data or not results_data.get('full_results_path'):
+        return dbc.Alert("No results available", color="warning")
+    
+    try:
+        # Load the full results to access uncertainty data
+        results_path = results_data['full_results_path']
+        with open(results_path, 'rb') as f:
+            list_of_elites = pickle.load(f)
+        
+        if not list_of_elites:
+            return dbc.Alert("No elite solutions found", color="warning")
+        
+        # Check if uncertainty data is available
+        if 'uncertainty' not in list_of_elites[0]:
+            return dbc.Alert(
+                "Uncertainty data not available for this optimization run. "
+                "Only available when using SVGP or Hybrid surrogate models.",
+                color="info"
+            )
+        
+        # Get uncertainty from first solution as example
+        # In a more sophisticated version, we could aggregate uncertainties across all solutions
+        first_uncertainty = list_of_elites[0]['uncertainty']
+        
+        # Create heatmap using plotly express
+        fig = px.imshow(
+            first_uncertainty,
+            color_continuous_scale='Reds',
+            labels=dict(x="X", y="Y", color="Uncertainty"),
+            title=T[lang]['STEP4_UNCERTAINTY_TITLE']
+        )
+        
+        fig.update_layout(
+            height=400,
+            margin=dict(l=20, r=20, t=40, b=20),
+            coloraxis_colorbar=dict(title="σ")
+        )
+        
+        return dcc.Graph(figure=fig)
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"Error displaying uncertainty: {str(e)}"
         print(f"[ERROR] {error_msg}")
         print(traceback.format_exc())
         return dbc.Alert(error_msg, color="danger")
