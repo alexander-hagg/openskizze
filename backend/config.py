@@ -9,6 +9,7 @@ QD_CONFIG = {
     'learning_rate': 0.02,
     'output_inv_frequency': 100,
     'batch_size': 64,
+    'live_update_interval': 10,  # Update progress every 10 generations
 }
 
 ENCODING_CONFIG = {

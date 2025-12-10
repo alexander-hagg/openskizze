@@ -521,12 +521,14 @@ def update_flow_visualizations(archetype_name, density, results, lang):
     # Velocity heatmap with building footprint overlay
     fig_heatmap = go.Figure()
     
-    # Add velocity heatmap
+    # Add velocity heatmap with fixed color range
     fig_heatmap.add_trace(go.Heatmap(
         z=velocity_mag,
         x=x,
         y=y,
         colorscale='Jet',
+        zmin=-1.3,
+        zmax=1.3,
         colorbar=dict(title=T[lang]['MODEL_DIAG_VELOCITY_MS'])
     ))
     

@@ -215,10 +215,11 @@ class SurrogateEvaluatorWrapper:
         
         self.evaluator = create_evaluator(
             model_type=model_type,
-            parcel_size=model_parcel_size,
+            parcel_size=model_parcel_size,  # Model size (e.g., 81m)
             models_dir=models_dir,
             device=self.device,
-            ucb_lambda=ucb_lambda
+            ucb_lambda=ucb_lambda,
+            actual_parcel_size=self.parcel_size_meters  # Actual parcel size (e.g., 51m)
         )
         
         # Fast encoding for heightmap generation
@@ -350,7 +351,8 @@ def create_surrogate_wrapper(
         return SurrogateEvaluatorWrapper(
             model_type=model_type,
             parcel_size_bins=parcel_size_bins,
-            ucb_lambda=ucb_lambda
+            ucb_lambda=ucb_lambda,
+            device='auto'  # Use GPU when available
         )
     except Exception as e:
         logger.error(f"Failed to create surrogate evaluator: {e}")

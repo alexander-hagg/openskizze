@@ -266,13 +266,20 @@ class UNetEvaluator:
         self,
         model_path: Path,
         parcel_size: int,
-        device: torch.device
+        device: torch.device,
+        actual_parcel_size: Optional[int] = None
     ):
         self.device = device
-        self.parcel_size = parcel_size
-        self.parcel_size_cells = parcel_size // 3  # 3m per cell
+        self.parcel_size = parcel_size  # Model size (e.g., 81m)
+        self.parcel_size_cells = parcel_size // 3  # Model size in cells (e.g., 27)
+        
+        # Actual parcel size may be smaller (e.g., 51m actual vs 81m model)
+        self.actual_parcel_size = actual_parcel_size if actual_parcel_size else parcel_size
+        self.actual_parcel_size_cells = self.actual_parcel_size // 3
         
         logger.info(f"Loading U-Net model from {model_path}")
+        logger.info(f"  Model size: {parcel_size}m ({self.parcel_size_cells} cells)")
+        logger.info(f"  Actual parcel size: {self.actual_parcel_size}m ({self.actual_parcel_size_cells} cells)")
         
         # Load model
         checkpoint = torch.load(model_path, map_location=device, weights_only=False)
@@ -340,17 +347,17 @@ class UNetEvaluator:
             self.hx_mean = norm_stats.get('hx_mean', 0.0)
             self.hx_std = norm_stats.get('hx_std', 1.0)
         
-        # Initialize fast encoding
-        self.fast_encoding = NumbaFastEncoding(parcel_size=parcel_size)
+        # Initialize fast encoding (uses ACTUAL parcel size, not model size)
+        self.fast_encoding = NumbaFastEncoding(parcel_size=self.actual_parcel_size)
         
         # ROI mask (region of interest on parcel)
         grid_h, grid_w = 66, 94
-        start_row = (grid_h - self.parcel_size_cells) // 2
-        start_col = (grid_w - self.parcel_size_cells) // 2
+        start_row = (grid_h - self.actual_parcel_size_cells) // 2
+        start_col = (grid_w - self.actual_parcel_size_cells) // 2
         self.roi_mask = np.zeros((grid_h, grid_w), dtype=bool)
         self.roi_mask[
-            start_row:start_row+self.parcel_size_cells,
-            start_col:start_col+self.parcel_size_cells
+            start_row:start_row+self.actual_parcel_size_cells,
+            start_col:start_col+self.actual_parcel_size_cells
         ] = True
         
         logger.info("U-Net loaded successfully")
@@ -386,7 +393,7 @@ class UNetEvaluator:
         # Construct domain grids
         terrain, buildings, landuse = construct_domain_grids_batch(
             heightmaps,
-            self.parcel_size_cells
+            self.actual_parcel_size_cells  # Use ACTUAL parcel size, not model size
         )
         
         # Normalize inputs
@@ -451,10 +458,12 @@ class HybridEvaluator:
         svgp_path: Path,
         parcel_size: int,
         device: torch.device,
-        ucb_lambda: float = 1.0
+        ucb_lambda: float = 1.0,
+        actual_parcel_size: Optional[int] = None
     ):
-        self.unet_eval = UNetEvaluator(unet_path, parcel_size, device)
-        self.svgp_eval = SVGPEvaluator(svgp_path, parcel_size, device, ucb_lambda=0.0)
+        self.unet_eval = UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)
+        actual_size = actual_parcel_size if actual_parcel_size else parcel_size
+        self.svgp_eval = SVGPEvaluator(svgp_path, actual_size, device, ucb_lambda=0.0)
         self.ucb_lambda = ucb_lambda
         
         logger.info(f"Hybrid evaluator created (λ={ucb_lambda})")
@@ -498,20 +507,20 @@ def create_evaluator(
     parcel_size: int,
     models_dir: Path = Path('models'),
     device: str = 'cuda',
-    ucb_lambda: float = 1.0
+    ucb_lambda: float = 1.0,
+    actual_parcel_size: Optional[int] = None
 ):
     """
     Create appropriate evaluator based on model type.
     
     Args:
         model_type: 'svgp', 'unet', or 'hybrid'
-        parcel_size: Parcel size in METERS (e.g., 81 for 81m parcel)
-                    Used to:
-                    - Select size-specific U-Net model (unet_{parcel_size}m.pth)
-                    - Pass as input to SVGP (which works for all sizes)
+        parcel_size: MODEL parcel size in METERS (e.g., 81 for unet_81m.pth)
         models_dir: Directory containing model files
         device: 'cuda' or 'cpu'
         ucb_lambda: UCB exploration parameter (for SVGP/Hybrid)
+        actual_parcel_size: ACTUAL parcel size in meters (may be smaller than model size)
+                           If None, assumes actual size == model size
     
     Returns:
         Configured evaluator instance
@@ -521,9 +530,8 @@ def create_evaluator(
         ValueError: If model_type invalid
     
     Example:
-        # For 27-bin parcel (81m at 3m/bin)
-        evaluator = create_evaluator('hybrid', parcel_size=81, ucb_lambda=1.0)
-        results = evaluator.evaluate(genomes, parcel_sizes)
+        # For 17-bin (51m) parcel using 27-bin (81m) U-Net model
+        evaluator = create_evaluator('unet', parcel_size=81, actual_parcel_size=51)
     """
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
     
@@ -541,14 +549,14 @@ def create_evaluator(
     elif model_type == 'unet':
         if not unet_path.exists():
             raise FileNotFoundError(f"U-Net model not found: {unet_path}")
-        return UNetEvaluator(unet_path, parcel_size, device)
+        return UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)
     
     elif model_type == 'hybrid':
         if not svgp_path.exists():
             raise FileNotFoundError(f"SVGP model not found: {svgp_path}")
         if not unet_path.exists():
             raise FileNotFoundError(f"U-Net model not found: {unet_path}")
-        return HybridEvaluator(unet_path, svgp_path, parcel_size, device, ucb_lambda)
+        return HybridEvaluator(unet_path, svgp_path, parcel_size, device, ucb_lambda, actual_parcel_size)
     
     else:
         raise ValueError(f"Invalid model_type: {model_type}. Must be 'svgp', 'unet', or 'hybrid'")

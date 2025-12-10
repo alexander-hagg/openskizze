@@ -589,7 +589,8 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
                         "objective": objectives[i],
                         "measures": measures[i].tolist(),
                         "grid_indices": grid_indices[i].tolist(),
-                        "heightmap": heightmap.flatten().tolist() # Store the regenerated map
+                        "heightmap": heightmap.flatten().tolist(), # Store the regenerated map
+                        "genome": genome.tolist()  # Store genome for flow field generation
                     })
 
             session_id = str(uuid.uuid4())
