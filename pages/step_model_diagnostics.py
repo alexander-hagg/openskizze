@@ -298,43 +298,49 @@ def run_evaluations(n_clicks, lang):
                 results['unet'].append(unet_score)
                 
                 # Get ACTUAL flow field from U-Net predictions
-                # The evaluate() method already runs the model - we need access to intermediate outputs
-                # For now, let's access the model's internal state by re-running evaluation
-                # and extracting the velocity fields from the ROI region
+                # Use construct_domain_grids_batch to create proper 3-channel input
+                # This places buildings RIGHT OF CENTER (not centered)
                 
-                # Re-express genome to get heightmap in 66x94 grid (what U-Net expects)
                 from backend.fast_encoding import NumbaFastEncoding
-                encoding_full = NumbaFastEncoding(parcel_size=81)
-                X_27 = encoding_full.express_batch(genome.reshape(1, -1))[0]  # 27x27
+                from backend.model_evaluator import construct_domain_grids_batch
                 
-                # Create 66x94 grid with parcel in center (matching U-Net's ROI logic)
-                X_full = np.zeros((1, 3, 66, 94), dtype=np.float32)
-                start_row = (66 - 27) // 2
-                start_col = (94 - 27) // 2
-                X_full[0, 1, start_row:start_row+27, start_col:start_col+27] = X_27
+                # Express genome to 27x27 heightmap
+                encoding_full = NumbaFastEncoding(parcel_size=81)
+                heightmap_27x27 = encoding_full.express_batch(genome.reshape(1, -1))[0]  # 27x27
+                
+                # Construct proper 3-channel domain grids (terrain, buildings, landuse)
+                # This automatically places buildings right of center
+                terrain, buildings_grid, landuse = construct_domain_grids_batch(
+                    heightmap_27x27[np.newaxis, :, :],  # Add batch dimension
+                    parcel_size_cells=27  # 81m / 3m = 27 cells
+                )
+                
+                # Normalize using evaluator's stats
+                terrain_norm = (terrain - unet_eval.terrain_mean) / unet_eval.terrain_std
+                buildings_norm = (buildings_grid - unet_eval.buildings_mean) / unet_eval.buildings_std
+                landuse_norm = (landuse - unet_eval.landuse_mean) / unet_eval.landuse_std
+                
+                # Stack into 3-channel input: (1, 3, 66, 94)
+                X_full = np.stack([terrain_norm[0], buildings_norm[0], landuse_norm[0]], axis=0)
                 
                 # Run model
                 dtype = torch.float16 if device.type == 'cuda' else torch.float32
-                X_torch = torch.tensor(X_full, dtype=dtype, device=device)
+                X_torch = torch.tensor(X_full, dtype=dtype, device=device).unsqueeze(0)
                 
                 with torch.no_grad():
                     Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, 66, 94)
                 
                 Y_pred = Y_pred.float().cpu().numpy()
                 
-                # Extract uq and vq from ROI region and denormalize
+                # Extract uq and vq from FULL domain and denormalize
                 uq_full = Y_pred[0, 2, :, :] * unet_eval.uq_std + unet_eval.uq_mean  # cm/s
                 vq_full = Y_pred[0, 3, :, :] * unet_eval.vq_std + unet_eval.vq_mean  # cm/s
                 
-                # Extract ROI (27x27 region)
-                uq_roi = uq_full[start_row:start_row+27, start_col:start_col+27]
-                vq_roi = vq_full[start_row:start_row+27, start_col:start_col+27]
+                # Convert cm/s to m/s and store FULL flow field (66x94)
+                flow_u = uq_full / 100.0
+                flow_v = vq_full / 100.0
                 
-                # Convert cm/s to m/s
-                flow_u = uq_roi / 100.0
-                flow_v = vq_roi / 100.0
-                
-                flow_field = np.stack([flow_u, flow_v], axis=-1)  # Shape: (27, 27, 2)
+                flow_field = np.stack([flow_u, flow_v], axis=-1)  # Shape: (66, 94, 2)
                 results['unet_flow_fields'][name] = flow_field.tolist()
                 
             except Exception as e:
@@ -499,24 +505,25 @@ def update_flow_visualizations(archetype_name, density, results, lang):
     if not results or not archetype_name:
         return go.Figure(), go.Figure()
     
-    # Get flow field (u, v components)
+    # Get flow field (u, v components) - now 66x94
     flow_field = np.array(results['unet_flow_fields'].get(archetype_name))
-    heightmap = np.array(results['heightmaps'][archetype_name])
+    heightmap = np.array(results['heightmaps'][archetype_name])  # Still 27x27
     
     if flow_field is None or flow_field.size == 0:
         return go.Figure(), go.Figure()
     
-    # Extract u, v components (assuming shape is [27, 27, 2])
+    # Extract u, v components (shape is [66, 94, 2] for full domain)
     u = flow_field[:, :, 0]
     v = flow_field[:, :, 1]
     
     # Compute velocity magnitude
     velocity_mag = np.sqrt(u**2 + v**2)
     
-    # Create coordinate arrays
-    pixel_size = 3.0
-    x = np.arange(27) * pixel_size
-    y = np.arange(27) * pixel_size
+    # Create coordinate arrays for full domain (66x94 at 3m resolution)
+    pixel_size = 3.0  # meters
+    flow_height, flow_width = u.shape  # Should be 66, 94
+    x = np.arange(flow_width) * pixel_size  # 0 to 282m
+    y = np.arange(flow_height) * pixel_size  # 0 to 198m
     
     # Velocity heatmap with building footprint overlay
     fig_heatmap = go.Figure()
@@ -533,10 +540,18 @@ def update_flow_visualizations(archetype_name, density, results, lang):
     ))
     
     # Overlay building footprints as contours
+    # Buildings are 27x27, placed right of center in 66x94 domain
+    start_row = (66 - 27) // 2
+    start_col = (94 - 27) // 2 + (94 // 6)  # Right of center offset
+    
+    # Create building coordinates in the full domain
+    building_x = (np.arange(27) + start_col) * pixel_size
+    building_y = (np.arange(27) + start_row) * pixel_size
+    
     fig_heatmap.add_trace(go.Contour(
         z=heightmap,
-        x=x,
-        y=y,
+        x=building_x,
+        y=building_y,
         contours=dict(
             start=0.1,
             size=3,
@@ -551,6 +566,7 @@ def update_flow_visualizations(archetype_name, density, results, lang):
         title=T[lang]['MODEL_DIAG_VELOCITY_HEATMAP'],
         xaxis_title='X (m)',
         yaxis_title='Y (m)',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         height=400
     )
     
@@ -558,13 +574,11 @@ def update_flow_visualizations(archetype_name, density, results, lang):
     fig_streamlines = go.Figure()
     
     # Calculate proper streamlines using integration
-    # Sample starting points for streamlines
-    step = max(1, 27 // density)
-    y_starts = np.arange(0, 27, step)
+    # Sample starting points for streamlines across the full height
+    flow_height, flow_width = u.shape  # 66, 94
+    step = max(1, flow_height // density)
+    y_starts = np.arange(0, flow_height, step)
     x_start = 2  # Start streamlines from left edge
-    
-    # Create meshgrid for interpolation
-    X, Y = np.meshgrid(np.arange(27), np.arange(27))
     
     def integrate_streamline(x0, y0, max_steps=200):
         """Integrate streamline from starting point using RK2.
@@ -575,10 +589,9 @@ def update_flow_visualizations(archetype_name, density, results, lang):
         from scipy.interpolate import RegularGridInterpolator
         
         # Create interpolators for u and v
-        # u and v have shape (27, 27) where first index is row (y), second is column (x)
-        # RegularGridInterpolator expects points as (row, col) = (y, x)
-        y_coords = np.arange(27)
-        x_coords = np.arange(27)
+        # u and v have shape (66, 94) where first index is row (y), second is column (x)
+        y_coords = np.arange(flow_height)
+        x_coords = np.arange(flow_width)
         u_interp = RegularGridInterpolator((y_coords, x_coords), u, 
                                           bounds_error=False, fill_value=0)
         v_interp = RegularGridInterpolator((y_coords, x_coords), v,
@@ -605,14 +618,15 @@ def update_flow_visualizations(archetype_name, density, results, lang):
             y_new = y + dt * v2
             
             # Check if out of bounds or velocity too small
-            if (x_new < 0 or x_new >= 27 or y_new < 0 or y_new >= 27 or
+            if (x_new < 0 or x_new >= flow_width or y_new < 0 or y_new >= flow_height or
                 np.sqrt(u2**2 + v2**2) < 0.01):
                 break
             
-            # Check if hit a building
-            # heightmap[row, col] = heightmap[y, x]
-            ix, iy = int(np.round(x_new)), int(np.round(y_new))
-            if 0 <= ix < 27 and 0 <= iy < 27 and heightmap[iy, ix] > 0:
+            # Check if hit a building (buildings are in 27x27 region)
+            # Convert flow grid coords to building grid coords
+            bldg_x = int(np.round(x_new - start_col))
+            bldg_y = int(np.round(y_new - start_row))
+            if 0 <= bldg_x < 27 and 0 <= bldg_y < 27 and heightmap[bldg_y, bldg_x] > 0:
                 break
             
             points.append([x_new, y_new])
@@ -665,11 +679,14 @@ def update_flow_visualizations(archetype_name, density, results, lang):
             print(f"Error integrating streamline at y={y_start}: {e}")
             continue
     
-    # Add building footprints
+    # Add building footprints at correct position (right of center)
+    building_x = (np.arange(27) + start_col) * pixel_size
+    building_y = (np.arange(27) + start_row) * pixel_size
+    
     fig_streamlines.add_trace(go.Contour(
         z=heightmap,
-        x=x,
-        y=y,
+        x=building_x,
+        y=building_y,
         contours=dict(
             start=0.1,
             size=3,
@@ -684,6 +701,7 @@ def update_flow_visualizations(archetype_name, density, results, lang):
         title=T[lang]['MODEL_DIAG_STREAMLINES'],
         xaxis_title='X (m)',
         yaxis_title='Y (m)',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         height=400
     )
     

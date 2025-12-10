@@ -70,7 +70,7 @@ def layout(lang='DE'):
                         max=60,
                         step=3,
                         value=int(ENCODING_CONFIG['max_building_floors'] * ENCODING_CONFIG['meters_per_floor']),
-                        marks={3: '3m', 10: '10m', 20: '20m', 30: '30m'},
+                        marks={3: '3m', 12: '12m', 24: '24m', 36: '36m', 48: '48m', 60: '60m'},
                         tooltip={"placement": "bottom", "always_visible": False}
                     ),
                     dbc.Label([T[lang]['STEP2_MIN_DISTANCE_LABEL'], html.Span(id='min-distance-value', className='ms-2 text-primary fw-bold')], className="mt-3"),
@@ -104,48 +104,7 @@ def layout(lang='DE'):
                     switch=True,
                 ), body=True),
                 
-                # --- Advanced Mode Toggle ---
-                dbc.Row([
-                    dbc.Col([
-                        dbc.Checklist(
-                            options=[{"label": T[lang]['STEP2_ADVANCED_MODE'], "value": 1}],
-                            value=[],
-                            id="advanced-mode-toggle",
-                            switch=True,
-                            className="mt-3"
-                        ),
-                    ]),
-                ]),
-                
-                # --- NEW: QD Hyperparameters Section (shown only in advanced mode) ---
-                html.Div(id='qd-hyperparams-container', children=[
-                    html.H5(T[lang]['STEP2_QD_HYPERPARAMS_HEADER'], className="mt-4"),
-                    dbc.Card(dbc.CardBody([
-                    dbc.Row([
-                        dbc.Col([
-                            dbc.Label(T[lang]['STEP2_QD_GENERATIONS_LABEL']),
-                            dbc.Input(id='qd-generations-input', type="number", min=100, max=10000, step=100, value=QD_CONFIG['num_generations']),
-                        ], md=6),
-                        dbc.Col([
-                            dbc.Label(T[lang]['STEP2_QD_EMITTERS_LABEL']),
-                            dbc.Input(id='qd-emitters-input', type="number", min=1, max=20, step=1, value=QD_CONFIG['num_emitters']),
-                        ], md=6),
-                    ]),
-                    dbc.Row([
-                        dbc.Col([
-                            dbc.Label(T[lang]['STEP2_QD_NICHES_LABEL']),
-                            dbc.Input(id='qd-niches-input', type="number", min=3, max=20, step=1, value=QD_CONFIG['num_niches']),
-                        ], md=6),
-                        dbc.Col([
-                            dbc.Label(T[lang]['STEP2_QD_BATCH_SIZE_LABEL']),
-                            dbc.Input(id='qd-batch-size-input', type="number", min=8, max=128, step=8, value=QD_CONFIG['batch_size']),
-                        ], md=6),
-                    ], className="mt-2"),
-                    html.Small(T[lang]['STEP2_QD_HYPERPARAMS_INFO'], className="text-muted mt-2 d-block")
-                    ]), color="light")
-                ], style={'display': 'none'}),  # Hidden by default
-                
-                # --- NEW: Surrogate Model Selector (shown only in advanced mode) ---
+                # --- Evaluation Method Selector (always visible) ---
                 html.Div(id='surrogate-model-container', children=[
                     html.H5(T[lang]['STEP2_SURROGATE_MODEL_HEADER'], className="mt-4"),
                     dbc.Card(dbc.CardBody([
@@ -176,6 +135,47 @@ def layout(lang='DE'):
                             ),
                             html.Small(T[lang]['STEP2_UCB_LAMBDA_INFO'], className="text-muted mt-1 d-block")
                         ], style={'display': 'none'}),
+                    ]), color="light")
+                ]),  # Always visible now
+                
+                # --- Advanced Mode Toggle ---
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Checklist(
+                            options=[{"label": T[lang]['STEP2_ADVANCED_MODE'], "value": 1}],
+                            value=[],
+                            id="advanced-mode-toggle",
+                            switch=True,
+                            className="mt-3"
+                        ),
+                    ]),
+                ]),
+                
+                # --- QD Hyperparameters Section (shown only in advanced mode) ---
+                html.Div(id='qd-hyperparams-container', children=[
+                    html.H5(T[lang]['STEP2_QD_HYPERPARAMS_HEADER'], className="mt-4"),
+                    dbc.Card(dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_GENERATIONS_LABEL']),
+                            dbc.Input(id='qd-generations-input', type="number", min=100, max=10000, step=100, value=QD_CONFIG['num_generations']),
+                        ], md=6),
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_EMITTERS_LABEL']),
+                            dbc.Input(id='qd-emitters-input', type="number", min=1, max=20, step=1, value=QD_CONFIG['num_emitters']),
+                        ], md=6),
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_NICHES_LABEL']),
+                            dbc.Input(id='qd-niches-input', type="number", min=3, max=20, step=1, value=QD_CONFIG['num_niches']),
+                        ], md=6),
+                        dbc.Col([
+                            dbc.Label(T[lang]['STEP2_QD_BATCH_SIZE_LABEL']),
+                            dbc.Input(id='qd-batch-size-input', type="number", min=8, max=128, step=8, value=QD_CONFIG['batch_size']),
+                        ], md=6),
+                    ], className="mt-2"),
+                    html.Small(T[lang]['STEP2_QD_HYPERPARAMS_INFO'], className="text-muted mt-2 d-block")
                     ]), color="light")
                 ], style={'display': 'none'}),  # Hidden by default
             ], md=6),
@@ -483,16 +483,15 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
         
     return sliders
 
-# Callback to toggle advanced mode visibility
+# Callback to toggle advanced mode visibility (only QD hyperparams now, model is always visible)
 @callback(
     Output('qd-hyperparams-container', 'style'),
-    Output('surrogate-model-container', 'style'),
     Input('advanced-mode-toggle', 'value')
 )
 def toggle_advanced_mode(advanced_mode):
     if advanced_mode and 1 in advanced_mode:
-        return {'display': 'block'}, {'display': 'block'}
-    return {'display': 'none'}, {'display': 'none'}
+        return {'display': 'block'}
+    return {'display': 'none'}
 
 @callback(
     Output('model-info-card', 'children'),

@@ -97,9 +97,9 @@ def construct_domain_grids_batch(
     for col in range(slope_end_col):
         terrain[:, :, col] = (slope_end_col - col) * 3.0 * np.tan(np.radians(1.0))
     
-    # Place buildings in center
+    # Place buildings to the right of center
     start_row = (grid_h - parcel_size_cells) // 2
-    start_col = (grid_w - parcel_size_cells) // 2
+    start_col = (grid_w - parcel_size_cells) // 2 + (grid_w // 6)  # Shift right by 1/6 of width
     buildings[:, start_row:start_row+parcel_size_cells, start_col:start_col+parcel_size_cells] = heightmaps
     
     # Landuse: 7 (free space) in upwind half

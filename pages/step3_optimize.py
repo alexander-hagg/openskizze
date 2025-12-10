@@ -85,40 +85,15 @@ def layout(lang='DE'):
             html.Div(id="progress-text", className="text-center text-muted small mt-1")
         ], style={'visibility': 'hidden'}),
         
-        html.Hr(),
-        
-        # Archive Visualization Section - Axis Selection Controls
-        dbc.Card(dbc.CardBody([
-            html.H4(T[lang]['STEP3_ARCHIVE_VIS_HEADER']),
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label(T[lang]['STEP3_X_AXIS_LABEL']),
-                    dcc.Dropdown(id='x-axis-dropdown-s3'),
-                ], md=6),
-                dbc.Col([
-                    dbc.Label(T[lang]['STEP3_Y_AXIS_LABEL']),
-                    dcc.Dropdown(id='y-axis-dropdown-s3'),
-                ], md=6),
-            ]),
-        ]), className="mb-3"),
-        
-        # Three visualizations in a row: Solution Archive (50%), Archive Heatmap (25%), Parallel Coords (25%)
-        dbc.Row([
-            dbc.Col([
-                html.H5(T[lang]['STEP3_SOLUTION_GRID_HEADER']),
-                dcc.Loading(html.Div(id='solution-map-grid-container-s3'))
-            ], md=6),
-            dbc.Col([
-                dbc.Row([
-                    html.H5(T[lang]['STEP3_ARCHIVE_HEATMAP_TITLE']),
-                    dcc.Loading(dcc.Graph(id='archive-heatmap-s3'))
-                ]),
-                dbc.Row([
-                    html.H5(T[lang]['STEP3_PARALLEL_COORDS_HEADER']),
-                    dcc.Loading(dcc.Graph(id='parallel-coords-plot-s3'))
-                ]),
-            ], md=6),
-        ]),
+        # Hidden placeholder components for callbacks that still reference them
+        # These will be properly implemented in Step 4
+        html.Div([
+            dcc.Dropdown(id='x-axis-dropdown-s3', style={'display': 'none'}),
+            dcc.Dropdown(id='y-axis-dropdown-s3', style={'display': 'none'}),
+            dcc.Graph(id='archive-heatmap-s3', style={'display': 'none'}),
+            html.Div(id='solution-map-grid-container-s3', style={'display': 'none'}),
+            dcc.Graph(id='parallel-coords-plot-s3', style={'display': 'none'}),
+        ], style={'display': 'none'}),
         
     ], fluid=True)
 

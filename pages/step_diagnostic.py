@@ -235,6 +235,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         width=300, height=300,
         xaxis_title='X (perpendicular to wind)',
         yaxis_title='Z (Height in meters)',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         annotations=[
             dict(text=f'Green = open path | Red = blocked by design OR existing buildings<br>1 meter per voxel',
                  xref='paper', yref='paper', x=0.5, y=-0.25, 
@@ -255,6 +256,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         title=f'Step 5a: Street Canyons (Score: {street_canyon_score:.3f})',
         width=300, height=300,
         xaxis_title='X', yaxis_title='Y',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
                          x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
@@ -269,6 +271,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         title=f'Step 5b: Lateral Ventilation (Score: {lateral_ventilation_score:.3f})',
         width=300, height=300,
         xaxis_title='X', yaxis_title='Y',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
                          x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
@@ -283,6 +286,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         title=f'Step 5c: Height Variation (Score: {height_variation_score:.3f})',
         width=300, height=300,
         xaxis_title='X', yaxis_title='Y',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
                          x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )
@@ -297,6 +301,7 @@ def _visualize_fitness_calculation(genome, encoding_obj, env_config):
         title=f'Step 5d: Partial Penetration (Score: {penetration_score:.3f})',
         width=300, height=300,
         xaxis_title='X', yaxis_title='Z',
+        yaxis=dict(scaleanchor='x', scaleratio=1),
         annotations=[dict(text='Alternative Method', xref='paper', yref='paper', 
                          x=0.5, y=1.1, showarrow=False, font=dict(size=9, color='gray'))]
     )

@@ -115,19 +115,6 @@ def layout(lang='DE'):
             dbc.Col([
                 html.Div([
                     html.H5(T[lang]['STEP1_TOOLS_HEADER']),
-                    # --- NEW: File Upload ---
-                    dbc.Label(T[lang]['STEP1_UPLOAD_LABEL'], className="fw-bold"),
-                    dcc.Upload(
-                        id='upload-geojson',
-                        children=html.Div([T[lang]['STEP1_UPLOAD_BUTTON_TEXT']]),
-                        style={
-                            'width': '100%', 'height': '60px', 'lineHeight': '60px',
-                            'borderWidth': '1px', 'borderStyle': 'dashed',
-                            'borderRadius': '5px', 'textAlign': 'center', 'margin-bottom': '10px'
-                        },
-                        multiple=False
-                    ),
-                    html.Hr(),
                     dbc.Label(T[lang]['STEP1_LOAD_PARCELS_LABEL'], className="fw-bold"),
                     dbc.Button(T[lang]['STEP1_LOAD_PARCELS_BUTTON'], id="load-parcels-btn", className="w-100 mb-3"),
                     
@@ -149,6 +136,12 @@ def layout(lang='DE'):
                     ])
                 ]),
                 html.Hr(),
+                # Wind Direction - moved above Model Diagnostics
+                html.H5(T[lang]['STEP1_WIND_HEADER']),
+                html.Div(T[lang]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
+                create_compass_component(),
+                dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
+                html.Hr(),
                 # Model Diagnostics Button
                 dbc.Card([
                     dbc.CardBody([
@@ -168,11 +161,8 @@ def layout(lang='DE'):
                         )
                     ])
                 ], className='mb-3'),
-                html.Hr(),
-                html.H5(T[lang]['STEP1_WIND_HEADER']),
-                html.Div(T[lang]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
-                create_compass_component(),
-                dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
+                # Hidden upload component (needed for callbacks but not displayed)
+                dcc.Upload(id='upload-geojson', style={'display': 'none'}),
             ], md=5)
         ])
     ], fluid=True)

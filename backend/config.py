@@ -15,7 +15,7 @@ QD_CONFIG = {
 ENCODING_CONFIG = {
     'max_num_buildings': 10,  # FIXED - always 10 buildings
     'xy_length': 32,  # Updated dynamically per parcel
-    'max_building_floors': 10,  # Maximum building height in FLOORS (e.g., 10 floors = 30m at 3m/floor)
+    'max_building_floors': 4,  # Default maximum building height in FLOORS (e.g., 4 floors = 12m at 3m/floor)
     'meters_per_floor': 3.0,  # Standard floor height in meters (used to convert floors → meters in phenotype)
 }
 
@@ -39,7 +39,7 @@ DOMAIN_CONFIG = {
     'feat_ranges': [
         [0.0, 1.0],      # 0: GRZ (Site Coverage Ratio) - 0-100%
         [0.0, 5.0],      # 1: GFZ (Floor Area Ratio) - 0-5.0
-        [0.0, 30.0],     # 2: Avg Height (m)
+        [0.0, 12.0],     # 2: Avg Height (m) - synced with default max building height
         [0.0, 15.0],     # 3: Height Variability (m)
         [0.0, 50.0],     # 4: Avg Distance (m)
         [0.0, 10.0],     # 5: Number of Buildings (count)

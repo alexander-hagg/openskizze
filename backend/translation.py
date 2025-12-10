@@ -111,6 +111,7 @@ T = {
         
         # Step 6 - Flow Field
         'STEP6_SHOW_FLOW': "Strömungsfeld anzeigen",
+        'STEP6_SHOW_ALL_FLOW': "Alle Strömungsfelder anzeigen",
         'STEP6_FLOW_FIELD_HEADER': "Strömungsfeld",
         'STEP6_FLOW_OVERLAY': "Windströmungs-Overlay",
         'STEP6_FLOW_TITLE': "Kaltluftströmung (U-Net Vorhersage)",
@@ -238,7 +239,7 @@ T = {
         'STEP6_IDS_NOT_FOUND': "Fehler: Die ausgewählten Entwurfs-IDs wurden in der aktuellen Ergebnisdatei nicht gefunden. Dies kann passieren, wenn nach der Auswahl eine neue Optimierung gestartet wurde. Bitte gehen Sie zu Schritt 5 zurück und treffen Sie eine neue Auswahl.",
         'STEP6_EXPORT_PDF': "PDF-Bericht exportieren",
         'STEP6_DESIGN': "Entwurf",
-        'STEP6_OBJECTIVE': "Zielfunktion (Kaltluft):",
+        'STEP6_OBJECTIVE': "Zielfunktion:",
         'STEP6_FEATURES': "Leistungsmerkmale",
         'STEP6_FEATURE': "Merkmal",
         'STEP6_VALUE': "Wert",
@@ -247,7 +248,7 @@ T = {
         'STEP6_FEATURE_LABEL': "Merkmal",
         'STEP6_VALUE_LABEL': "Wert",
         'STEP6_DESIGN_TITLE': "Entwurf {num}",
-        'STEP6_OBJECTIVE_LABEL': "Zielfunktion (Kaltluft): {value:.4f}",
+        'STEP6_OBJECTIVE_LABEL': "Zielfunktion: {value:.4f}",
         'STEP6_METRICS_HEADER': "Leistungsmerkmale",
         
         # Breadcrumbs
@@ -257,7 +258,7 @@ T = {
         'BREADCRUMB_STEP3': 'Optimierung',
         'BREADCRUMB_STEP4': 'Analyse',
         'BREADCRUMB_STEP5': 'Clustering',
-        'BREADCRUMB_STEP6': 'Vergleich',
+        'BREADCRUMB_STEP6': 'Archetypen vergleichen',
         
         # Next step navigation
         'NEXT_STEP_LABEL': 'Weiter zu',
@@ -266,7 +267,7 @@ T = {
         'NEXT_STEP_STEP3': 'Optimierung starten',
         'NEXT_STEP_STEP4': 'Ergebnisse analysieren',
         'NEXT_STEP_STEP5': 'Entwürfe clustern',
-        'NEXT_STEP_STEP6': 'Entwürfe vergleichen',
+        'NEXT_STEP_STEP6': 'Archetypen vergleichen',
         
         # Model Diagnostics Page
         'MODEL_DIAG_TITLE': 'Modelldiagnose',
@@ -415,6 +416,7 @@ T = {
         
         # Step 6 - Flow Field
         'STEP6_SHOW_FLOW': "Show Flow Field",
+        'STEP6_SHOW_ALL_FLOW': "Show All Flow Fields",
         'STEP6_FLOW_FIELD_HEADER': "Flow Field",
         'STEP6_FLOW_OVERLAY': "Wind Flow Overlay",
         'STEP6_FLOW_TITLE': "Cold Air Flow (U-Net Prediction)",
@@ -576,7 +578,7 @@ T = {
         'STEP6_IDS_NOT_FOUND': "Error: The selected design IDs were not found in the current results file. This can happen if a new optimization was started after selection. Please return to Step 5 and make a new selection.",
         'STEP6_EXPORT_PDF': "Export PDF Report",
         'STEP6_DESIGN': "Design",
-        'STEP6_OBJECTIVE': "Objective Function (Cold Air):",
+        'STEP6_OBJECTIVE': "Objective Function:",
         'STEP6_FEATURES': "Performance Metrics",
         'STEP6_FEATURE': "Metric",
         'STEP6_VALUE': "Value",
@@ -585,7 +587,7 @@ T = {
         'STEP6_FEATURE_LABEL': "Metric",
         'STEP6_VALUE_LABEL': "Value",
         'STEP6_DESIGN_TITLE': "Design {num}",
-        'STEP6_OBJECTIVE_LABEL': "Objective Function (Cold Air): {value:.4f}",
+        'STEP6_OBJECTIVE_LABEL': "Objective Function: {value:.4f}",
         'STEP6_METRICS_HEADER': "Performance Metrics",
         
         # Breadcrumbs
@@ -595,7 +597,7 @@ T = {
         'BREADCRUMB_STEP3': 'Optimization',
         'BREADCRUMB_STEP4': 'Analysis',
         'BREADCRUMB_STEP5': 'Clustering',
-        'BREADCRUMB_STEP6': 'Comparison',
+        'BREADCRUMB_STEP6': 'Compare Archetypes',
 
         # Next step navigation
         'NEXT_STEP_LABEL': 'Go to',
@@ -604,7 +606,7 @@ T = {
         'NEXT_STEP_STEP3': 'Run Optimization',
         'NEXT_STEP_STEP4': 'Analyze Results',
         'NEXT_STEP_STEP5': 'Cluster Designs',
-        'NEXT_STEP_STEP6': 'Compare Designs',
+        'NEXT_STEP_STEP6': 'Compare Archetypes',
         
     }
 }
@@ -632,6 +634,7 @@ def translate_feature_labels(feature_indices, lang='DE', feature_set='consolidat
 def create_breadcrumb(current_step, lang='DE'):
     """
     Create breadcrumb navigation component with next step button.
+    All steps are always visible, with unvisited steps shown in grey.
     
     Args:
         current_step: Current step number (1-6) or 'home'
@@ -668,23 +671,28 @@ def create_breadcrumb(current_step, lang='DE'):
     
     current_index = step_map.get(current_step, 0)
     
-    # Build breadcrumb items
+    # Build breadcrumb items - ALL steps are always visible and clickable
     items = []
     for idx, (href, key) in enumerate(steps):
-        if idx <= current_index:
-            if idx == current_index:
-                # Current page - no link, active
-                items.append({
-                    "label": translations[key],
-                    "active": True,
-                })
-            else:
-                # Previous pages - with link
-                items.append({
-                    "label": translations[key],
-                    "href": href,
-                    "external_link": False,
-                })
+        label = translations[key]
+        
+        if idx == current_index:
+            # Current page - active (no link)
+            items.append({
+                "label": label,
+                "active": True,
+            })
+        else:
+            # All other pages - with link (visited=normal color, unvisited=will style via CSS)
+            items.append({
+                "label": label,
+                "href": href,
+                "external_link": False,
+                "class_name": "text-muted" if idx > current_index else "",
+            })
+    
+    # Create breadcrumb
+    breadcrumb = dbc.Breadcrumb(items=items, className="mb-0")
     
     # Create next step button (if not on last step)
     next_button = None
@@ -709,7 +717,7 @@ def create_breadcrumb(current_step, lang='DE'):
     # Return container with breadcrumb and next button aligned horizontally at baseline
     return html.Div(
         [
-            dbc.Breadcrumb(items=items, className="mb-0"),
+            breadcrumb,
             next_button if next_button else html.Div()
         ],
         className="d-flex align-items-baseline mb-3",

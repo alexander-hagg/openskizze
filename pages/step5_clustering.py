@@ -32,22 +32,11 @@ def layout(lang='DE'):
         create_breadcrumb(5, lang),
         html.H2(T[lang].get('STEP5_TITLE', 'Cluster Analysis')),
         
-        # Reorganized layout with filter controls in left column
+        # Single column layout (filtering removed - done in Step 4)
         dbc.Row([
-            # Left column: Filtering Controls
             dbc.Col([
                 dbc.Card(dbc.CardBody([
-                    html.H4(T[lang]['STEP5_FILTER_HEADER']),
-                    html.P(T[lang]['STEP5_FILTER_INFO'], className="text-muted"),
-                    html.Div(id='feature-filter-controls'),
-                ])),
-                
-            ], md=5),
-            
-            # Right column: Clustering Results
-            dbc.Col([
-                dbc.Card(dbc.CardBody([
-                    html.H4(T[lang]['STEP5_SIMILARITY_METRIC_LABEL']),
+                    html.H5(T[lang]['STEP5_SIMILARITY_METRIC_LABEL']),
                     dbc.RadioItems(
                         id='similarity-metric-selector',
                         options=[
@@ -59,7 +48,7 @@ def layout(lang='DE'):
                         className="mb-3"
                     ),
 
-                    html.H4(T[lang]['STEP5_ALGORITHM_LABEL']),
+                    html.H5(T[lang]['STEP5_ALGORITHM_LABEL']),
                     dbc.RadioItems(
                         id='algorithm-selector',
                         options=[
@@ -97,13 +86,18 @@ def layout(lang='DE'):
                     # Add a "Compare" button and link to comparison view
                     dbc.Button(T[lang]['STEP5_COMPARE_BUTTON'], id="compare-btn", href="/step6", color="success", className="mt-3 ms-2", style={'display': 'none'}),
                 ]), className="mb-3"),
-                
+            ], md=4),
+            
+            dbc.Col([
                 html.H4(T[lang]['STEP5_ANALYSIS_HEADER']),
                 dcc.Loading(html.Div(id='cluster-results-container', children=[
                      dbc.Alert(T[lang]['STEP5_NO_SELECTION'], color="light")
                 ])),
-            ], md=7),
+            ], md=8),
         ], className="mb-4"),
+        
+        # Hidden placeholder for filter controls (removed from UI but needed for callbacks)
+        html.Div(id='feature-filter-controls', style={'display': 'none'}),
         
     ], fluid=True)
 
