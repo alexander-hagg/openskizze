@@ -4,7 +4,7 @@
 
 OpenSKIZZE is an interactive decision-support tool for urban planners exploring climate-optimized building layouts. Using Quality-Diversity (QD) algorithms, it generates hundreds of diverse design alternatives optimized for ventilation and microclimate, helping planners navigate trade-offs between urban form and environmental performance.
 
-![OpenSKIZZE Interface](https://github.com/FullDA-FM/openskizze-gui/assets/1055659/4cc87b6a-9303-4d37-9afe-011e0f3c08f8)
+<img width="1512" height="437" alt="Screenshot from 2025-12-10 16-00-35" src="https://github.com/user-attachments/assets/956f3e8b-6059-440a-b162-4b8c5306d881" />
 
 ---
 
@@ -84,6 +84,8 @@ Open your browser to: **http://127.0.0.1:8050**
 - Set wind direction (meteorological convention, e.g., 270° = wind from west)
 - LOD2 buildings automatically fetched for context
 
+<img width="1671" height="878" alt="Screenshot from 2025-12-10 16-18-57" src="https://github.com/user-attachments/assets/798d26d4-b1dd-4c4c-a6e7-27a68544138c" />
+
 ### Step 2: Constraints & Features
 - Select up to 8 features for archive dimensions
 - Set target ranges (min/max) for each feature
@@ -96,6 +98,8 @@ Open your browser to: **http://127.0.0.1:8050**
   - `street_canyon` (dense urban areas, recommended)
   - `unet` (requires trained model)
 
+<img width="1671" height="878" alt="Screenshot from 2025-12-10 16-19-34" src="https://github.com/user-attachments/assets/e26ac163-cfb4-46dc-afdd-e4db348cb599" />
+
 ### Step 3: Optimize
 - Configure QD parameters:
   - Number of generations (100-1000)
@@ -104,15 +108,21 @@ Open your browser to: **http://127.0.0.1:8050**
 - Run optimization (multiprocessed)
 - Monitor progress with live updates
 
+<img width="1671" height="878" alt="Screenshot from 2025-12-10 16-19-56" src="https://github.com/user-attachments/assets/9a3f7451-9951-4b39-93dd-98cdf8b84b6d" />
+
 ### Step 4: Explore Archive
 - View archive heatmaps (2D projections of solution space)
 - Inspect 3D previews of high-performing solutions
 - Check diversity metrics (coverage, density)
 
+<img width="1671" height="878" alt="Screenshot from 2025-12-10 16-20-17" src="https://github.com/user-attachments/assets/fe1858de-4576-4a91-acdf-9d760a10862a" />
+
 ### Step 5: Clustering
 - Automatic clustering identifies "design families"
 - Select clusters for detailed comparison
 - View representative (central) or best solutions per cluster
+
+<img width="1671" height="878" alt="Screenshot from 2025-12-10 16-22-04" src="https://github.com/user-attachments/assets/387b0060-eedd-44a3-9c5e-ff4cc47aa139" />
 
 ### Step 6: Compare & Export
 - Side-by-side 3D visualization with synchronized cameras
@@ -120,6 +130,8 @@ Open your browser to: **http://127.0.0.1:8050**
 - **Design robustness**: Cluster size as % of total solutions
 - Toggle U-Net flow field visualization (if available)
 - Export PDF report with all visualizations and metrics
+
+<img width="1671" height="878" alt="Screenshot from 2025-12-10 16-22-26" src="https://github.com/user-attachments/assets/ed157302-5647-467d-8beb-9fac42700e96" />
 
 ---
 
@@ -319,7 +331,8 @@ OpenSKIZZE is research software under active development. Contributions welcome!
 
 ## 📄 License
 
-[Specify license here - typically GPL-3.0, MIT, or Apache-2.0]
+AGPL-3.0 license 
+[https://github.com/alexander-hagg/openskizze-gui?tab=AGPL-3.0-1-ov-file#readme]
 
 ---
 
@@ -334,9 +347,9 @@ OpenSKIZZE is research software under active development. Contributions welcome!
 
 ## 📧 Contact
 
-Alexander Hagg - [Add contact info if public]
+Alexander Hagg - [[Personal Webpage](https://alexander-hagg.github.io/)]
 
-**Funding**: [Add funding agency/project info]
+**Funding**: [Deutsche Bundesstiftung Umwelt] (AZ 39022/01)
 
 ---
 
