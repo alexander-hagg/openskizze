@@ -1071,6 +1071,10 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                 from backend.model_evaluator import create_evaluator
                 from backend.fast_encoding import NumbaFastEncoding
                 
+                # Calculate actual parcel size from results data
+                parcel_size_m = heightmap_res * pixel_size  # e.g., 17 cells * 3m = 51m
+                print(f"DEBUG: Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
+                
                 # Get solution genome - handle different possible key names
                 genome = None
                 if 'genome' in sol:
@@ -1090,20 +1094,20 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                 genome = np.array(genome) if not isinstance(genome, np.ndarray) else genome
                 print(f"DEBUG: Using genome shape: {genome.shape}")
                 
-                # Create U-Net evaluator
+                # Create U-Net evaluator with actual parcel size
                 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
                 print(f"DEBUG: Using device: {device}")
-                unet_eval = create_evaluator('unet', parcel_size=81, device=device)
+                unet_eval = create_evaluator('unet', parcel_size=parcel_size_m, device=device)
                 
-                # Generate heightmap using same encoding as in diagnostics
-                encoding = NumbaFastEncoding(parcel_size=81)  # 27x27 grid for 81m parcel
-                heightmap_27x27 = encoding.express_batch(genome.reshape(1, -1))[0]
+                # Generate heightmap using actual parcel size
+                encoding = NumbaFastEncoding(parcel_size=parcel_size_m)
+                heightmap_encoded = encoding.express_batch(genome.reshape(1, -1))[0]
                 
                 # Construct proper 3-channel domain grids for U-Net (terrain, buildings, landuse)
                 from backend.model_evaluator import construct_domain_grids_batch
                 terrain, buildings, landuse = construct_domain_grids_batch(
-                    heightmap_27x27[np.newaxis, :, :],  # Add batch dimension
-                    parcel_size_cells=27  # 81m / 3m = 27 cells
+                    heightmap_encoded[np.newaxis, :, :],  # Add batch dimension
+                    parcel_size_m=parcel_size_m
                 )
                 
                 # Normalize inputs using the evaluator's normalization stats
@@ -1130,9 +1134,9 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                     uq_np = uq_full.cpu().numpy() / 100.0  # Convert cm/s to m/s
                     vq_np = vq_full.cpu().numpy() / 100.0
                     
-                    # Use ENTIRE flow field (66x94) instead of ROI extraction
+                    # Use ENTIRE flow field (grid dynamically sized based on parcel)
                     # Create flow field in expected format: (2, H, W) for (u, v)
-                    flow_field = np.stack([uq_np, vq_np], axis=0)  # Shape: (2, 66, 94)
+                    flow_field = np.stack([uq_np, vq_np], axis=0)  # Shape: (2, grid_h, grid_w)
                     print(f"DEBUG: Generated full flow field shape: {flow_field.shape}")
                     
             except Exception as e:
@@ -1510,22 +1514,29 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
             from backend.model_evaluator import create_evaluator
             from backend.fast_encoding import NumbaFastEncoding
             
+            # Calculate actual parcel size from results data
+            heightmap_res = results_data['xy_length']
+            from backend.config import DOMAIN_CONFIG
+            pixel_size = DOMAIN_CONFIG.get('pixel_size_in_meters', 3.0)
+            parcel_size_m = heightmap_res * pixel_size
+            print(f"DEBUG: Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
+            
             # Get solution genome
             genome = solution['genome']
             
-            # Create U-Net evaluator
+            # Create U-Net evaluator with actual parcel size
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            unet_eval = create_evaluator('unet', parcel_size=81, device=device)
+            unet_eval = create_evaluator('unet', parcel_size=parcel_size_m, device=device)
             
-            # Generate heightmap using same encoding as in diagnostics
-            encoding = NumbaFastEncoding(parcel_size=81)  # 27x27 grid for 81m parcel
-            heightmap_27x27 = encoding.express_batch(genome.reshape(1, -1))[0]
+            # Generate heightmap using actual parcel size
+            encoding = NumbaFastEncoding(parcel_size=parcel_size_m)
+            heightmap_encoded = encoding.express_batch(genome.reshape(1, -1))[0]
             
             # Construct proper 3-channel domain grids for U-Net (terrain, buildings, landuse)
             from backend.model_evaluator import construct_domain_grids_batch
             terrain, buildings, landuse = construct_domain_grids_batch(
-                heightmap_27x27[np.newaxis, :, :],  # Add batch dimension
-                parcel_size_cells=27  # 81m / 3m = 27 cells
+                heightmap_encoded[np.newaxis, :, :],  # Add batch dimension
+                parcel_size_m=parcel_size_m
             )
             
             # Normalize inputs using the evaluator's normalization stats
@@ -1538,15 +1549,11 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
             
             # Prepare input tensor (convert to half precision on CUDA to match model)
             dtype = torch.float16 if device.type == 'cuda' else torch.float32
-            X_torch = torch.tensor(X, dtype=dtype, device=device).unsqueeze(0)  # Shape: (1, 3, 66, 94)
-            
-            # ROI coordinates for extracting results
-            y_start = (66 - 27) // 2  # Center vertically
-            x_start = (94 - 27) // 2  # Center horizontally
+            X_torch = torch.tensor(X, dtype=dtype, device=device).unsqueeze(0)  # Shape: (1, 3, grid_h, grid_w)
             
             # Get U-Net predictions
             with torch.no_grad():
-                Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, 66, 94)
+                Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, grid_h, grid_w)
                 
                 # Extract velocity components (channels 2 and 3: uq, vq)
                 uq_full = Y_pred[0, 2, :, :] * unet_eval.uq_std + unet_eval.uq_mean  # cm/s
@@ -1556,12 +1563,10 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
                 uq_np = uq_full.cpu().numpy() / 100.0  # Convert cm/s to m/s
                 vq_np = vq_full.cpu().numpy() / 100.0
                 
-                # Extract ROI (27x27 region where the parcel is)
-                uq_roi = uq_np[y_start:y_start+27, x_start:x_start+27]
-                vq_roi = vq_np[y_start:y_start+27, x_start:x_start+27]
-                
+                # Use full domain flow field (grid dynamically sized)
                 # Create flow field in expected format: (2, H, W) for (u, v)
-                flow_field = np.stack([uq_roi, vq_roi], axis=0)  # Shape: (2, 27, 27)
+                flow_field = np.stack([uq_np, vq_np], axis=0)  # Shape: (2, grid_h, grid_w)
+                print(f"DEBUG: Generated flow field shape: {flow_field.shape}")
                 
         except Exception as e:
             return dbc.Alert(

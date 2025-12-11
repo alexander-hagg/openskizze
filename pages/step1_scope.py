@@ -315,9 +315,9 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
     hideout = {'selected': selected_ids}
     final_geom = base_geom
     
-    # Set default wind_direction to 0 (katabatic flow has no regional wind)
-    if 'wind_direction' not in session_data:
-        session_data['wind_direction'] = 0
+    # Wind direction fixed at 270° (west) for katabatic flow
+    # Note: Not used with wind_speed=0 (pure katabatic), but kept for backwards compatibility
+    wind_direction = 270
 
     if triggered_id == 'parcels-layer':
         if click_data is None: return no_update
