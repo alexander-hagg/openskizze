@@ -11,14 +11,9 @@
 Unified Evaluator for SVGP, U-Net, and Hybrid Models
 
 This module provides a single interface for evaluating building layouts using:
-1. SVGP model (fast, provides uncertainty, works for ALL parcel sizes)
-2. U-Net model (most accurate, no uncertainty, size-specific)
+1. SVGP model (fast, provides uncertainty)
+2. U-Net model (most accurate, no uncertainty)
 3. Hybrid model (U-Net fitness + SVGP uncertainty for exploration)
-
-Model Files:
-- SVGP: models/svgp.pth (single model, parcel size as input)
-- U-Net: models/unet_{SIZE}m.pth (size-specific, e.g., unet_81m.pth)
-- U-Net normalization: models/unet_{SIZE}m_normalization.json
 
 All evaluators use the optimized fast_encoding.py for consistent feature
 calculation and performance.
@@ -26,10 +21,10 @@ calculation and performance.
 Usage:
     from model_evaluator import create_evaluator
     
-    # Create evaluator (parcel_size in meters, e.g., 81m)
+    # Create evaluator
     evaluator = create_evaluator(
         model_type='hybrid',  # or 'svgp' or 'unet'
-        parcel_size=81,  # Parcel size in meters
+        parcel_size=60,
         device='cuda',
         ucb_lambda=1.0  # For UCB exploration
     )
@@ -49,41 +44,11 @@ import numpy as np
 import torch
 import gpytorch
 
-from backend.svgp import SVGPModel, load_svgp_model
-from backend.unet import UNet, UNetConfig
-from backend.fast_encoding import NumbaFastEncoding
+from svgp import SVGPModel, load_svgp_model
+from unet import UNet, UNetConfig
+from fast_encoding import NumbaFastEncoding
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Model Size Mapping
-# ============================================================================
-
-def get_nearest_model_size(parcel_size: int) -> int:
-    """
-    Map any parcel size to nearest available U-Net model size.
-    
-    Available models: 60m, 120m, 240m (training in progress)
-    Uses nearest neighbor mapping for best accuracy.
-    
-    Args:
-        parcel_size: Actual parcel size in meters
-    
-    Returns:
-        model_size: Nearest model size (60, 120, or 240)
-    
-    Examples:
-        >>> get_nearest_model_size(51)  # Returns 60
-        >>> get_nearest_model_size(81)  # Returns 60
-        >>> get_nearest_model_size(90)  # Returns 120
-        >>> get_nearest_model_size(180) # Returns 120
-        >>> get_nearest_model_size(210) # Returns 240
-    """
-    model_sizes = [60, 120, 240]
-    distances = [abs(parcel_size - size) for size in model_sizes]
-    nearest_idx = distances.index(min(distances))
-    return model_sizes[nearest_idx]
 
 
 # ============================================================================
@@ -168,67 +133,22 @@ class SVGPEvaluator:
         self.parcel_size = parcel_size
         
         logger.info(f"Loading SVGP model from {model_path}")
-        
-        # Load checkpoint - contains model AND normalization (62D input + scalar output)
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-        
-        # Extract normalization stats from checkpoint (lowercase keys)
-        self.train_X_mean = checkpoint['train_x_mean'].to(device)  # (62,) - genome + width + height
-        self.train_X_std = checkpoint['train_x_std'].to(device)    # (62,)
-        # Convert scalar tensors to Python floats for correct broadcasting
-        self.train_y_mean = checkpoint['train_y_mean'].item() if hasattr(checkpoint['train_y_mean'], 'item') else float(checkpoint['train_y_mean'])
-        self.train_y_std = checkpoint['train_y_std'].item() if hasattr(checkpoint['train_y_std'], 'item') else float(checkpoint['train_y_std'])
-        
-        # Load model using extracted checkpoint
         self.model, self.likelihood = load_svgp_model(str(model_path), device=str(device))
+        
+        # Load normalization stats
+        norm_path = model_path.parent / 'normalization.json'
+        with open(norm_path) as f:
+            norm_stats = json.load(f)
+        
+        self.train_X_mean = torch.tensor(norm_stats['train_X_mean'], device=device)
+        self.train_X_std = torch.tensor(norm_stats['train_X_std'], device=device)
+        self.train_y_mean = norm_stats['train_y_mean']
+        self.train_y_std = norm_stats['train_y_std']
         
         # Initialize fast encoding for feature calculation
         self.fast_encoding = NumbaFastEncoding(parcel_size=parcel_size)
         
         logger.info(f"SVGP loaded (UCB λ={ucb_lambda})")
-    
-    def _denormalize_genomes(self, genomes: np.ndarray, parcel_size_bins: int) -> np.ndarray:
-        """
-        Convert normalized 0-1 genomes to pixel-coordinate encoding that SVGP was trained on.
-        
-        Genome structure: 10 buildings × [width, length, height, x, y, active]
-        
-        Training encoding:
-        - width, length: pixels (range depends on parcel size)
-        - height: floors (0-max_floors)
-        - x, y: pixel coordinates centered at 0 (range: -parcel_size/2 to +parcel_size/2)
-        - active: binary 0/1
-        
-        Args:
-            genomes: (N, 60) normalized genomes in [0, 1]
-            parcel_size_bins: Parcel size in bins
-        
-        Returns:
-            (N, 60) denormalized genomes in pixel coordinates
-        """
-        N = len(genomes)
-        genomes_denorm = np.zeros_like(genomes)
-        
-        max_building_floors = self.fast_encoding.config.get('max_building_floors', 10)
-        
-        for i in range(10):  # 10 buildings
-            base = i * 6
-            
-            # Width & Length: 0-1 → 0 to parcel_size/2 pixels
-            genomes_denorm[:, base + 0] = genomes[:, base + 0] * (parcel_size_bins / 2)
-            genomes_denorm[:, base + 1] = genomes[:, base + 1] * (parcel_size_bins / 2)
-            
-            # Height: 0-1 → 0 to max_floors
-            genomes_denorm[:, base + 2] = genomes[:, base + 2] * max_building_floors
-            
-            # X & Y positions: 0-1 → -parcel_size/2 to +parcel_size/2 (centered at 0)
-            genomes_denorm[:, base + 3] = (genomes[:, base + 3] - 0.5) * parcel_size_bins
-            genomes_denorm[:, base + 4] = (genomes[:, base + 4] - 0.5) * parcel_size_bins
-            
-            # Active: 0-1 → 0 or 1 (threshold at 0.5)
-            genomes_denorm[:, base + 5] = (genomes[:, base + 5] > 0.5).astype(np.float32)
-        
-        return genomes_denorm
     
     def evaluate(
         self,
@@ -239,8 +159,8 @@ class SVGPEvaluator:
         Evaluate genomes using SVGP.
         
         Args:
-            genomes: (N, 60) genome array in NORMALIZED 0-1 range
-            parcel_sizes: (N,) parcel sizes in BINS (not meters!)
+            genomes: (N, 60) genome array
+            parcel_sizes: (N,) parcel sizes in meters
         
         Returns:
             Dictionary with:
@@ -251,24 +171,16 @@ class SVGPEvaluator:
         """
         N = len(genomes)
         
-        # Express genomes to heightmaps
-        heightmaps = self.fast_encoding.express_batch(genomes)
+        # Compute features (needed for archive)
+        heightmaps, features = self.fast_encoding.express_and_features_batch(
+            genomes,
+            parcel_sizes
+        )
         
-        # Compute features for archive
-        from backend.fast_encoding import numba_calculate_features
-        pixel_size = self.fast_encoding.config['xy_scale']
-        features = np.zeros((N, 8), dtype=np.float64)
-        for i in range(N):
-            features[i] = numba_calculate_features(heightmaps[i], pixel_size)
-        
-        # CRITICAL: Convert normalized 0-1 genomes to pixel-coordinate encoding
-        # that SVGP was trained on
-        genomes_denorm = self._denormalize_genomes(genomes, parcel_sizes[0])
-        
-        # Prepare SVGP input: [denormalized_genome (60), width_bins (1), height_bins (1)] = 62D
+        # Prepare SVGP input: [genome (60), width (1), height (1)] = 62D
         widths = parcel_sizes.reshape(-1, 1)
         heights = parcel_sizes.reshape(-1, 1)
-        X = np.column_stack([genomes_denorm, widths, heights])
+        X = np.column_stack([genomes, widths, heights])
         X_tensor = torch.tensor(X, dtype=torch.float32, device=self.device)
         
         # Normalize
@@ -307,20 +219,13 @@ class UNetEvaluator:
         self,
         model_path: Path,
         parcel_size: int,
-        device: torch.device,
-        actual_parcel_size: Optional[int] = None
+        device: torch.device
     ):
         self.device = device
-        self.parcel_size = parcel_size  # Model size (e.g., 81m)
-        self.parcel_size_cells = parcel_size // 3  # Model size in cells (e.g., 27)
-        
-        # Actual parcel size may be smaller (e.g., 51m actual vs 81m model)
-        self.actual_parcel_size = actual_parcel_size if actual_parcel_size else parcel_size
-        self.actual_parcel_size_cells = self.actual_parcel_size // 3
+        self.parcel_size = parcel_size
+        self.parcel_size_cells = parcel_size // 3  # 3m per cell
         
         logger.info(f"Loading U-Net model from {model_path}")
-        logger.info(f"  Model size: {parcel_size}m ({self.parcel_size_cells} cells)")
-        logger.info(f"  Actual parcel size: {self.actual_parcel_size}m ({self.actual_parcel_size_cells} cells)")
         
         # Load model
         checkpoint = torch.load(model_path, map_location=device, weights_only=False)
@@ -335,61 +240,22 @@ class UNetEvaluator:
             self.model = self.model.half()
             logger.info("  ✓ FP16 enabled")
         
-        # Load normalization stats from size-specific U-Net file
-        # Extract parcel size from model filename (e.g., unet_81m.pth -> 81m)
-        model_filename = model_path.stem  # e.g., 'unet_81m'
-        parcel_size_str = model_filename.replace('unet_', '')  # e.g., '81m'
-        norm_path = model_path.parent / f'unet_{parcel_size_str}_normalization.json'
+        # Load normalization stats
+        norm_path = model_path.parent / 'normalization.json'
         with open(norm_path) as f:
             norm_stats = json.load(f)
         
-        # Handle both flat and nested normalization formats
-        if 'input' in norm_stats and 'output' in norm_stats:
-            # Nested format: {"input": {"terrain": {"mean": ..., "std": ...}}, "output": {...}}
-            self.terrain_mean = norm_stats['input']['terrain']['mean']
-            self.terrain_std = norm_stats['input']['terrain']['std']
-            self.buildings_mean = norm_stats['input']['buildings']['mean']
-            self.buildings_std = norm_stats['input']['buildings']['std']
-            self.landuse_mean = norm_stats['input']['landuse']['mean']
-            self.landuse_std = norm_stats['input']['landuse']['std']
-            
-            # Output normalization
-            self.ex_mean = norm_stats['output']['Ex']['mean']
-            self.ex_std = norm_stats['output']['Ex']['std']
-            self.hx_mean = norm_stats['output'].get('Hx', {}).get('mean', 0.0)
-            self.hx_std = norm_stats['output'].get('Hx', {}).get('std', 1.0)
-            self.uq_mean = norm_stats['output']['uq']['mean']
-            self.uq_std = norm_stats['output']['uq']['std']
-            self.vq_mean = norm_stats['output']['vq']['mean']
-            self.vq_std = norm_stats['output']['vq']['std']
-            self.uz_mean = norm_stats['output'].get('uz', {}).get('mean', 0.0)
-            self.uz_std = norm_stats['output'].get('uz', {}).get('std', 1.0)
-            self.vz_mean = norm_stats['output'].get('vz', {}).get('mean', 0.0)
-            self.vz_std = norm_stats['output'].get('vz', {}).get('std', 1.0)
-        else:
-            # Flat format: {"terrain_mean": ..., "terrain_std": ..., ...}
-            self.terrain_mean = norm_stats['terrain_mean']
-            self.terrain_std = norm_stats['terrain_std']
-            self.buildings_mean = norm_stats['buildings_mean']
-            self.buildings_std = norm_stats['buildings_std']
-            self.landuse_mean = norm_stats['landuse_mean']
-            self.landuse_std = norm_stats['landuse_std']
-            
-            self.uq_mean = norm_stats['uq_mean']
-            self.uq_std = norm_stats['uq_std']
-            self.vq_mean = norm_stats['vq_mean']
-            self.vq_std = norm_stats['vq_std']
-            self.uz_mean = norm_stats.get('uz_mean', 0.0)
-            self.uz_std = norm_stats.get('uz_std', 1.0)
-            self.vz_mean = norm_stats.get('vz_mean', 0.0)
-            self.vz_std = norm_stats.get('vz_std', 1.0)
-            self.ex_mean = norm_stats['ex_mean']
-            self.ex_std = norm_stats['ex_std']
-            self.hx_mean = norm_stats.get('hx_mean', 0.0)
-            self.hx_std = norm_stats.get('hx_std', 1.0)
+        self.terrain_mean = norm_stats['input']['terrain']['mean']
+        self.terrain_std = norm_stats['input']['terrain']['std']
+        self.buildings_mean = norm_stats['input']['buildings']['mean']
+        self.buildings_std = norm_stats['input']['buildings']['std']
+        self.landuse_mean = norm_stats['input']['landuse']['mean']
+        self.landuse_std = norm_stats['input']['landuse']['std']
+        self.output_means = {k: v['mean'] for k, v in norm_stats['output'].items()}
+        self.output_stds = {k: v['std'] for k, v in norm_stats['output'].items()}
         
-        # Initialize fast encoding (uses ACTUAL parcel size, not model size)
-        self.fast_encoding = NumbaFastEncoding(parcel_size=self.actual_parcel_size)
+        # Initialize fast encoding
+        self.fast_encoding = NumbaFastEncoding(parcel_size=parcel_size)
         
         # Calculate grid dimensions (must match training data)
         xy_scale = 3.0
@@ -430,21 +296,16 @@ class UNetEvaluator:
             - objectives: Cold air flux predictions
             - features: (N, 8) planning features
         """
-        # Express genomes to heightmaps
-        heightmaps = self.fast_encoding.express_batch(genomes)
-        
-        # Compute features for archive
-        from backend.fast_encoding import numba_calculate_features
-        pixel_size = self.fast_encoding.config['xy_scale']
-        N = len(genomes)
-        features = np.zeros((N, 8), dtype=np.float64)
-        for i in range(N):
-            features[i] = numba_calculate_features(heightmaps[i], pixel_size)
+        # Compute heightmaps and features
+        heightmaps, features = self.fast_encoding.express_and_features_batch(
+            genomes,
+            parcel_sizes
+        )
         
         # Construct domain grids with dynamic sizing
         terrain, buildings, landuse = construct_domain_grids_batch(
             heightmaps,
-            self.parcel_size  # Pass parcel size in meters
+            self.parcel_size
         )
         
         # Normalize inputs
@@ -463,12 +324,11 @@ class UNetEvaluator:
         with torch.no_grad():
             Y_pred = self.model(X_torch)
         
-        # Denormalize outputs using scalar mean/std
-        # Y_pred shape: (N, 6, H, W) - [Ex, Hx, uq, vq, uz, vz]
+        # Denormalize outputs
         Y_pred = Y_pred.float().cpu().numpy()
-        Ex = Y_pred[:, 0, :, :] * self.ex_std + self.ex_mean
-        uq = Y_pred[:, 2, :, :] * self.uq_std + self.uq_mean
-        vq = Y_pred[:, 3, :, :] * self.vq_std + self.vq_mean
+        Ex = Y_pred[:, 0, :, :] * self.output_stds['Ex'] + self.output_means['Ex']
+        uq = Y_pred[:, 2, :, :] * self.output_stds['uq'] + self.output_means['uq']
+        vq = Y_pred[:, 3, :, :] * self.output_stds['vq'] + self.output_means['vq']
         
         # Compute cold air flux: Φ = mean(Ex) * mean(sqrt(uq^2 + vq^2))
         # Convert cm/s → m/s
@@ -509,12 +369,10 @@ class HybridEvaluator:
         svgp_path: Path,
         parcel_size: int,
         device: torch.device,
-        ucb_lambda: float = 1.0,
-        actual_parcel_size: Optional[int] = None
+        ucb_lambda: float = 1.0
     ):
-        self.unet_eval = UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)
-        actual_size = actual_parcel_size if actual_parcel_size else parcel_size
-        self.svgp_eval = SVGPEvaluator(svgp_path, actual_size, device, ucb_lambda=0.0)
+        self.unet_eval = UNetEvaluator(unet_path, parcel_size, device)
+        self.svgp_eval = SVGPEvaluator(svgp_path, parcel_size, device, ucb_lambda=0.0)
         self.ucb_lambda = ucb_lambda
         
         logger.info(f"Hybrid evaluator created (λ={ucb_lambda})")
@@ -558,20 +416,17 @@ def create_evaluator(
     parcel_size: int,
     models_dir: Path = Path('models'),
     device: str = 'cuda',
-    ucb_lambda: float = 1.0,
-    actual_parcel_size: Optional[int] = None
+    ucb_lambda: float = 1.0
 ):
     """
     Create appropriate evaluator based on model type.
     
     Args:
         model_type: 'svgp', 'unet', or 'hybrid'
-        parcel_size: MODEL parcel size in METERS (e.g., 81 for unet_81m.pth)
+        parcel_size: Parcel size in meters (e.g., 60)
         models_dir: Directory containing model files
         device: 'cuda' or 'cpu'
         ucb_lambda: UCB exploration parameter (for SVGP/Hybrid)
-        actual_parcel_size: ACTUAL parcel size in meters (may be smaller than model size)
-                           If None, assumes actual size == model size
     
     Returns:
         Configured evaluator instance
@@ -581,15 +436,13 @@ def create_evaluator(
         ValueError: If model_type invalid
     
     Example:
-        # For 17-bin (51m) parcel using 27-bin (81m) U-Net model
-        evaluator = create_evaluator('unet', parcel_size=81, actual_parcel_size=51)
+        evaluator = create_evaluator('hybrid', parcel_size=60, ucb_lambda=1.0)
+        results = evaluator.evaluate(genomes, parcel_sizes)
     """
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
     
     # Model paths
-    # SVGP: Single model for ALL parcel sizes (uses parcel dims as input)
-    svgp_path = models_dir / 'svgp.pth'
-    # U-Net: Size-specific models (fixed input dimensions)
+    svgp_path = models_dir / f'svgp_{parcel_size}m.pth'
     unet_path = models_dir / f'unet_{parcel_size}m.pth'
     
     if model_type == 'svgp':
@@ -600,14 +453,14 @@ def create_evaluator(
     elif model_type == 'unet':
         if not unet_path.exists():
             raise FileNotFoundError(f"U-Net model not found: {unet_path}")
-        return UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)
+        return UNetEvaluator(unet_path, parcel_size, device)
     
     elif model_type == 'hybrid':
         if not svgp_path.exists():
             raise FileNotFoundError(f"SVGP model not found: {svgp_path}")
         if not unet_path.exists():
             raise FileNotFoundError(f"U-Net model not found: {unet_path}")
-        return HybridEvaluator(unet_path, svgp_path, parcel_size, device, ucb_lambda, actual_parcel_size)
+        return HybridEvaluator(unet_path, svgp_path, parcel_size, device, ucb_lambda)
     
     else:
         raise ValueError(f"Invalid model_type: {model_type}. Must be 'svgp', 'unet', or 'hybrid'")

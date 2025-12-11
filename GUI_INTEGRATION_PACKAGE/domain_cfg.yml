@@ -1,0 +1,29 @@
+features: [0, 1, 2, 3, 4, 5, 6, 7]
+labels: ['GRZ (Site Coverage)', 'GFZ (Floor Area Ratio)', 'Avg Height (m)', 'Height Variability (m)', 'Avg Distance (m)', 'Building Count', 'Compactness (A/V)', 'Park Factor (m)']
+feat_ranges: [
+  [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],      # Min values
+  [1.0, 3.0, 15.0, 8.0, 50.0, 10.0, 2.0, 30.0]   # Max values
+]
+# Feature explanations (CONSOLIDATED 8D Feature Set - matches OpenSKIZZE GUI):
+# [0] GRZ: 0-1 (0-100% site coverage) - Site Coverage Ratio
+# [1] GFZ: 0-3+ (typical urban values, can exceed 1.0) - Floor Area Ratio
+# [2] Avg Height: 0-15m (assuming 3m/floor, max 5 floors) - Average Building Height
+# [3] Height Variability: 0-8m (std dev of building heights) - Urban Grain
+# [4] Avg Distance: 0-50m (spacing between buildings) - Porosity
+# [5] Building Count: 1-10 - Grain (distinct buildings)
+# [6] Compactness: 0-2 (1/m, A/V ratio) - Energy (lower = more compact)
+# [7] Park Factor: 0-30m (green space radius) - Social (larger contiguous open spaces)
+
+# --- General Environment Settings ---
+environment_xy_size: 200 # The fixed size of the simulation domain (in meters)
+max_flow_length: None 
+
+# --- Evaluation Method Configuration ---
+evaluation_method: 'flood_fill'
+
+# --- KLAM_21 Simulation Configuration ---
+klam_config:
+  binary_path: 'domain_description/klam_21_v2012'
+  wind_speed: 0.0        # m/s (pure katabatic flow, no regional wind)
+  wind_direction: 270    # degrees (west wind, used for flow direction only)
+  sim_duration: 14400    # seconds (4 hours)

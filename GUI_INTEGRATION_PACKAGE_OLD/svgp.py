@@ -30,7 +30,7 @@ Usage:
     from svgp import SVGPModel, load_svgp_model
     
     # Load pre-trained model
-    model, likelihood = load_svgp_model('models/svgp_60m.pth', device='cuda')
+    model, likelihood = load_svgp_model('models/svgp_27m.pth', device='cuda')
     
     # Predict with uncertainty
     model.eval()
@@ -127,7 +127,7 @@ def load_svgp_model(
         likelihood: GaussianLikelihood in eval mode
     
     Example:
-        model, likelihood = load_svgp_model('models/svgp_60m.pth', device='cuda')
+        model, likelihood = load_svgp_model('models/svgp_27m.pth', device='cuda')
         
         # Predict on new data
         model.eval()

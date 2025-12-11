@@ -42,9 +42,8 @@ Usage:
 
 import numpy as np
 from scipy.special import erf
-from scipy.stats import qmc
 from numba import jit
-from typing import Optional, Dict, Any
+from typing import Optional
 
 
 # ============================================================================
@@ -106,152 +105,22 @@ class NumbaFastEncoding:
     Interface matches ParametricEncoding for drop-in replacement.
     """
     
-    def __init__(self, parcel_size: int = None, config: Dict[str, Any] = None):
+    def __init__(self, parcel_size: int):
         """
         Initialize encoding.
         
         Args:
-            parcel_size: Parcel size in meters (must be divisible by 3).
-                         If None, uses config['length_design'] * 3 or default 60m.
-            config: Optional config dict (for ParametricEncoding compatibility).
-                    If provided, uses config['length_design'] for grid size.
+            parcel_size: Parcel size in meters (must be divisible by 3)
         """
-        # Handle both interfaces: parcel_size (new) and config (legacy)
-        if config is not None:
-            # Legacy ParametricEncoding interface
-            self.config = config.copy()
-            self.length_design = config.get('length_design', 20)
-            self.parcel_size = self.length_design * 3  # Derive from length_design
-        elif parcel_size is not None:
-            # New FastEncoding interface  
-            self.parcel_size = parcel_size
-            self.length_design = parcel_size // 3
-            self.config = {
-                'length_design': self.length_design,
-                'max_num_buildings': 10,
-                'max_num_floors': 10,
-                'xy_scale': 3.0,
-                'z_scale': 3.0,
-                'parcel_width_m': float(parcel_size),
-                'parcel_height_m': float(parcel_size),
-            }
-        else:
-            # Default: 60m parcel (20 cells)
-            self.parcel_size = 60
-            self.length_design = 20
-            self.config = {
-                'length_design': self.length_design,
-                'max_num_buildings': 10,
-                'max_num_floors': 10,
-                'xy_scale': 3.0,
-                'z_scale': 3.0,
-                'parcel_width_m': 60.0,
-                'parcel_height_m': 60.0,
-            }
-        
-        # Ensure required keys exist
-        self.config.setdefault('max_num_buildings', 10)
-        self.config.setdefault('max_num_floors', 10)
-        self.config.setdefault('xy_scale', 3.0)
-        self.config.setdefault('z_scale', 3.0)
-        
-        # Store genome for compatibility with set_genome/express pattern
-        self.genome = None
-    
-    def get_dimension(self) -> int:
-        """Return genome dimension (10 buildings × 6 params = 60)."""
-        return self.config['max_num_buildings'] * 6
-    
-    def get_dimension_phenotype_heightmap(self) -> int:
-        """Return flattened heightmap dimension."""
-        return self.config['length_design'] ** 2
-    
-    def set_genome(self, genome: np.ndarray) -> None:
-        """Set genome for subsequent express() calls (legacy interface)."""
-        self.genome = genome
-    
-    def express(self, genome: np.ndarray = None, as_height_map: bool = False) -> np.ndarray:
-        """
-        Express single genome to phenotype.
-        
-        Args:
-            genome: (60,) genome array. If None, uses self.genome.
-            as_height_map: If True, returns (D, D) heightmap in FLOORS.
-                           If False, returns (D, D, max_floors) voxel representation.
-        
-        Returns:
-            Phenotype as heightmap (floors) or voxel grid.
-        """
-        if genome is None:
-            genome = self.genome
-        if genome is None:
-            raise ValueError("No genome provided and none set via set_genome()")
-        
-        # Use fast_norm2unif with fixed μ=0, σ=1
-        genome_uniform = np.clip(fast_norm2unif(genome), 0, 1)
-        
-        phenotype = np.zeros((self.length_design, self.length_design))
-        
-        for i in range(self.config['max_num_buildings']):
-            if genome_uniform[i*6 + 5] > 0.5:  # active_bit
-                x_origin = int(genome_uniform[i*6 + 3] * self.length_design)
-                y_origin = int(genome_uniform[i*6 + 4] * self.length_design)
-                width = int(genome_uniform[i*6 + 0] * self.length_design)
-                length = int(genome_uniform[i*6 + 1] * self.length_design)
-                num_floors = int(np.floor(genome_uniform[i*6 + 2] * (self.config['max_num_floors'] + 1)))
-                num_floors = min(num_floors, self.config['max_num_floors'])
-                
-                x_start = max(0, int(x_origin - 0.5 * width))
-                x_end = min(self.length_design, int(x_origin + 0.5 * width))
-                y_start = max(0, int(y_origin - 0.5 * length))
-                y_end = min(self.length_design, int(y_origin + 0.5 * length))
-                
-                phenotype[y_start:y_end, x_start:x_end] = np.maximum(
-                    phenotype[y_start:y_end, x_start:x_end], 
-                    num_floors
-                )
-        
-        if not as_height_map:
-            # Return voxel representation
-            max_floors = self.config['max_num_floors']
-            voxels = np.zeros((self.length_design, self.length_design, max_floors))
-            for x in range(self.length_design):
-                for y in range(self.length_design):
-                    for z in range(int(phenotype[x, y])):
-                        voxels[y, x, z] = 1  # Use y, x for standard image indexing
-            return voxels
-        else:
-            return phenotype  # Returns floors, not meters
-    
-    def generate_sobol_sequence_genome(self, num_samples_base2: int) -> np.ndarray:
-        """
-        Generate Sobol sequence of genomes in [0, 1] range.
-        
-        Args:
-            num_samples_base2: Log2 of number of samples (e.g., 10 → 1024 samples)
-        
-        Returns:
-            (2^num_samples_base2, 60) array of genomes in [0, 1]
-        """
-        dims = self.get_dimension()
-        sampler = qmc.Sobol(d=dims, scramble=False)
-        sample = sampler.random_base2(m=num_samples_base2)
-        return sample
-    
-    def generate_sobol_sequence_phenotype(self, num_samples_base2: int) -> np.ndarray:
-        """
-        Generate Sobol sequence for direct phenotype sampling.
-        
-        Args:
-            num_samples_base2: Log2 of number of samples
-        
-        Returns:
-            (2^num_samples_base2, D*D) array
-        """
-        dims = self.get_dimension_phenotype_heightmap()
-        sampler = qmc.Sobol(d=dims, scramble=False)
-        sample = sampler.random_base2(m=num_samples_base2)
-        return sample
+        self.parcel_size = parcel_size
+        self.length_design = parcel_size // 3
+        self.config = {
+            'length_design': self.length_design,
+            'max_num_buildings': 10,
+            'max_num_floors': 10,
+            'xy_scale': 3.0,
+            'z_scale': 3.0
+        }
     
     def express_batch(self, genomes: np.ndarray) -> np.ndarray:
         """
@@ -277,7 +146,7 @@ class NumbaFastEncoding:
             genome = genomes_uniform[i]
             phenotype = np.zeros((self.length_design, self.length_design))
             
-            for j in range(self.config['max_num_buildings']):
+            for j in range(10):  # max_num_buildings
                 if genome[j*6 + 5] > 0.5:  # active_bit
                     # Match original ParametricEncoding logic exactly
                     x_origin = int(genome[j*6 + 3] * self.length_design)

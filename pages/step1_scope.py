@@ -136,12 +136,6 @@ def layout(lang='DE'):
                     ])
                 ]),
                 html.Hr(),
-                # Wind Direction - moved above Model Diagnostics
-                html.H5(T[lang]['STEP1_WIND_HEADER']),
-                html.Div(T[lang]['STEP1_WIND_SLIDER_LABEL'], className="text-center"),
-                create_compass_component(),
-                dcc.Slider(id='wind-direction-slider', min=0, max=360, step=1, value=180, marks={0: 'N', 90: 'E', 180: 'S', 270: 'W'}),
-                html.Hr(),
                 # Model Diagnostics Button
                 dbc.Card([
                     dbc.CardBody([
@@ -268,27 +262,25 @@ def load_parcels_data(n_clicks, bounds):
 def display_parcels(geojson_data):
     return geojson_data
 
-# Callback to restore the polygon and wind direction when a project is loaded
+# Callback to restore the polygon when a project is loaded
 @callback(
     Output('active-polygon-layer', 'data', allow_duplicate=True),
-    Output('wind-direction-slider', 'value', allow_duplicate=True),
     Input('session-store', 'data'),
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
 def restore_from_session(session_data, pathname):
     if pathname != '/' or not session_data:
-        return no_update, no_update
+        return no_update
     
     ctx = dash.callback_context
     # Only restore when session-store changes (e.g., project load), not on every visit
     if not ctx.triggered or ctx.triggered[0]['prop_id'] != 'session-store.data':
-        return no_update, no_update
+        return no_update
     
     site_polygon = session_data.get('site_polygon')
-    wind_direction = session_data.get('wind_direction', 180)
     
-    return site_polygon, wind_direction
+    return site_polygon
 
 # The single, authoritative callback that manages the active green polygon.
 @callback(
@@ -299,7 +291,6 @@ def restore_from_session(session_data, pathname):
     Output('parcel-info-display', 'children'),
     Input('parcels-layer', 'clickData'),
     Input('edit-control', 'geojson'),
-    Input('wind-direction-slider', 'value'),
     Input('upload-geojson', 'contents'), # --- NEW INPUT ---
     State('upload-geojson', 'filename'), # --- NEW STATE ---
     State('selected-parcels-store', 'data'),
@@ -308,7 +299,7 @@ def restore_from_session(session_data, pathname):
     State('edit-mode-toggle', 'value'),
     prevent_initial_call=True
 )
-def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_contents, upload_filename,
+def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_filename,
                             selected_ids, all_parcels_data, session_data, edit_mode):
     from backend.translation import T
     session_data = session_data or {}
@@ -324,11 +315,9 @@ def handle_all_interactions(click_data, drawn_geojson, wind_direction, upload_co
     hideout = {'selected': selected_ids}
     final_geom = base_geom
     
-    # If only wind direction changed, skip parcel info update
-    if triggered_id == 'wind-direction-slider':
-        print(f"[handle_all_interactions] Wind direction changed to {wind_direction}, keeping geometry unchanged")
-        session_data['wind_direction'] = wind_direction
-        return session_data, no_update, no_update, no_update, no_update
+    # Set default wind_direction to 0 (katabatic flow has no regional wind)
+    if 'wind_direction' not in session_data:
+        session_data['wind_direction'] = 0
 
     if triggered_id == 'parcels-layer':
         if click_data is None: return no_update

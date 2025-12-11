@@ -31,20 +31,20 @@ FEATURE_SETS = {
 }
 
 DOMAIN_CONFIG = {
-    'wind_direction': 180,
+    'wind_direction': 270,  # West wind direction (not used with pure katabatic flow, wind_speed=0)
     'pixel_size_in_meters': 3,
     'feature_set': 'consolidated',
     'features': [0, 1, 2, 3, 4, 5, 6, 7],
     'labels': [T['DE'][f'MEASURE_{i}'] for i in range(8)],
     'feat_ranges': [
         [0.0, 1.0],      # 0: GRZ (Site Coverage Ratio) - 0-100%
-        [0.0, 5.0],      # 1: GFZ (Floor Area Ratio) - 0-5.0
-        [0.0, 12.0],     # 2: Avg Height (m) - synced with default max building height
-        [0.0, 15.0],     # 3: Height Variability (m)
+        [0.0, 3.0],      # 1: GFZ (Floor Area Ratio) - 0-3.0 (matches training data)
+        [0.0, 15.0],     # 2: Avg Height (m) - matches training data max
+        [0.0, 8.0],      # 3: Height Variability (m) - matches training data
         [0.0, 50.0],     # 4: Avg Distance (m)
         [0.0, 10.0],     # 5: Number of Buildings (count)
         [0.0, 2.0],      # 6: Compactness (A/V Ratio) - Lower is better
-        [0.0, 50.0],     # 7: Park Factor (Max Green Circle Radius in m)
+        [0.0, 30.0],     # 7: Park Factor (Max Green Circle Radius in m) - matches training data
     ],
     'environment_border_size': 1.2,
 }
@@ -56,8 +56,8 @@ SURROGATE_CONFIG = {
     # Normalization stored IN checkpoint: 62D input (60 genome + 2 parcel dims) + scalar output
     'svgp_model_name': 'svgp.pth',
     # U-Net: Fixed input dimensions, need separate model per parcel size
-    # Trained sizes (in bins): 27, 33, 39, 45, 51, 57, 63, 69, 75, 81, 87, 93, 99
-    'available_parcel_sizes_unet': [27, 33, 39, 45, 51, 57, 63, 69, 75, 81, 87, 93, 99],
+    # Trained sizes: 60m, 120m, 240m (new KLAM_21 katabatic training)
+    'available_parcel_sizes_unet': [60, 120, 240],
     # U-Net normalization: Size-specific (e.g., unet_81m_normalization.json)
     # Each parcel size may have different terrain/building statistics
     'default_ucb_lambda': 1.0,
