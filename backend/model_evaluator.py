@@ -441,6 +441,15 @@ class UNetEvaluator:
         for i in range(N):
             features[i] = numba_calculate_features(heightmaps[i], pixel_size)
         
+        # Zero-pad heightmaps if actual parcel is smaller than model parcel
+        D = heightmaps.shape[1]  # actual_parcel_size_cells
+        P = self.parcel_size_cells  # model parcel size in cells (e.g. 20 for 60m)
+        if D < P:
+            padded = np.zeros((N, P, P), dtype=heightmaps.dtype)
+            offset = (P - D) // 2
+            padded[:, offset:offset+D, offset:offset+D] = heightmaps
+            heightmaps = padded
+        
         # Construct domain grids with dynamic sizing
         terrain, buildings, landuse = construct_domain_grids_batch(
             heightmaps,
@@ -584,7 +593,7 @@ def create_evaluator(
         # For 17-bin (51m) parcel using 27-bin (81m) U-Net model
         evaluator = create_evaluator('unet', parcel_size=81, actual_parcel_size=51)
     """
-    device = torch.device(device if torch.cuda.is_available() else 'cpu')
+    device = torch.device(device)
     
     # Model paths
     # SVGP: Single model for ALL parcel sizes (uses parcel dims as input)

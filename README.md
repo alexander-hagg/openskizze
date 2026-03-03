@@ -353,4 +353,4 @@ Alexander Hagg - [[Personal Webpage](https://alexander-hagg.github.io/)]
 
 ---
 
-*Last updated: December 2025*
+*Last updated: March 2026*

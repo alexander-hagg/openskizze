@@ -4,7 +4,7 @@ from datetime import datetime
 
 PROJECT_FILE_EXTENSION = ".skizze"
 
-def gather_application_state(session_data, results_data, comparison_data):
+def gather_application_state(session_data, results_data, comparison_data, filter_data=None):
     """
     Gathers all relevant application state into a single dictionary.
     Embeds the actual optimization results data instead of just file paths.
@@ -56,6 +56,7 @@ def gather_application_state(session_data, results_data, comparison_data):
         'session_data': session_data_copy,
         'results_data': results_data_copy,
         'comparison_data': comparison_data_copy,
+        'filter_data': filter_data,
         'version': '1.0',
         'timestamp': datetime.now().isoformat()
     }

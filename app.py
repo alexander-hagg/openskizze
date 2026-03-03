@@ -36,6 +36,7 @@ app.layout = html.Div([
     dcc.Store(id='results-store', storage_type='memory'),  # Use memory to avoid localStorage quota errors
     dcc.Store(id='comparison-store', storage_type='memory', data=[]),  # Use memory for large data
     dcc.Store(id='clustering-data-store', storage_type='memory'),  # Use memory for large cluster data
+    dcc.Store(id='filter-store', storage_type='memory', data=None),  # Step 4 filter slider state for Step 5 clustering
     dcc.Store(id='language-store', storage_type='session', data='DE'),
     dcc.Download(id="download-project-file"),
 
@@ -107,6 +108,7 @@ def update_navbar(language):
     Output('session-store', 'data', allow_duplicate=True),
     Output('results-store', 'data', allow_duplicate=True),
     Output('comparison-store', 'data', allow_duplicate=True),
+    Output('filter-store', 'data', allow_duplicate=True),
     Output('url', 'pathname'),
     Input('upload-project-file', 'contents'),
     State('upload-project-file', 'filename'),
@@ -119,11 +121,12 @@ def load_project_file(contents, filename):
         try:
             if 'skizze' in filename:
                 state = project_state.load_state_from_file(io.BytesIO(decoded))
-                return state['session_data'], state['results_data'], state['comparison_data'], '/'
+                filter_data = state.get('filter_data', None)
+                return state['session_data'], state['results_data'], state['comparison_data'], filter_data, '/'
         except Exception as e:
             print(f"Error loading project file: {e}")
             # Optionally, show an error message to the user
-    return no_update, no_update, no_update, no_update
+    return no_update, no_update, no_update, no_update, no_update
 
 # Callback to save project state and trigger download
 @app.callback(
@@ -132,11 +135,12 @@ def load_project_file(contents, filename):
     State('session-store', 'data'),
     State('results-store', 'data'),
     State('comparison-store', 'data'),
+    State('filter-store', 'data'),
     prevent_initial_call=True
 )
-def save_project_file(n_clicks, session_data, results_data, comparison_data):
+def save_project_file(n_clicks, session_data, results_data, comparison_data, filter_data):
     if n_clicks > 0:
-        state = project_state.gather_application_state(session_data, results_data, comparison_data)
+        state = project_state.gather_application_state(session_data, results_data, comparison_data, filter_data=filter_data)
         
         # Use a BytesIO object to hold the pickled data in memory
         in_memory_file = io.BytesIO()

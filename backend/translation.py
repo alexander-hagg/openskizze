@@ -99,7 +99,8 @@ T = {
         'MODEL_SELECT_PARCEL_FIRST': "Bitte wählen Sie zuerst eine Parzelle in Schritt 1.",
         'MODEL_CANNOT_DETERMINE_SIZE': "Parzellengröße konnte nicht ermittelt werden.",
         'MODEL_NONE_AVAILABLE': "Keine Surrogate-Modelle für Parzellengröße {size}m verfügbar.",
-        'MODEL_UNET_UNAVAILABLE': "U-Net/Hybrid nicht verfügbar für Parzellengröße {size}m. SVGP kann verwendet werden.",
+        'MODEL_UNET_UNAVAILABLE': "U-Net nicht verfügbar für Parzellengröße {size}m.",
+        'STEP2_UNET_SIZE_WARNING': "U-Net ist nur für Parzellen bis 60 m verfügbar. Bitte wählen Sie eine geometrische Methode (Street Canyon oder Einfache Porosität) für größere Parzellen.",
         
         # Step 4 - Uncertainty Heatmap
         'STEP4_UNCERTAINTY_HEADER': "Modell-Unsicherheit",
@@ -227,6 +228,8 @@ T = {
         'STEP5_ALG_HIERARCHICAL': "Hierarchisch (Ward)",
         'STEP5_HDBSCAN_AUTO_NOTE': "HDBSCAN verwendet eine minimale Clustergröße von 5.",
         'STEP5_FILTER_INFO': "Filtern Sie die Lösungen nach ihren Merkmalen und passen Sie die Clustering-Parameter an, um Entwurfstypen zu identifizieren.",
+        'STEP5_FILTER_ACTIVE_INFO': "Clusteranalyse wird auf {filtered} von {total} Lösungen angewendet (gefiltert in Schritt 4).",
+        'STEP5_NO_FILTER_INFO': "Alle {total} Lösungen werden für die Clusteranalyse verwendet.",
         'STEP5_COMPARE_BUTTON': "Ausgewählte Designs vergleichen",
         'STEP5_NO_RESULTS_ERROR': "Ergebnisdatei oder Georeferenzierung nicht gefunden.",
         'STEP5_SELECT_FOR_COMPARISON': "Zum Vergleich auswählen",
@@ -404,7 +407,8 @@ T = {
         'MODEL_SELECT_PARCEL_FIRST': "Please select a parcel in Step 1 first.",
         'MODEL_CANNOT_DETERMINE_SIZE': "Could not determine parcel size.",
         'MODEL_NONE_AVAILABLE': "No surrogate models available for parcel size {size}m.",
-        'MODEL_UNET_UNAVAILABLE': "U-Net/Hybrid not available for parcel size {size}m. SVGP can be used.",
+        'MODEL_UNET_UNAVAILABLE': "U-Net not available for parcel size {size}m.",
+        'STEP2_UNET_SIZE_WARNING': "U-Net is only available for parcels up to 60 m. Please select a geometric method (Street Canyon or Simple Porosity) for larger parcels.",
         
         # Step 4 - Uncertainty Heatmap
         'STEP4_UNCERTAINTY_HEADER': "Model Uncertainty",
@@ -524,6 +528,8 @@ T = {
         'STEP5_ALG_HIERARCHICAL': "Hierarchical (Ward)",
         'STEP5_HDBSCAN_AUTO_NOTE': "HDBSCAN uses a minimum cluster size of 5.",
         'STEP5_FILTER_INFO': "Filter solutions by their metrics and adjust clustering parameters to identify design types.",
+        'STEP5_FILTER_ACTIVE_INFO': "Clustering will be applied to {filtered} of {total} solutions (filtered in Step 4).",
+        'STEP5_NO_FILTER_INFO': "All {total} solutions will be used for clustering.",
         'STEP5_COMPARE_BUTTON': "Compare Selected Designs",
         'STEP5_NO_RESULTS_ERROR': "Results file or georeferencing not found.",
         'STEP5_SELECT_FOR_COMPARISON': "Select for Comparison",

@@ -6,7 +6,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
 from scipy.ndimage import rotate
-from backend.config import QD_CONFIG, ENCODING_CONFIG, DOMAIN_CONFIG
+from backend.config import QD_CONFIG, ENCODING_CONFIG, DOMAIN_CONFIG, SURROGATE_CONFIG
 from backend.data_io import fetch_existing_buildings_data
 from backend.encoding import ParametricEncoding
 from backend.optimizer import run_qd_optimization
@@ -440,15 +440,19 @@ def start_optimization(
     
     # Map unified model_type to objective_function and surrogate settings
     # Geometric methods: simple_porosity, street_canyon
-    # ML methods: svgp, unet, hybrid (all use street_canyon objective, but via surrogate)
-    use_surrogate = model_type in ['svgp', 'unet', 'hybrid']
+    # ML methods: unet (uses street_canyon objective, but via surrogate)
+    use_surrogate = model_type == 'unet'
     
     if model_type in ['simple_porosity', 'street_canyon']:
         # Geometric methods: use specified objective directly
         actual_objective = model_type
-    else:
-        # ML methods: trained on street_canyon, use that as base objective
+    elif model_type == 'unet':
+        # U-Net: trained on street_canyon, use that as base objective
         actual_objective = 'street_canyon'
+    else:
+        # Legacy model types (svgp, hybrid) — fall back to geometric
+        actual_objective = 'street_canyon'
+        use_surrogate = False
     
     # Pass hard_constraints, cached_building_data, feature_set, and grid_params to create_environment
     env_config = create_environment(
@@ -527,6 +531,16 @@ def start_optimization(
         if not parcel_size_bins:
             raise ValueError("Cannot create surrogate: parcel size (xy_length) not found in ENCODING_CONFIG")
         
+        # Guard: U-Net only available for parcels <= max available model size
+        max_unet_size_m = max(SURROGATE_CONFIG['available_parcel_sizes_unet_m'])
+        parcel_size_m = parcel_size_bins * pixel_size
+        if parcel_size_m > max_unet_size_m:
+            raise ValueError(
+                f"U-Net model not available for {parcel_size_m:.0f}m parcel "
+                f"(max supported: {max_unet_size_m}m). "
+                f"Please select a geometric method (Street Canyon or Simple Porosity)."
+            )
+        
         surrogate_wrapper = create_surrogate_wrapper(
             model_type=model_type,
             parcel_size_bins=parcel_size_bins,
@@ -534,11 +548,15 @@ def start_optimization(
         )
         
         if surrogate_wrapper is None:
-            raise ValueError(f"Surrogate model '{model_type}' is not available for parcel size {parcel_size_bins} bins")
+            raise ValueError(
+                f"Could not initialize '{model_type}' model for parcel size {parcel_size_bins} bins ({parcel_size_m:.0f}m). "
+                f"Check the logs for details (possible CUDA/GPU issue). "
+                f"You can also try a geometric method (Street Canyon or Simple Porosity)."
+            )
         
         env_config['use_surrogate'] = True
         env_config['surrogate_wrapper'] = surrogate_wrapper
-        print(f"Using surrogate model: {model_type} (UCB lambda={ucb_lambda}, parcel_size={parcel_size_bins} bins)")
+        print(f"Using surrogate model: {model_type} (parcel_size={parcel_size_bins} bins, {parcel_size_m:.0f}m)")
     else:
         env_config['use_surrogate'] = False
         env_config['surrogate_wrapper'] = None

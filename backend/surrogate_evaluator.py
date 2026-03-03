@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 
-from backend.model_evaluator import create_evaluator, SVGPEvaluator, UNetEvaluator, HybridEvaluator
+from backend.model_evaluator import create_evaluator, UNetEvaluator
 from backend.fast_encoding import NumbaFastEncoding
 from backend.config import SURROGATE_CONFIG, DOMAIN_CONFIG
 
@@ -46,89 +46,60 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
     """
     Check which surrogate models are available for the given parcel size.
     
-    SVGP: Single model works for ALL parcel sizes (uses parcel dimensions as input)
-    U-Net: Requires size-specific model (fixed input dimensions)
-    Hybrid: Requires both SVGP and U-Net
+    Only U-Net is supported.  SVGP and hybrid are always marked unavailable.
     
     Args:
-        parcel_size_bins: Parcel size in bins (e.g., 27 for 81m at 3m/bin)
+        parcel_size_bins: Parcel size in bins (cells), e.g. 20 for 60m at 3m/cell
     
     Returns:
-        Dictionary with model availability: {'svgp': bool, 'unet': bool, 'hybrid': bool}
+        Dictionary with model availability: {'svgp': False, 'unet': bool, 'hybrid': False}
     """
     print("\n[SURROGATE DEBUG] get_available_models called")
     print(f"  - parcel_size_bins: {parcel_size_bins}")
     
     models_dir = Path(SURROGATE_CONFIG['models_dir'])
-    print(f"  - models_dir: {models_dir}")
-    print(f"  - models_dir exists: {models_dir.exists()}")
     
-    # Check SVGP model (single model works for ALL parcel sizes)
-    # Normalization stored IN checkpoint, not separate file
-    svgp_path = models_dir / SURROGATE_CONFIG['svgp_model_name']
-    svgp_available = svgp_path.exists()
-    print(f"  - SVGP model: {svgp_path}")
-    print(f"  - SVGP model exists: {svgp_path.exists()}")
-    print(f"  - SVGP available: {svgp_available} (works for ALL parcel sizes, normalization in checkpoint)")
-    
-    # For U-Net, we need to know the parcel size
     unet_available = False
-    hybrid_available = False
+    selected_unet_size = None
     
     if parcel_size_bins is None:
-        print("  - parcel_size_bins is None, U-Net/Hybrid cannot be determined")
-        print(f"  - Returning: {{'svgp': {svgp_available}, 'unet': False, 'hybrid': False}}")
-        return {'svgp': svgp_available, 'unet': False, 'hybrid': False}
+        print("  - parcel_size_bins is None, U-Net cannot be determined")
+        result = {'svgp': False, 'unet': False, 'hybrid': False}
+        print(f"  - Returning: {result}")
+        return result
     
     parcel_size_m = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
     print(f"  - parcel_size_bins: {parcel_size_bins}, parcel_size_m: {int(parcel_size_m)}m")
     
-    # Check U-Net model: Find smallest model >= required parcel size
-    # U-Net can handle smaller parcels via ROI masking (centered in training domain)
-    # available_parcel_sizes_unet is in BINS, need to convert to meters for comparison
-    pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-    available_unet_sizes_bins = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet'])
-    suitable_unet_sizes_bins = [s for s in available_unet_sizes_bins if s * pixel_size >= parcel_size_m]
+    # Check U-Net model: find smallest available model >= actual parcel size
+    # available_parcel_sizes_unet_m is already in METERS
+    available_unet_sizes_m = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet_m'])
+    suitable_unet_sizes_m = [s for s in available_unet_sizes_m if s >= parcel_size_m]
     
-    unet_available = False
-    selected_unet_size = None
-    if suitable_unet_sizes_bins:
-        # Try each suitable size from smallest to largest
-        for unet_size_bins in suitable_unet_sizes_bins:
-            unet_size_m = unet_size_bins * pixel_size
+    if suitable_unet_sizes_m:
+        for unet_size_m in suitable_unet_sizes_m:
             unet_path = models_dir / f"unet_{int(unet_size_m)}m.pth"
             unet_norm_path = models_dir / f"unet_{int(unet_size_m)}m_normalization.json"
             if unet_path.exists() and unet_norm_path.exists():
                 unet_available = True
                 selected_unet_size = unet_size_m
-                print(f"  - U-Net model: Using {int(unet_size_m)}m model ({unet_size_bins} bins) for {int(parcel_size_m)}m parcel ({parcel_size_bins} bins)")
-                print(f"  - U-Net model path: {unet_path}")
-                print(f"  - U-Net normalization path: {unet_norm_path}")
+                print(f"  - U-Net model: Using {int(unet_size_m)}m model for {int(parcel_size_m)}m parcel")
                 break
     
     if not unet_available:
-        available_sizes_m = [s * pixel_size for s in available_unet_sizes_bins]
-        print(f"  - WARNING: No suitable U-Net model for {int(parcel_size_m)}m parcel ({parcel_size_bins} bins)")
-        print(f"  - Need model >= {int(parcel_size_m)}m. Available sizes: {[int(s) for s in available_sizes_m]}m")
-    
-    print(f"  - U-Net available: {unet_available}")
-    
-    # Hybrid requires both
-    hybrid_available = svgp_available and unet_available
-    print(f"  - Hybrid available: {hybrid_available} (needs both SVGP + U-Net)")
+        print(f"  - WARNING: No suitable U-Net model for {int(parcel_size_m)}m parcel")
+        print(f"  - Need model >= {int(parcel_size_m)}m. Available sizes: {[int(s) for s in available_unet_sizes_m]}m")
     
     # List all .pth files in models directory if it exists
     if models_dir.exists():
         pth_files = list(models_dir.glob('*.pth'))
         print(f"  - Found .pth files in {models_dir}: {[f.name for f in pth_files]}")
-    else:
-        print(f"  - Models directory does not exist!")
     
     result = {
-        'svgp': svgp_available,
+        'svgp': False,
         'unet': unet_available,
-        'hybrid': hybrid_available,
-        'selected_unet_size': selected_unet_size  # Size in meters of the selected U-Net model
+        'hybrid': False,
+        'selected_unet_size': selected_unet_size
     }
     print(f"  - Returning: {result}")
     
@@ -155,22 +126,34 @@ class SurrogateEvaluatorWrapper:
         device: str = 'auto'
     ):
         """
-        Initialize surrogate evaluator.
+        Initialize surrogate evaluator (U-Net only).
         
         Args:
-            model_type: 'svgp', 'unet', or 'hybrid'
-            parcel_size_bins: Parcel size in bins (e.g., 27 for 81m at 3m/bin)
-            ucb_lambda: UCB exploration parameter (for SVGP/Hybrid)
+            model_type: 'unet' (only supported type)
+            parcel_size_bins: Parcel size in bins (cells), e.g. 20 for 60m at 3m/cell
+            ucb_lambda: Unused, kept for interface compatibility
             device: 'cuda', 'cpu', or 'auto'
         """
+        if model_type != 'unet':
+            raise ValueError(f"Only 'unet' model type is supported, got '{model_type}'")
+        
         self.model_type = model_type
         self.parcel_size_bins = parcel_size_bins
         self.parcel_size_meters = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
         self.ucb_lambda = ucb_lambda
         
-        # Device selection
+        # Device selection with CUDA compatibility check
         if device == 'auto':
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            if torch.cuda.is_available():
+                # Verify CUDA is actually usable (driver may exist but kernels may be missing)
+                try:
+                    torch.zeros(1, device='cuda')
+                    self.device = 'cuda'
+                except RuntimeError:
+                    logger.warning("CUDA available but not usable (kernel mismatch). Falling back to CPU.")
+                    self.device = 'cpu'
+            else:
+                self.device = 'cpu'
         else:
             self.device = device
         
@@ -185,41 +168,31 @@ class SurrogateEvaluatorWrapper:
         # Initialize evaluator
         models_dir = Path(SURROGATE_CONFIG['models_dir'])
         
-        # Determine actual model size to use (for U-Net, may be larger than parcel)
-        if model_type in ['unet', 'hybrid']:
-            # Find smallest suitable U-Net model
-            # available_parcel_sizes_unet is in BINS, need to convert to meters
-            pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
-            available_unet_sizes_bins = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet'])
-            suitable_sizes_bins = [s for s in available_unet_sizes_bins if s * pixel_size >= self.parcel_size_meters]
-            actual_model_size = None
-            
-            for size_bins in suitable_sizes_bins:
-                size_m = size_bins * pixel_size
-                unet_path = models_dir / f"unet_{int(size_m)}m.pth"
-                unet_norm_path = models_dir / f"unet_{int(size_m)}m_normalization.json"
-                if unet_path.exists() and unet_norm_path.exists():
-                    actual_model_size = size_m
-                    logger.info(f"  Using U-Net model: {int(size_m)}m ({size_bins} bins) for {self.parcel_size_meters}m parcel ({parcel_size_bins} bins)")
-                    break
-            
-            if actual_model_size is None:
-                available_sizes_m = [int(s * pixel_size) for s in available_unet_sizes_bins]
-                raise ValueError(f"No suitable U-Net model found for {self.parcel_size_meters}m parcel. Available: {available_sizes_m}m")
-            
-            # Use the actual model size for U-Net initialization
-            model_parcel_size = actual_model_size
-        else:
-            # SVGP works with any parcel size
-            model_parcel_size = self.parcel_size_meters
+        # Find smallest suitable U-Net model (sizes in meters)
+        available_unet_sizes_m = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet_m'])
+        suitable_sizes_m = [s for s in available_unet_sizes_m if s >= self.parcel_size_meters]
+        actual_model_size = None
+        
+        for size_m in suitable_sizes_m:
+            unet_path = models_dir / f"unet_{int(size_m)}m.pth"
+            unet_norm_path = models_dir / f"unet_{int(size_m)}m_normalization.json"
+            if unet_path.exists() and unet_norm_path.exists():
+                actual_model_size = size_m
+                logger.info(f"  Using U-Net model: {int(size_m)}m for {self.parcel_size_meters}m parcel")
+                break
+        
+        if actual_model_size is None:
+            raise ValueError(f"No suitable U-Net model found for {self.parcel_size_meters}m parcel. Available: {[int(s) for s in available_unet_sizes_m]}m")
+        
+        model_parcel_size = actual_model_size
         
         self.evaluator = create_evaluator(
-            model_type=model_type,
-            parcel_size=model_parcel_size,  # Model size (e.g., 81m)
+            model_type='unet',
+            parcel_size=model_parcel_size,
             models_dir=models_dir,
             device=self.device,
             ucb_lambda=ucb_lambda,
-            actual_parcel_size=self.parcel_size_meters  # Actual parcel size (e.g., 51m)
+            actual_parcel_size=self.parcel_size_meters
         )
         
         # Fast encoding for heightmap generation
@@ -352,8 +325,25 @@ def create_surrogate_wrapper(
             model_type=model_type,
             parcel_size_bins=parcel_size_bins,
             ucb_lambda=ucb_lambda,
-            device='auto'  # Use GPU when available
+            device='auto'
         )
+    except RuntimeError as e:
+        # CUDA errors (kernel mismatch, OOM, etc.) — retry on CPU
+        if 'CUDA' in str(e) or 'cuda' in str(e):
+            logger.warning(f"CUDA error during model init, retrying on CPU: {e}")
+            try:
+                return SurrogateEvaluatorWrapper(
+                    model_type=model_type,
+                    parcel_size_bins=parcel_size_bins,
+                    ucb_lambda=ucb_lambda,
+                    device='cpu'
+                )
+            except Exception as e2:
+                logger.error(f"Failed to create surrogate evaluator on CPU: {e2}")
+                return None
+        else:
+            logger.error(f"Failed to create surrogate evaluator: {e}")
+            return None
     except Exception as e:
         logger.error(f"Failed to create surrogate evaluator: {e}")
         return None

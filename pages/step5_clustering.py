@@ -86,6 +86,10 @@ def layout(lang='DE'):
                     # Add a "Compare" button and link to comparison view
                     dbc.Button(T[lang]['STEP5_COMPARE_BUTTON'], id="compare-btn", href="/step6", color="success", className="mt-3 ms-2", style={'display': 'none'}),
                 ]), className="mb-3"),
+                
+                # Filter info banner — shows how many solutions will be used for clustering
+                html.Div(id='step5-filter-info-container'),
+                
             ], md=4),
             
             dbc.Col([
@@ -96,7 +100,7 @@ def layout(lang='DE'):
             ], md=8),
         ], className="mb-4"),
         
-        # Hidden placeholder for filter controls (removed from UI but needed for callbacks)
+        # Hidden placeholder for filter controls (kept empty for layout compatibility)
         html.Div(id='feature-filter-controls', style={'display': 'none'}),
         
     ], fluid=True)
@@ -121,97 +125,64 @@ def toggle_parameter_sliders(selected_algorithm):
 @callback(
     Output('feature-filter-controls', 'children'),
     Input('results-store', 'data'),
+)
+def create_filter_controls(results_data):
+    """Keep hidden filter controls empty — filtering is now handled via filter-store from Step 4."""
+    return []
+
+
+@callback(
+    Output('step5-filter-info-container', 'children'),
+    Input('filter-store', 'data'),
+    Input('results-store', 'data'),
     Input('language-store', 'data'),
 )
-def create_filter_controls(results_data, language):
+def update_filter_info_banner(filter_data, results_data, language):
+    """Show an info banner indicating how many solutions will be used for clustering."""
+    lang = language if language else 'DE'
+    
     if not results_data or not results_data.get('full_results_path'):
         return []
     
-    # Get current language (default to 'DE')
-    lang = language if language else 'DE'
-    
-    results_path = results_data.get('full_results_path')
-    if not os.path.exists(results_path):
-        return []
-    
-    with open(results_path, 'rb') as f:
-        list_of_elites = pickle.load(f)
-    
-    # Translate feature labels based on current language and feature set
-    from backend.translation import translate_feature_labels
-    from backend.units import get_unit_label
-    selected_feature_indices = results_data.get('selected_features_indices', [])
-    feature_set = results_data.get('feature_set', 'consolidated')
-    if not selected_feature_indices: return no_update
-    
-    labels = translate_feature_labels(selected_feature_indices, lang, feature_set)
-    
-    # Extract measures data to get actual ranges from optimization results
-    measures_data = np.array([e['measures'] for e in list_of_elites if e is not None])
-    if measures_data.size == 0:
-        return []
-    
-    # Create filter sliders for each feature
-    sliders = []
-    num_buildings_original_index = 5  # Feature index for "Number of Buildings" in consolidated set
-    
-    for i, label in enumerate(labels):
-        current_feature_index = selected_feature_indices[i]
-        unit = get_unit_label(current_feature_index, lang)
-        label_with_unit = f"{label} ({unit})" if unit else label
+    if filter_data and filter_data.get('filtered_count') is not None:
+        total = filter_data['total_count']
+        filtered = filter_data['filtered_count']
         
-        # Get min/max from actual results data
-        min_val, max_val = measures_data[:, i].min(), measures_data[:, i].max()
-        
-        # Integer slider for Number of Buildings
-        if current_feature_index == num_buildings_original_index:
-            min_v = int(np.floor(min_val))
-            max_v = int(np.ceil(max_val))
-            if min_v == max_v: max_v += 1
-            
-            slider_div = html.Div([
-                dbc.Label(label_with_unit),
-                dcc.RangeSlider(
-                    id={'type': 'filter-slider', 'index': current_feature_index},
-                    min=min_v, max=max_v, step=1,
-                    value=[min_v, max_v],
-                    tooltip={"placement": "bottom", "always_visible": True},
-                    marks=None,
-                )
-            ], className="mb-2")
-        # Normalized sliders for Building Mass X/Y (0-1)
-        elif current_feature_index in [6, 7] and False: # Disable special handling for now, treat as float
-             pass
-        # Physical unit sliders (m, m²)
+        if filtered < total:
+            return dbc.Alert(
+                T[lang].get('STEP5_FILTER_ACTIVE_INFO', 'Clustering will use {filtered} of {total} solutions (filtered in Step 4).').format(
+                    filtered=filtered, total=total
+                ),
+                color="info",
+                className="mb-0"
+            )
         else:
-            # Use floor/ceil to ensure range covers the data
-            min_v = np.floor(min_val * 10) / 10.0
-            max_v = np.ceil(max_val * 10) / 10.0
-            
-            if min_v == max_v: max_v = min_v + 1.0
-            
-            # Determine appropriate step size
-            if max_v - min_v > 100:
-                step = 1.0
-            elif max_v - min_v > 10:
-                step = 0.5
-            else:
-                step = 0.1
-            
-            slider_div = html.Div([
-                dbc.Label(label_with_unit),
-                dcc.RangeSlider(
-                    id={'type': 'filter-slider', 'index': current_feature_index},
-                    min=min_v, max=max_v, step=step,
-                    value=[min_v, max_v],
-                    tooltip={"placement": "bottom", "always_visible": True},
-                    marks=None,
-                )
-            ], className="mb-2")
-        
-        sliders.append(slider_div)
+            return dbc.Alert(
+                T[lang].get('STEP5_NO_FILTER_INFO', 'All {total} solutions will be used for clustering.').format(
+                    total=total
+                ),
+                color="light",
+                className="mb-0"
+            )
     
-    return sliders
+    # No filter data yet — count solutions from results
+    try:
+        results_path = results_data.get('full_results_path')
+        if results_path and os.path.exists(results_path):
+            with open(results_path, 'rb') as f:
+                list_of_elites = pickle.load(f)
+            total = len(list_of_elites) if list_of_elites else 0
+            return dbc.Alert(
+                T[lang].get('STEP5_NO_FILTER_INFO', 'All {total} solutions will be used for clustering.').format(
+                    total=total
+                ),
+                color="light",
+                className="mb-0"
+            )
+    except Exception:
+        pass
+    
+    return []
 
 
 @callback(
@@ -219,8 +190,7 @@ def create_filter_controls(results_data, language):
     Output('clustering-data-store', 'data'),  # Store ACTUAL cluster data for Step 6
     Input('run-analysis-btn', 'n_clicks'),
     State('results-store', 'data'),
-    State({'type': 'filter-slider', 'index': ALL}, 'value'),
-    State({'type': 'filter-slider', 'index': ALL}, 'id'),
+    State('filter-store', 'data'),
     State('algorithm-selector', 'value'),
     State('kmedoids-k-slider', 'value'),
     State('hierarchical-k-slider', 'value'),
@@ -228,7 +198,7 @@ def create_filter_controls(results_data, language):
     State('language-store', 'data'),
     prevent_initial_call=True
 )
-def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids, 
+def run_and_display_analysis(n_clicks, results_data, filter_data,
                              algorithm, k_medoids, k_hierarchical, similarity_metric, lang):
     if not n_clicks: return no_update, no_update
     if lang is None: lang = 'DE'  # Default to German
@@ -237,8 +207,14 @@ def run_and_display_analysis(n_clicks, results_data, slider_values, slider_ids,
     grid_geojson = results_data.get('grid_geojson')
     if not results_path or not grid_geojson:
         return dbc.Alert(T[lang]['STEP5_NO_RESULTS_ERROR'], color="danger"), no_update
-        
-    feature_filters = {s_id['index']: s_val for s_id, s_val in zip(slider_ids, slider_values)}
+    
+    # Build feature_filters from filter-store (Step 4 slider state) using positional indices
+    feature_filters = {}
+    if filter_data and filter_data.get('slider_values'):
+        slider_values = filter_data['slider_values']
+        for i, s_val in enumerate(slider_values):
+            if s_val is not None:
+                feature_filters[i] = s_val
 
     
     # Translate to show human-readable feature names

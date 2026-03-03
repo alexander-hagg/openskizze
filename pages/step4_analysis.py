@@ -198,22 +198,23 @@ def create_filter_sliders(results_data, lang):
 
 @callback(
     [Output('filter-statistics', 'children'),
-     Output('random-sample-preview', 'children')],
+     Output('random-sample-preview', 'children'),
+     Output('filter-store', 'data')],
     [Input({'type': 'filter-slider', 'index': ALL}, 'value')],
     [State('results-store', 'data'),
      State('language-store', 'data')],
 )
 def update_filtered_preview(slider_values, results_data, lang):
-    """Filter solutions based on slider values and show random sample"""
+    """Filter solutions based on slider values, show stats, and persist filter state to filter-store."""
     if lang is None:
         lang = 'DE'
     
     if not results_data or not results_data.get('full_results_path'):
-        return "", ""
+        return "", "", None
     
     # If no slider values yet, wait for initial values
     if not slider_values or all(v is None for v in slider_values):
-        return "", ""
+        return "", "", None
     
     try:
         results_path = results_data['full_results_path']
@@ -221,7 +222,7 @@ def update_filtered_preview(slider_values, results_data, lang):
             list_of_elites = pickle.load(f)
         
         if not list_of_elites:
-            return "", ""
+            return "", "", None
         
         # Convert to numpy array for efficient filtering
         measures_array = np.array([elite['measures'] for elite in list_of_elites])
@@ -252,14 +253,21 @@ def update_filtered_preview(slider_values, results_data, lang):
             className="ms-3"
         )
         
+        # Persist filter state for Step 5 clustering (positional indices matching elite['measures'])
+        filter_store_data = {
+            'slider_values': slider_values,  # list of [min, max] per positional feature index
+            'total_count': len(list_of_elites),
+            'filtered_count': num_filtered,
+        }
+        
         # Random sample preview (hidden now, but keep for compatibility)
-        return stats, ""
+        return stats, "", filter_store_data
         
     except Exception as e:
         import traceback
         print(f"[ERROR] Filter preview: {str(e)}")
         print(traceback.format_exc())
-        return "", dbc.Alert(f"Error: {str(e)}", color="danger")
+        return "", dbc.Alert(f"Error: {str(e)}", color="danger"), None
 
 
 @callback(

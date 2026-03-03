@@ -51,16 +51,11 @@ DOMAIN_CONFIG = {
 
 SURROGATE_CONFIG = {
     'models_dir': 'models',
-    # SVGP: Single model trained on square parcels, uses parcel width/length as input features
-    # Works for ANY parcel size (parcel dimensions added to input)
-    # Normalization stored IN checkpoint: 62D input (60 genome + 2 parcel dims) + scalar output
-    'svgp_model_name': 'svgp.pth',
-    # U-Net: Fixed input dimensions, need separate model per parcel size
-    # Trained sizes: 60m, 120m, 240m (new KLAM_21 katabatic training)
-    'available_parcel_sizes_unet': [60, 120, 240],
-    # U-Net normalization: Size-specific (e.g., unet_81m_normalization.json)
-    # Each parcel size may have different terrain/building statistics
-    'default_ucb_lambda': 1.0,
+    # U-Net: Fixed input dimensions, trained on specific parcel sizes
+    # Values are in METERS. Only 60m model available.
+    # Parcels <= 60m use U-Net (smaller parcels are zero-padded).
+    # Parcels > 60m fall back to geometric methods.
+    'available_parcel_sizes_unet_m': [60],
     'default_model_type': 'street_canyon',
 }
 
