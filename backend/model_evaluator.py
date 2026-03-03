@@ -241,13 +241,15 @@ class UNetEvaluator:
         self.grid_h = env_cells_base
         self.grid_w = env_cells_base + left_extension
         
-        # ROI mask (region of interest on parcel)
+        # ROI mask (region of interest on ACTUAL parcel, not padded model area)
         offset_x = original_offset + left_extension
         offset_y = original_offset
+        # Account for zero-padding offset (actual parcel centered in model parcel)
+        pad_offset = (self.parcel_size_cells - self.actual_parcel_size_cells) // 2
         self.roi_mask = np.zeros((self.grid_h, self.grid_w), dtype=bool)
         self.roi_mask[
-            offset_y:offset_y+self.parcel_size_cells,
-            offset_x:offset_x+self.parcel_size_cells
+            offset_y + pad_offset:offset_y + pad_offset + self.actual_parcel_size_cells,
+            offset_x + pad_offset:offset_x + pad_offset + self.actual_parcel_size_cells
         ] = True
         
         logger.info(f"U-Net loaded successfully (grid: {self.grid_h}×{self.grid_w})")

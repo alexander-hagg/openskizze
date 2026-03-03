@@ -192,12 +192,13 @@ class NumbaFastEncoding:
         
         phenotype = np.zeros((self.length_design, self.length_design))
         
+        half_design = self.length_design / 2
         for i in range(self.config['max_num_buildings']):
-            if genome_uniform[i*6 + 5] > 0.5:  # active_bit
+            if genome_uniform[i*6 + 5] > 0.0:  # active_bit (match ParametricEncoding)
                 x_origin = int(genome_uniform[i*6 + 3] * self.length_design)
                 y_origin = int(genome_uniform[i*6 + 4] * self.length_design)
-                width = int(genome_uniform[i*6 + 0] * self.length_design)
-                length = int(genome_uniform[i*6 + 1] * self.length_design)
+                width = int(genome_uniform[i*6 + 0] * half_design)
+                length = int(genome_uniform[i*6 + 1] * half_design)
                 num_floors = int(np.floor(genome_uniform[i*6 + 2] * (self.config['max_num_floors'] + 1)))
                 num_floors = min(num_floors, self.config['max_num_floors'])
                 
@@ -273,17 +274,18 @@ class NumbaFastEncoding:
         # Apply fast_norm2unif with fixed μ=0, σ=1 (vectorized, no data estimation)
         genomes_uniform = np.clip(fast_norm2unif(genomes), 0, 1)
         
+        half_design = self.length_design / 2
         for i in range(batch_size):
             genome = genomes_uniform[i]
             phenotype = np.zeros((self.length_design, self.length_design))
             
             for j in range(self.config['max_num_buildings']):
-                if genome[j*6 + 5] > 0.5:  # active_bit
+                if genome[j*6 + 5] > 0.0:  # active_bit (match ParametricEncoding)
                     # Match original ParametricEncoding logic exactly
                     x_origin = int(genome[j*6 + 3] * self.length_design)
                     y_origin = int(genome[j*6 + 4] * self.length_design)
-                    width = int(genome[j*6 + 0] * self.length_design)
-                    length = int(genome[j*6 + 1] * self.length_design)
+                    width = int(genome[j*6 + 0] * half_design)
+                    length = int(genome[j*6 + 1] * half_design)
                     # Height: np.floor(genome * (max_num_floors + 1))
                     num_floors = int(np.floor(genome[j*6 + 2] * (10 + 1)))
                     num_floors = min(num_floors, 10)
