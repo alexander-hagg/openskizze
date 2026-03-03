@@ -133,3 +133,4 @@ Built with [PyRibs](https://pyribs.org/), [Dash](https://dash.plotly.com/), and 
 ## Contact
 
 Alexander Hagg — [Personal Webpage](https://alexander-hagg.github.io/)
+OpenSKIZZE @ Bonn-Rhein-Sieg University of Applied Sciences - [Webpage](https://www.h-brs.de/en/openskizze)
