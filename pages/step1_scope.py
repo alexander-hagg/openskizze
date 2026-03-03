@@ -16,15 +16,18 @@ import json
 import base64
 import io
 import pickle
+import logging
+
+logger = logging.getLogger(__name__)
 
 def calculate_parcel_info(geometry, lang='DE'):
     """Calculate and format parcel information for display."""
     from backend.translation import T
     
-    print(f"[parcel_info] Calculating parcel info for geometry (empty={geometry.is_empty})")
+    logger.debug(f"Calculating parcel info for geometry (empty={geometry.is_empty})")
     
     if geometry.is_empty:
-        print(f"[parcel_info] No parcel selected, returning alert")
+        logger.debug(f"No parcel selected, returning alert")
         return dbc.Alert(T[lang]['STEP1_NO_PARCEL_SELECTED'], color="light", className="small")
     
     # Transform from WGS84 (EPSG:4326) to UTM Zone 32N (EPSG:25832) for accurate area calculation in NRW
@@ -43,7 +46,7 @@ def calculate_parcel_info(geometry, lang='DE'):
     width = maxx - minx
     length = maxy - miny
     
-    print(f"[parcel_info] Area: {area_m2:,.1f} m², Dimensions: {width:.1f} m × {length:.1f} m")
+    logger.debug(f"Area: {area_m2:,.1f} m², Dimensions: {width:.1f} m × {length:.1f} m")
     
     # Format the display
     return dbc.Card(dbc.CardBody([
@@ -135,26 +138,6 @@ def layout(lang='DE'):
                         dbc.Alert(T[lang]['STEP1_NO_PARCEL_SELECTED'], color="light", className="small")
                     ])
                 ]),
-                html.Hr(),
-                # Model Diagnostics Button
-                dbc.Card([
-                    dbc.CardBody([
-                        html.H6(T[lang].get('MODEL_DIAG_TITLE', 'Model Diagnostics'), className='mb-2'),
-                        html.P(
-                            T[lang].get('MODEL_DIAG_BUTTON_INFO', 
-                                       'Test and compare objective functions on archetypical urban patterns.'),
-                            className='small text-muted mb-3'
-                        ),
-                        dbc.Button(
-                            T[lang].get('MODEL_DIAG_BUTTON', 'Open Model Diagnostics'),
-                            id='open-model-diagnostics-btn',
-                            color='info',
-                            outline=True,
-                            size='sm',
-                            className='w-100'
-                        )
-                    ])
-                ], className='mb-3'),
                 # Hidden upload component (needed for callbacks but not displayed)
                 dcc.Upload(id='upload-geojson', style={'display': 'none'}),
             ], md=5)
@@ -306,7 +289,7 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
     ctx = dash.callback_context
     triggered_id = ctx.triggered_id
     
-    print(f"[handle_all_interactions] Triggered by: {triggered_id}")
+    logger.debug(f"Triggered by: {triggered_id}")
 
     last_active_geojson = session_data.get('site_polygon')
     base_geom = shape(last_active_geojson['features'][0]['geometry']) if last_active_geojson and last_active_geojson.get('features') else Polygon()
@@ -326,10 +309,10 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
         new_selected_ids = selected_ids[:]
         if parcel_id in new_selected_ids:
             new_selected_ids.remove(parcel_id)
-            print(f"[handle_all_interactions] Deselected parcel {parcel_id}")
+            logger.debug(f"Deselected parcel {parcel_id}")
         else:
             new_selected_ids.append(parcel_id)
-            print(f"[handle_all_interactions] Selected parcel {parcel_id}")
+            logger.debug(f"Selected parcel {parcel_id}")
         
         hideout = {'selected': new_selected_ids}
 
@@ -337,22 +320,22 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
             selected_features = [f for f in all_parcels_data['features'] if f['properties']['id'] in new_selected_ids]
             geometries = [shape(f['geometry']) for f in selected_features]
             final_geom = unary_union(geometries)
-            print(f"[handle_all_interactions] Combined {len(new_selected_ids)} parcels, area: {final_geom.area:.1f}")
+            logger.debug(f"Combined {len(new_selected_ids)} parcels, area: {final_geom.area:.1f}")
         else:
             final_geom = Polygon()
-            print(f"[handle_all_interactions] No parcels selected, empty geometry")
+            logger.debug(f"No parcels selected, empty geometry")
             
     elif triggered_id == 'edit-control':
         if drawn_geojson and drawn_geojson['features']:
             newly_drawn_geom = shape(drawn_geojson['features'][-1]['geometry'])
-            print(f"[handle_all_interactions] Edit control triggered, mode={edit_mode}, drawn area={newly_drawn_geom.area:.1f}")
+            logger.debug(f"Edit control triggered, mode={edit_mode}, drawn area={newly_drawn_geom.area:.1f}")
             
             if edit_mode == 'add':
                 final_geom = base_geom.union(newly_drawn_geom)
-                print(f"[handle_all_interactions] Added area, new total: {final_geom.area:.1f}")
+                logger.debug(f"Added area, new total: {final_geom.area:.1f}")
             else: # subtract
                 final_geom = base_geom.difference(newly_drawn_geom)
-                print(f"[handle_all_interactions] Subtracted area, new total: {final_geom.area:.1f}")
+                logger.debug(f"Subtracted area, new total: {final_geom.area:.1f}")
             
             new_selected_ids = []
             hideout = {'selected': []}
@@ -364,12 +347,12 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
             geojson_data = json.load(io.StringIO(decoded.decode('utf-8')))
             geometries = [shape(feature['geometry']) for feature in geojson_data['features']]
             final_geom = unary_union(geometries)
-            print(f"[handle_all_interactions] Uploaded GeoJSON with {len(geometries)} features, total area: {final_geom.area:.1f}")
+            logger.debug(f"Uploaded GeoJSON with {len(geometries)} features, total area: {final_geom.area:.1f}")
             # Clear parcel selection when importing a file
             new_selected_ids = []
             hideout = {'selected': []}
         except Exception as e:
-            print(f"[handle_all_interactions] Error parsing uploaded file: {e}")
+            logger.error(f"Error parsing uploaded file: {e}")
             return no_update
     
     if final_geom.is_empty:
@@ -406,7 +389,7 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
             'grid_side_length': grid_side_length,
             'pixel_size': pixel_size
         }
-        print(f"[grid_params] Calculated grid: {xy_length} bins ({grid_side_length:.1f}m)")
+        logger.info(f"Calculated grid: {xy_length} bins ({grid_side_length:.1f}m)")
     
     # =========================================================================
     # Fetch and cache building data when area is selected/modified
@@ -415,7 +398,7 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
     if triggered_id in ['parcels-layer', 'edit-control', 'upload-geojson']:
         if final_geojson and final_geojson.get('features'):
             # Fetch and process building data for the selected area
-            print(f"[fetch_buildings] → Fetching building data for selected area from NRW API...")
+            logger.info(f"Fetching building data for selected area from NRW API...")
             try:
                 building_data = fetch_and_process_buildings_for_area(
                     user_polygon_geojson=final_geojson
@@ -429,7 +412,7 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
                     
                     # Count buildings from the GeoDataFrame
                     num_buildings = len(building_data.get('gdf_buildings_filtered', []))
-                    print(f"[fetch_buildings] ✓ Cached building data: {num_buildings} buildings processed")
+                    logger.info(f"✓ Cached building data: {num_buildings} buildings processed")
                     
                     # Calculate adaptive max height based on nearby buildings
                     from backend.data_io import calculate_adaptive_max_height
@@ -449,36 +432,34 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
                             # Clear user override flag for new parcel
                             if 'user_set_max_height' in session_data:
                                 del session_data['user_set_max_height']
-                            print(f"[fetch_buildings] ✓ Calculated adaptive max height: {adaptive_height}m")
+                            logger.info(f"✓ Calculated adaptive max height: {adaptive_height}m")
                         else:
                             # No buildings found - use default 10m
                             session_data['adaptive_max_height'] = 10
                             # Clear user override flag for new parcel
                             if 'user_set_max_height' in session_data:
                                 del session_data['user_set_max_height']
-                            print(f"[fetch_buildings] ℹ No buildings in vicinity, using default max height: 10m")
+                            logger.info(f"No buildings in vicinity, using default max height: 10m")
                     except Exception as e:
-                        print(f"[fetch_buildings] Warning: Could not calculate adaptive height: {e}")
+                        logger.warning(f"Could not calculate adaptive height: {e}")
                         session_data['adaptive_max_height'] = 10  # Fallback to default
                         # Clear user override flag for new parcel
                         if 'user_set_max_height' in session_data:
                             del session_data['user_set_max_height']
                 else:
-                    print("[fetch_buildings] ✗ No building data returned")
+                    logger.warning("No building data returned")
                     # No buildings - use default 10m
                     session_data['adaptive_max_height'] = 10
                     # Clear user override flag for new parcel
                     if 'user_set_max_height' in session_data:
                         del session_data['user_set_max_height']
-                    print(f"[fetch_buildings] ℹ No buildings in vicinity, using default max height: 10m")
+                    logger.info(f"No buildings in vicinity, using default max height: 10m")
                     # Clear cache if fetch returned None
                     if 'building_data' in session_data:
                         del session_data['building_data']
                     
             except Exception as e:
-                print(f"[fetch_buildings] ✗ Error fetching building data: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.exception(f"Error fetching building data: {e}")
                 # Don't fail - optimization will fall back to fetching directly
                 if 'building_data' in session_data:
                     del session_data['building_data']
@@ -486,22 +467,10 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
             # No polygon selected, clear cached building data
             if 'building_data' in session_data:
                 del session_data['building_data']
-                print(f"[fetch_buildings] ✗ No polygon selected - cleared building cache")
+                logger.info(f"No polygon selected - cleared building cache")
 
     # Calculate parcel information
     lang = session_data.get('language', 'DE')
     parcel_info_component = calculate_parcel_info(final_geom, lang)
 
     return session_data, final_geojson, new_selected_ids, hideout, parcel_info_component
-
-# Callback to navigate to model diagnostics page
-@callback(
-    Output('url', 'pathname', allow_duplicate=True),
-    Input('open-model-diagnostics-btn', 'n_clicks'),
-    prevent_initial_call=True
-)
-def open_model_diagnostics(n_clicks):
-    """Navigate to model diagnostics page."""
-    if n_clicks:
-        return '/model_diagnostics'
-    return no_update

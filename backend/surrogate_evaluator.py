@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any
 
-from backend.model_evaluator import create_evaluator, UNetEvaluator
+from backend.model_evaluator import create_evaluator
 from backend.fast_encoding import NumbaFastEncoding
 from backend.config import SURROGATE_CONFIG, DOMAIN_CONFIG
 
@@ -52,10 +52,10 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
         parcel_size_bins: Parcel size in bins (cells), e.g. 20 for 60m at 3m/cell
     
     Returns:
-        Dictionary with model availability: {'svgp': False, 'unet': bool, 'hybrid': False}
+        Dictionary with model availability: {'unet': bool}
     """
-    print("\n[SURROGATE DEBUG] get_available_models called")
-    print(f"  - parcel_size_bins: {parcel_size_bins}")
+    logger.debug("get_available_models called")
+    logger.debug(f"  parcel_size_bins: {parcel_size_bins}")
     
     models_dir = Path(SURROGATE_CONFIG['models_dir'])
     
@@ -63,13 +63,13 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
     selected_unet_size = None
     
     if parcel_size_bins is None:
-        print("  - parcel_size_bins is None, U-Net cannot be determined")
-        result = {'svgp': False, 'unet': False, 'hybrid': False}
-        print(f"  - Returning: {result}")
+        logger.debug("parcel_size_bins is None, U-Net cannot be determined")
+        result = {'unet': False}
+        logger.debug(f"  Returning: {result}")
         return result
     
     parcel_size_m = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
-    print(f"  - parcel_size_bins: {parcel_size_bins}, parcel_size_m: {int(parcel_size_m)}m")
+    logger.debug(f"  parcel_size_bins: {parcel_size_bins}, parcel_size_m: {int(parcel_size_m)}m")
     
     # Check U-Net model: find smallest available model >= actual parcel size
     # available_parcel_sizes_unet_m is already in METERS
@@ -83,25 +83,23 @@ def get_available_models(parcel_size_bins: Optional[int]) -> Dict[str, bool]:
             if unet_path.exists() and unet_norm_path.exists():
                 unet_available = True
                 selected_unet_size = unet_size_m
-                print(f"  - U-Net model: Using {int(unet_size_m)}m model for {int(parcel_size_m)}m parcel")
+                logger.debug(f"  U-Net model: Using {int(unet_size_m)}m model for {int(parcel_size_m)}m parcel")
                 break
     
     if not unet_available:
-        print(f"  - WARNING: No suitable U-Net model for {int(parcel_size_m)}m parcel")
-        print(f"  - Need model >= {int(parcel_size_m)}m. Available sizes: {[int(s) for s in available_unet_sizes_m]}m")
+        logger.warning(f"No suitable U-Net model for {int(parcel_size_m)}m parcel")
+        logger.warning(f"  Need model >= {int(parcel_size_m)}m. Available sizes: {[int(s) for s in available_unet_sizes_m]}m")
     
     # List all .pth files in models directory if it exists
     if models_dir.exists():
         pth_files = list(models_dir.glob('*.pth'))
-        print(f"  - Found .pth files in {models_dir}: {[f.name for f in pth_files]}")
+        logger.debug(f"  Found .pth files in {models_dir}: {[f.name for f in pth_files]}")
     
     result = {
-        'svgp': False,
         'unet': unet_available,
-        'hybrid': False,
         'selected_unet_size': selected_unet_size
     }
-    print(f"  - Returning: {result}")
+    logger.debug(f"  Returning: {result}")
     
     return result
 
@@ -122,7 +120,6 @@ class SurrogateEvaluatorWrapper:
         self,
         model_type: str,
         parcel_size_bins: int,
-        ucb_lambda: float = 1.0,
         device: str = 'auto'
     ):
         """
@@ -131,7 +128,6 @@ class SurrogateEvaluatorWrapper:
         Args:
             model_type: 'unet' (only supported type)
             parcel_size_bins: Parcel size in bins (cells), e.g. 20 for 60m at 3m/cell
-            ucb_lambda: Unused, kept for interface compatibility
             device: 'cuda', 'cpu', or 'auto'
         """
         if model_type != 'unet':
@@ -140,7 +136,6 @@ class SurrogateEvaluatorWrapper:
         self.model_type = model_type
         self.parcel_size_bins = parcel_size_bins
         self.parcel_size_meters = parcel_size_bins * DOMAIN_CONFIG['pixel_size_in_meters']
-        self.ucb_lambda = ucb_lambda
         
         # Device selection with CUDA compatibility check
         if device == 'auto':
@@ -191,7 +186,6 @@ class SurrogateEvaluatorWrapper:
             parcel_size=model_parcel_size,
             models_dir=models_dir,
             device=self.device,
-            ucb_lambda=ucb_lambda,
             actual_parcel_size=self.parcel_size_meters
         )
         
@@ -202,7 +196,6 @@ class SurrogateEvaluatorWrapper:
         logger.info(f"  Model: {model_type}")
         logger.info(f"  Parcel: {parcel_size_bins} bins ({self.parcel_size_meters}m)")
         logger.info(f"  Device: {self.device}")
-        logger.info(f"  UCB λ: {ucb_lambda}")
     
     def evaluate_batch(
         self,
@@ -300,16 +293,14 @@ class SurrogateEvaluatorWrapper:
 
 def create_surrogate_wrapper(
     model_type: str,
-    parcel_size_bins: int,
-    ucb_lambda: float = 1.0
+    parcel_size_bins: int
 ) -> Optional[SurrogateEvaluatorWrapper]:
     """
     Factory function to create surrogate evaluator wrapper.
     
     Args:
-        model_type: 'svgp', 'unet', or 'hybrid'
+        model_type: 'unet'
         parcel_size_bins: Parcel size in bins
-        ucb_lambda: UCB exploration parameter
     
     Returns:
         SurrogateEvaluatorWrapper instance, or None if model not available
@@ -324,7 +315,6 @@ def create_surrogate_wrapper(
         return SurrogateEvaluatorWrapper(
             model_type=model_type,
             parcel_size_bins=parcel_size_bins,
-            ucb_lambda=ucb_lambda,
             device='auto'
         )
     except RuntimeError as e:
@@ -335,7 +325,6 @@ def create_surrogate_wrapper(
                 return SurrogateEvaluatorWrapper(
                     model_type=model_type,
                     parcel_size_bins=parcel_size_bins,
-                    ucb_lambda=ucb_lambda,
                     device='cpu'
                 )
             except Exception as e2:

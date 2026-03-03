@@ -24,6 +24,9 @@ import shutil
 from io import BytesIO
 from pylatex import Document, Section, Subsection, Figure, Command
 from pylatex.utils import italic, NoEscape
+import logging
+
+logger = logging.getLogger(__name__)
 
 def heightmap_to_geojson(heightmap_2d: np.ndarray, grid_geojson: dict):
     """
@@ -178,7 +181,7 @@ def cluster_and_analyze_solutions(results_path, algorithm='dbscan', params=None,
                     dist_matrix[i:end_i, j:end_j] = 1.0 - ssim_block
 
         except Exception as e:
-            print(f"PyTorch SSIM failed, falling back to CPU loop: {e}")
+            logger.warning(f"PyTorch SSIM failed, falling back to CPU loop: {e}")
             # Fallback to CPU loop
             dist_matrix = np.zeros((n_samples, n_samples))
             for i in range(n_samples):
@@ -561,13 +564,13 @@ def generate_pdf_report(solutions: list, all_elites: list, labels: list, grid_ge
         return b64_zip
 
     except Exception as e:
-        print(f"LaTeX PDF generation failed: {e}")
-        print("Falling back to returning TeX source file.")
+        logger.error(f"LaTeX PDF generation failed: {e}")
+        logger.info("Falling back to returning TeX source file.")
         try:
             tex_content = doc.dumps()
             return base64.b64encode(tex_content.encode('utf-8')).decode('utf-8')
         except Exception as inner_e:
-            print(f"Failed to even generate TeX source: {inner_e}")
+            logger.error(f"Failed to even generate TeX source: {inner_e}")
             return None
     finally:
         # Clean up the temporary directory

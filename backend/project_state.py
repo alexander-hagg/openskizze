@@ -1,6 +1,9 @@
 import pickle
 import os
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 PROJECT_FILE_EXTENSION = ".skizze"
 
@@ -38,7 +41,7 @@ def gather_application_state(session_data, results_data, comparison_data, filter
                 # Keep the path for reference but mark it as embedded
                 results_data_copy['full_results_embedded'] = True
             except Exception as e:
-                print(f"Warning: Could not load results from {full_results_path}: {e}")
+                logger.warning(f"Could not load results from {full_results_path}: {e}")
     
     # Also embed env_3d data if it exists
     if results_data_copy and 'env_3d_path' in results_data_copy:
@@ -50,7 +53,7 @@ def gather_application_state(session_data, results_data, comparison_data, filter
                 results_data_copy['env_3d_data'] = env_data
                 results_data_copy['env_3d_embedded'] = True
             except Exception as e:
-                print(f"Warning: Could not load env_3d from {env_3d_path}: {e}")
+                logger.warning(f"Could not load env_3d from {env_3d_path}: {e}")
     
     return {
         'session_data': session_data_copy,

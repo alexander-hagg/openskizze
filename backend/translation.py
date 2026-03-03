@@ -34,10 +34,6 @@ T = {
         'STEP1_PARCEL_DIMENSIONS': "Abmessungen (Breite × Länge)",
         'STEP1_NO_PARCEL_SELECTED': "Kein Flurstück ausgewählt",
         
-        # Model Diagnostics Button (Step 1)
-        'MODEL_DIAG_BUTTON': 'Modelldiagnose öffnen',
-        'MODEL_DIAG_BUTTON_INFO': 'Testen und vergleichen Sie Zielfunktionen auf archetypischen städtischen Mustern.',
-
         # Step 2
         'STEP2_TITLE': "Schritt 2: Leistungsmerkmale und Optimierungsziele festlegen",
         'STEP2_RESET_BUTTON': "Zurücksetzen",
@@ -68,27 +64,17 @@ T = {
         'STEP2_MODEL_TYPE_LABEL': "Wählen Sie die Berechnungsmethode:",
         'STEP2_MODEL_SIMPLE_POROSITY': "Einfache Porosität (Geometrisch)",
         'STEP2_MODEL_STREET_CANYON': "Street Canyon (Geometrisch)",
-        'STEP2_MODEL_SVGP': "SVGP (ML + Unsicherheit)",
         'STEP2_MODEL_UNET': "U-Net (ML + Strömung)",
-        'STEP2_MODEL_HYBRID': "Hybrid (ML + Beides)",
-        'STEP2_UCB_LAMBDA_LABEL': "Explorationsparameter (λ):",
-        'STEP2_UCB_LAMBDA_INFO': "Höhere Werte fördern die Erkundung unsicherer Regionen",
         
         # Model Info Cards
         'MODEL_INFO_SIMPLE_POROSITY_TITLE': "Einfache Porosität",
         'MODEL_INFO_SIMPLE_POROSITY_DESC': "Zählt offene horizontale Windkorridore. Schnelle geometrische Berechnung, gut für offene Layouts.",
         'MODEL_INFO_STREET_CANYON_TITLE': "Street Canyon",
         'MODEL_INFO_STREET_CANYON_DESC': "Berücksichtigt Straßenschluchten, Querbelüftung und Höhenvariation. Besser für dichte urbane Umgebungen.",
-        'MODEL_INFO_SVGP_TITLE': "SVGP - Sparse Variational Gaussian Process",
-        'MODEL_INFO_SVGP_DESC': "Probabilistisches ML-Modell trainiert auf KLAM_21 Simulationen. Liefert Unsicherheitsschätzungen für gezielte Exploration. ~10× schneller.",
         'MODEL_INFO_UNET_TITLE': "U-Net - Neuronales Netz",
         'MODEL_INFO_UNET_DESC': "Tiefes neuronales Netz trainiert auf KLAM_21 Simulationen. Liefert Strömungsfelder für Visualisierung. ~100× schneller.",
-        'MODEL_INFO_HYBRID_TITLE': "Hybrid - Kombination aus U-Net und SVGP",
-        'MODEL_INFO_HYBRID_DESC': "Nutzt U-Net Fitness (KLAM-genau) und SVGP Unsicherheit. Beste Qualitätsdiversitäts-Ergebnisse mit Strömungsvisualisierung. ~50× schneller.",
         
-        'MODEL_INFO_SVGP_SPEED': "~10× schneller, KLAM-Genauigkeit + Unsicherheit",
         'MODEL_INFO_UNET_SPEED': "~100× schneller, KLAM-Genauigkeit + Strömungsfelder",
-        'MODEL_INFO_HYBRID_SPEED': "~50× schneller, volle KLAM-Genauigkeit + Unsicherheit + Strömung",
         
         'MODEL_INFO_SPEED': "Geschwindigkeit:",
         'MODEL_INFO_ACCURACY': "Genauigkeit:",
@@ -101,14 +87,6 @@ T = {
         'MODEL_NONE_AVAILABLE': "Keine Surrogate-Modelle für Parzellengröße {size}m verfügbar.",
         'MODEL_UNET_UNAVAILABLE': "U-Net nicht verfügbar für Parzellengröße {size}m.",
         'STEP2_UNET_SIZE_WARNING': "U-Net ist nur für Parzellen bis 60 m verfügbar. Bitte wählen Sie eine geometrische Methode (Street Canyon oder Einfache Porosität) für größere Parzellen.",
-        
-        # Step 4 - Uncertainty Heatmap
-        'STEP4_UNCERTAINTY_HEADER': "Modell-Unsicherheit",
-        'STEP4_UNCERTAINTY_INFO': "Für SVGP/Hybrid-Modelle zeigt die Unsicherheitskarte, wo das Modell am wenigsten sicher ist.",
-        'STEP4_SHOW_UNCERTAINTY': "Unsicherheit anzeigen",
-        'STEP4_UNCERTAINTY_OVERLAY': "Unsicherheits-Overlay",
-        'STEP4_UNCERTAINTY_HEATMAP_TITLE': "Modell-Unsicherheit",
-        'UNCERTAINTY_LABEL': "Unsicherheit (σ)",
         
         # Step 6 - Flow Field
         'STEP6_SHOW_FLOW': "Strömungsfeld anzeigen",
@@ -271,43 +249,6 @@ T = {
         'NEXT_STEP_STEP4': 'Ergebnisse analysieren',
         'NEXT_STEP_STEP5': 'Entwürfe clustern',
         'NEXT_STEP_STEP6': 'Archetypen vergleichen',
-        
-        # Model Diagnostics Page
-        'MODEL_DIAG_TITLE': 'Modelldiagnose',
-        'MODEL_DIAG_BACK_TO_STEP1': 'Zurück zu Schritt 1',
-        'MODEL_DIAG_GALLERY_HEADER': 'Archetypische Stadtbausteine (81m × 81m)',
-        'MODEL_DIAG_GALLERY_INFO': 'Sechs vordefinierte Gebäudelayouts zum Testen und Vergleichen der Zielfunktionen.',
-        'MODEL_DIAG_RUN_BTN': 'Alle Bewertungen ausführen',
-        'MODEL_DIAG_RANKING': 'Bewertungsranking',
-        'MODEL_DIAG_RANKING_INFO': 'Fitness-Scores für alle Archetypen. Höhere Werte = bessere Kaltluftproduktion.',
-        'MODEL_DIAG_CORRELATION': 'Korrelationsmatrix',
-        'MODEL_DIAG_CORRELATION_INFO': 'Pearson-Korrelation zwischen Zielfunktionen über alle Archetypen.',
-        'MODEL_DIAG_CORRELATION_LABEL': 'Korrelation',
-        'MODEL_DIAG_FLOW_VIZ': 'Strömungsvisualisierung (U-Net)',
-        'MODEL_DIAG_FLOW_VIZ_INFO': 'Windgeschwindigkeitsfeld und Stromlinien vom U-Net-Modell vorhergesagt.',
-        'MODEL_DIAG_SELECT_ARCH': 'Archetyp auswählen:',
-        'MODEL_DIAG_STREAMLINE_DENSITY': 'Stromliniendichte:',
-        'MODEL_DIAG_VELOCITY_HEATMAP': 'Geschwindigkeitsfeld',
-        'MODEL_DIAG_STREAMLINES': 'Stromlinien',
-        'MODEL_DIAG_VELOCITY_MS': 'Geschwindigkeit (m/s)',
-        'MODEL_DIAG_EVAL_COMPLETE': 'Bewertung abgeschlossen!',
-        'MODEL_DIAG_EVAL_ERROR': 'Fehler bei der Bewertung',
-        'MODEL_DIAG_TABLE_ARCHETYPE': 'Archetyp',
-        'MODEL_DIAG_TABLE_POROSITY': 'Porosität',
-        'MODEL_DIAG_TABLE_STREET_CANYON': 'Straßenschlucht',
-        'MODEL_DIAG_TABLE_SVGP': 'SVGP',
-        'MODEL_DIAG_TABLE_UNET': 'U-Net',
-        
-        # Archetype names and descriptions
-        'ARCHETYPE_EMPTY': 'Leer',
-        'ARCHETYPE_SQUARE': 'Quadrat',
-        'ARCHETYPE_TWO_SQUARES': 'Zwei Quadrate',
-        'ARCHETYPE_TWO_SQUARES_ROTATED': 'Zwei Quadrate (90° gedreht)',
-        'ARCHETYPE_U_SHAPE': 'U-Form',
-        'ARCHETYPE_U_SHAPE_ROTATED': 'U-Form (90° gedreht)',
-        'ARCHETYPE_GRID': 'Raster',
-        'ARCHETYPE_STREET_CANYON': 'Straßenschlucht',
-        'ARCHETYPE_STREET_CANYON_ROTATED': 'Straßenschlucht (90° gedreht)',
     },
     'EN': {
         # App-wide
@@ -341,10 +282,6 @@ T = {
         'STEP1_PARCEL_AREA': "Area",
         'STEP1_PARCEL_DIMENSIONS': "Dimensions (Width × Length)",
         'STEP1_NO_PARCEL_SELECTED': "No parcel selected",
-        
-        # Model Diagnostics Button (Step 1)
-        'MODEL_DIAG_BUTTON': 'Open Model Diagnostics',
-        'MODEL_DIAG_BUTTON_INFO': 'Test and compare objective functions on archetypical urban patterns.',
 
         # Step 2
         'STEP2_TITLE': "Step 2: Define Performance Metrics and Optimization Goals",
@@ -376,27 +313,17 @@ T = {
         'STEP2_MODEL_TYPE_LABEL': "Choose calculation method:",
         'STEP2_MODEL_SIMPLE_POROSITY': "Simple Porosity (Geometric)",
         'STEP2_MODEL_STREET_CANYON': "Street Canyon (Geometric)",
-        'STEP2_MODEL_SVGP': "SVGP (ML + Uncertainty)",
         'STEP2_MODEL_UNET': "U-Net (ML + Flow)",
-        'STEP2_MODEL_HYBRID': "Hybrid (ML + Both)",
-        'STEP2_UCB_LAMBDA_LABEL': "Exploration Parameter (λ):",
-        'STEP2_UCB_LAMBDA_INFO': "Higher values encourage exploring uncertain regions",
         
         # Model Info Cards
         'MODEL_INFO_SIMPLE_POROSITY_TITLE': "Simple Porosity",
         'MODEL_INFO_SIMPLE_POROSITY_DESC': "Counts open horizontal wind corridors. Fast geometric calculation, good for open layouts.",
         'MODEL_INFO_STREET_CANYON_TITLE': "Street Canyon",
         'MODEL_INFO_STREET_CANYON_DESC': "Considers street canyons, cross-ventilation, and height variation. Better for dense urban environments.",
-        'MODEL_INFO_SVGP_TITLE': "SVGP - Sparse Variational Gaussian Process",
-        'MODEL_INFO_SVGP_DESC': "Probabilistic ML model trained on KLAM_21 simulations. Provides uncertainty estimates for targeted exploration. ~10× faster.",
         'MODEL_INFO_UNET_TITLE': "U-Net - Neural Network",
         'MODEL_INFO_UNET_DESC': "Deep neural network trained on KLAM_21 simulations. Provides flow fields for visualization. ~100× faster.",
-        'MODEL_INFO_HYBRID_TITLE': "Hybrid - Combination of U-Net and SVGP",
-        'MODEL_INFO_HYBRID_DESC': "Uses U-Net fitness (KLAM-accurate) and SVGP uncertainty. Best quality-diversity results with flow visualization. ~50× faster.",
         
-        'MODEL_INFO_SVGP_SPEED': "~10× faster, KLAM accuracy + uncertainty",
         'MODEL_INFO_UNET_SPEED': "~100× faster, KLAM accuracy + flow fields",
-        'MODEL_INFO_HYBRID_SPEED': "~50× faster, full KLAM accuracy + uncertainty + flow",
         
         'MODEL_INFO_SPEED': "Speed:",
         'MODEL_INFO_ACCURACY': "Accuracy:",
@@ -409,14 +336,6 @@ T = {
         'MODEL_NONE_AVAILABLE': "No surrogate models available for parcel size {size}m.",
         'MODEL_UNET_UNAVAILABLE': "U-Net not available for parcel size {size}m.",
         'STEP2_UNET_SIZE_WARNING': "U-Net is only available for parcels up to 60 m. Please select a geometric method (Street Canyon or Simple Porosity) for larger parcels.",
-        
-        # Step 4 - Uncertainty Heatmap
-        'STEP4_UNCERTAINTY_HEADER': "Model Uncertainty",
-        'STEP4_UNCERTAINTY_INFO': "For SVGP/Hybrid models, the uncertainty map shows where the model is least confident.",
-        'STEP4_SHOW_UNCERTAINTY': "Show Uncertainty",
-        'STEP4_UNCERTAINTY_OVERLAY': "Uncertainty Overlay",
-        'STEP4_UNCERTAINTY_HEATMAP_TITLE': "Model Uncertainty",
-        'UNCERTAINTY_LABEL': "Uncertainty (σ)",
         
         # Step 6 - Flow Field
         'STEP6_SHOW_FLOW': "Show Flow Field",
@@ -538,43 +457,6 @@ T = {
         'OBJECTIVE_FUNCTION': 'Objective Function',
         'COUNT': 'Count',
         'OBJECTIVE_DISTRIBUTION': 'Objective Distribution',
-        
-        # Model Diagnostics Page
-        'MODEL_DIAG_TITLE': 'Model Diagnostics',
-        'MODEL_DIAG_BACK_TO_STEP1': 'Back to Step 1',
-        'MODEL_DIAG_GALLERY_HEADER': 'Archetypical Urban Patterns (81m × 81m)',
-        'MODEL_DIAG_GALLERY_INFO': 'Six predefined building layouts for testing and comparing objective functions.',
-        'MODEL_DIAG_RUN_BTN': 'Run All Evaluations',
-        'MODEL_DIAG_RANKING': 'Evaluation Ranking',
-        'MODEL_DIAG_RANKING_INFO': 'Fitness scores for all archetypes. Higher values = better cold air production.',
-        'MODEL_DIAG_CORRELATION': 'Correlation Matrix',
-        'MODEL_DIAG_CORRELATION_INFO': 'Pearson correlation between objective functions across all archetypes.',
-        'MODEL_DIAG_CORRELATION_LABEL': 'Correlation',
-        'MODEL_DIAG_FLOW_VIZ': 'Flow Visualization (U-Net)',
-        'MODEL_DIAG_FLOW_VIZ_INFO': 'Wind velocity field and streamlines predicted by U-Net model.',
-        'MODEL_DIAG_SELECT_ARCH': 'Select Archetype:',
-        'MODEL_DIAG_STREAMLINE_DENSITY': 'Streamline Density:',
-        'MODEL_DIAG_VELOCITY_HEATMAP': 'Velocity Field',
-        'MODEL_DIAG_STREAMLINES': 'Streamlines',
-        'MODEL_DIAG_VELOCITY_MS': 'Velocity (m/s)',
-        'MODEL_DIAG_EVAL_COMPLETE': 'Evaluation complete!',
-        'MODEL_DIAG_EVAL_ERROR': 'Error during evaluation',
-        'MODEL_DIAG_TABLE_ARCHETYPE': 'Archetype',
-        'MODEL_DIAG_TABLE_POROSITY': 'Porosity',
-        'MODEL_DIAG_TABLE_STREET_CANYON': 'Street Canyon',
-        'MODEL_DIAG_TABLE_SVGP': 'SVGP',
-        'MODEL_DIAG_TABLE_UNET': 'U-Net',
-        
-        # Archetype names and descriptions
-        'ARCHETYPE_EMPTY': 'Empty',
-        'ARCHETYPE_SQUARE': 'Square',
-        'ARCHETYPE_TWO_SQUARES': 'Two Squares',
-        'ARCHETYPE_TWO_SQUARES_ROTATED': 'Two Squares (90° rotated)',
-        'ARCHETYPE_U_SHAPE': 'U-Shape',
-        'ARCHETYPE_U_SHAPE_ROTATED': 'U-Shape (90° rotated)',
-        'ARCHETYPE_GRID': 'Grid',
-        'ARCHETYPE_STREET_CANYON': 'Street Canyon',
-        'ARCHETYPE_STREET_CANYON_ROTATED': 'Street Canyon (90° rotated)',
         
         # Step 6
         'STEP6_TITLE': "Step 6: Detailed Comparison of Selected Designs",

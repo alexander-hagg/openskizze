@@ -10,14 +10,16 @@ from backend.config import QD_CONFIG, ENCODING_CONFIG, DOMAIN_CONFIG, SURROGATE_
 from backend.data_io import fetch_existing_buildings_data
 from backend.encoding import ParametricEncoding
 from backend.optimizer import run_qd_optimization
-from backend.debugging_plots import create_debug_plots
 import math
 from rasterio import features
 from rasterio.transform import from_origin
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None, feature_set: str = 'consolidated', model_type: str = 'original', ucb_lambda: float = 1.0, grid_params: dict = None):
+def create_environment(user_polygon_geojson: dict, selected_features: list, user_feature_ranges: dict, hard_constraints: dict = None, cached_building_data: dict = None, feature_set: str = 'consolidated', model_type: str = 'original', grid_params: dict = None):
     """
     Create the optimization environment with proper physical unit ranges.
     
@@ -29,8 +31,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         cached_building_data: Optional pre-fetched building data from Step 1 (for performance)
         feature_set: 'consolidated' (default)
         grid_params: Pre-calculated grid parameters from step 1 (to avoid recalculation differences)
-        model_type: 'original', 'svgp', 'unet', or 'hybrid'
-        ucb_lambda: UCB exploration parameter for SVGP/Hybrid models
+        model_type: 'original', 'unet'
     """
     if hard_constraints is None:
         hard_constraints = {}
@@ -47,7 +48,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         res = grid_params['xy_length']
         grid_side_length = grid_params['grid_side_length']
         pixel_size = grid_params['pixel_size']
-        print(f"[create_environment] Using pre-calculated grid: {res} bins ({grid_side_length:.1f}m)")
+        logger.info(f"Using pre-calculated grid: {res} bins ({grid_side_length:.1f}m)")
     else:
         width = max_x - min_x
         height = max_y - min_y
@@ -56,7 +57,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         grid_side_length = square_size + (2 * border)
         pixel_size = DOMAIN_CONFIG['pixel_size_in_meters']
         res = math.ceil(grid_side_length / pixel_size)
-        print(f"[create_environment] Calculated grid: {res} bins ({grid_side_length:.1f}m)")
+        logger.info(f"Calculated grid: {res} bins ({grid_side_length:.1f}m)")
     
     ENCODING_CONFIG['xy_length'] = res
     
@@ -118,7 +119,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
     gdf_building_polygons = None
     
     if cached_building_data is not None:
-        print("[create_environment] ✓ Using cached building data from Step 1")
+        logger.info("✓ Using cached building data from Step 1")
         
         # Extract cached data
         cached_env_3d_expanded = cached_building_data.get('env_3d_expanded')
@@ -128,19 +129,19 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         
         # Validate that cached data matches our grid resolution
         if cached_env_3d_expanded is None or cached_env_3d_expanded.shape[0] != expanded_res or cached_env_3d_expanded.shape[1] != expanded_res:
-            print(f"[create_environment] ⚠ Cached data resolution mismatch or invalid")
-            print("[create_environment] Falling back to fetching buildings from API")
+            logger.warning(f"⚠ Cached data resolution mismatch or invalid")
+            logger.warning("Falling back to fetching buildings from API")
             cached_building_data = None  # Invalidate cache and fetch fresh data
         else:
             # Cache is valid, use it
             env_3d_expanded = cached_env_3d_expanded
-            print(f"[create_environment] ✓ Using cached building data with {len(gdf_building_polygons) if gdf_building_polygons is not None else 0} buildings")
+            logger.info(f"✓ Using cached building data with {len(gdf_building_polygons) if gdf_building_polygons is not None else 0} buildings")
     
     # ============================================================================
     # If no cache or cache invalid, fetch buildings from NRW API
     # ============================================================================
     if cached_building_data is None:
-        print("[create_environment] Fetching building data from NRW API...")
+        logger.info("Fetching building data from NRW API...")
         
         # Use expanded bounds for fetching buildings
         fetch_poly_native = gpd.GeoSeries([Polygon.from_bounds(expanded_min_x, expanded_min_y, expanded_max_x, expanded_max_y)], crs="EPSG:25832")
@@ -167,7 +168,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
                 function_mask = ~gdf_polygons['funktion'].isin(exclude_types)
                 gdf_building_polygons = gdf_polygons[function_mask]
                 
-                print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after excluding {exclude_types}")
+                logger.info(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after excluding {exclude_types}")
             else:
                 # Fallback if no function attribute
                 perimeter = gdf_polygons.geometry.length
@@ -176,7 +177,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
                 compactness = 4 * math.pi * area / (perimeter**2)
                 compact_mask = compactness > 0.1
                 gdf_building_polygons = gdf_polygons[compact_mask]
-                print(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after geometric filter")
+                logger.info(f"Building filtering: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} after geometric filter")
             
             if not gdf_building_polygons.empty:
                 # Extract real building heights from NRW data
@@ -363,13 +364,12 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         
         surrogate_wrapper = create_surrogate_wrapper(
             model_type=model_type,
-            parcel_size_bins=parcel_size_bins,
-            ucb_lambda=ucb_lambda
+            parcel_size_bins=parcel_size_bins
         )
         
         if surrogate_wrapper is None:
-            print(f"[create_environment] WARNING: Could not create surrogate wrapper for {model_type}")
-            print("[create_environment] Falling back to original evaluation")
+            logger.warning(f"Could not create surrogate wrapper for {model_type}")
+            logger.warning("Falling back to original evaluation")
             use_surrogate = False
     
     return {
@@ -389,8 +389,7 @@ def create_environment(user_polygon_geojson: dict, selected_features: list, user
         'design_offset': (start_idx, start_idx),  # Where design grid sits within expanded grid
         'phenotype_config': phenotype_config,  # NEW: Adaptive phenotype parameters
         'use_surrogate': use_surrogate,  # NEW: Whether using surrogate model
-        'model_type': model_type,  # NEW: Model type ('original', 'svgp', 'unet', 'hybrid')
-        'ucb_lambda': ucb_lambda,  # NEW: UCB exploration parameter
+        'model_type': model_type,  # NEW: Model type ('original', 'unet')
         'surrogate_wrapper': surrogate_wrapper,  # NEW: Surrogate evaluator wrapper instance
     }
 
@@ -433,7 +432,6 @@ def start_optimization(
     feature_set: str = 'consolidated', 
     progress_callback=None,
     model_type: str = 'street_canyon',
-    ucb_lambda: float = 1.0,
     grid_params: dict = None
 ):
     progress_callback(5, "Creating environment...")
@@ -450,7 +448,7 @@ def start_optimization(
         # U-Net: trained on street_canyon, use that as base objective
         actual_objective = 'street_canyon'
     else:
-        # Legacy model types (svgp, hybrid) — fall back to geometric
+        # Unknown model type — fall back to geometric
         actual_objective = 'street_canyon'
         use_surrogate = False
     
@@ -463,7 +461,6 @@ def start_optimization(
         cached_building_data, 
         feature_set,
         model_type=model_type,
-        ucb_lambda=ucb_lambda,
         grid_params=grid_params
     )
     env_config['wind_direction'] = wind_direction
@@ -543,8 +540,7 @@ def start_optimization(
         
         surrogate_wrapper = create_surrogate_wrapper(
             model_type=model_type,
-            parcel_size_bins=parcel_size_bins,
-            ucb_lambda=ucb_lambda
+            parcel_size_bins=parcel_size_bins
         )
         
         if surrogate_wrapper is None:
@@ -556,14 +552,13 @@ def start_optimization(
         
         env_config['use_surrogate'] = True
         env_config['surrogate_wrapper'] = surrogate_wrapper
-        print(f"Using surrogate model: {model_type} (parcel_size={parcel_size_bins} bins, {parcel_size_m:.0f}m)")
+        logger.info(f"Using surrogate model: {model_type} (parcel_size={parcel_size_bins} bins, {parcel_size_m:.0f}m)")
     else:
         env_config['use_surrogate'] = False
         env_config['surrogate_wrapper'] = None
-        print(f"Using geometric evaluation: {model_type}")
+        logger.info(f"Using geometric evaluation: {model_type}")
     
     sample_genome = np.random.randn(encoding_obj.get_dimension())
-    # create_debug_plots(env_config, sample_genome, encoding_obj)
     progress_callback(10, "Starting optimization...")
     archive = run_qd_optimization(
         encoding_obj, env_config, qd_config, x0_adaptive, progress_callback)

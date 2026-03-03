@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# OpenSKIZZE - Unified Model Evaluator for GUI Integration
+# OpenSKIZZE - U-Net Model Evaluator for GUI Integration
 # Copyright (C) 2025 [Alexander Hagg]
 #
 # This program is free software: you can redistribute it and/or modify
@@ -8,48 +8,34 @@
 # (at your option) any later version.
 
 """
-Unified Evaluator for SVGP, U-Net, and Hybrid Models
+U-Net Evaluator for Building Layout Assessment
 
-This module provides a single interface for evaluating building layouts using:
-1. SVGP model (fast, provides uncertainty, works for ALL parcel sizes)
-2. U-Net model (most accurate, no uncertainty, size-specific)
-3. Hybrid model (U-Net fitness + SVGP uncertainty for exploration)
+Evaluates building layouts using a U-Net neural network trained on KLAM_21
+cold-air drainage simulations.
 
 Model Files:
-- SVGP: models/svgp.pth (single model, parcel size as input)
-- U-Net: models/unet_{SIZE}m.pth (size-specific, e.g., unet_81m.pth)
-- U-Net normalization: models/unet_{SIZE}m_normalization.json
-
-All evaluators use the optimized fast_encoding.py for consistent feature
-calculation and performance.
+- U-Net weights: models/unet_{SIZE}m.pth (e.g., unet_60m.pth)
+- Normalization: models/unet_{SIZE}m_normalization.json
 
 Usage:
     from model_evaluator import create_evaluator
-    
-    # Create evaluator (parcel_size in meters, e.g., 81m)
+
     evaluator = create_evaluator(
-        model_type='hybrid',  # or 'svgp' or 'unet'
-        parcel_size=81,  # Parcel size in meters
-        device='cuda',
-        ucb_lambda=1.0  # For UCB exploration
+        model_type='unet',
+        parcel_size=60,
+        device='cpu'
     )
-    
-    # Evaluate batch of genomes
     results = evaluator.evaluate(genomes, parcel_sizes)
-    objectives = results['objectives']
-    uncertainties = results.get('uncertainties', None)  # Only for SVGP/Hybrid
 """
 
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
-import gpytorch
 
-from backend.svgp import SVGPModel, load_svgp_model
 from backend.unet import UNet, UNetConfig
 from backend.fast_encoding import NumbaFastEncoding
 
@@ -147,153 +133,6 @@ def construct_domain_grids_batch(
     landuse[:, :, :slope_end_col] = 7
     
     return terrain, buildings, landuse
-
-
-# ============================================================================
-# SVGP Evaluator
-# ============================================================================
-
-class SVGPEvaluator:
-    """Evaluator using SVGP model with optional UCB exploration."""
-    
-    def __init__(
-        self,
-        model_path: Path,
-        parcel_size: int,
-        device: torch.device,
-        ucb_lambda: float = 0.0
-    ):
-        self.device = device
-        self.ucb_lambda = ucb_lambda
-        self.parcel_size = parcel_size
-        
-        logger.info(f"Loading SVGP model from {model_path}")
-        
-        # Load checkpoint - contains model AND normalization (62D input + scalar output)
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
-        
-        # Extract normalization stats from checkpoint (lowercase keys)
-        self.train_X_mean = checkpoint['train_x_mean'].to(device)  # (62,) - genome + width + height
-        self.train_X_std = checkpoint['train_x_std'].to(device)    # (62,)
-        # Convert scalar tensors to Python floats for correct broadcasting
-        self.train_y_mean = checkpoint['train_y_mean'].item() if hasattr(checkpoint['train_y_mean'], 'item') else float(checkpoint['train_y_mean'])
-        self.train_y_std = checkpoint['train_y_std'].item() if hasattr(checkpoint['train_y_std'], 'item') else float(checkpoint['train_y_std'])
-        
-        # Load model using extracted checkpoint
-        self.model, self.likelihood = load_svgp_model(str(model_path), device=str(device))
-        
-        # Initialize fast encoding for feature calculation
-        self.fast_encoding = NumbaFastEncoding(parcel_size=parcel_size)
-        
-        logger.info(f"SVGP loaded (UCB λ={ucb_lambda})")
-    
-    def _denormalize_genomes(self, genomes: np.ndarray, parcel_size_bins: int) -> np.ndarray:
-        """
-        Convert normalized 0-1 genomes to pixel-coordinate encoding that SVGP was trained on.
-        
-        Genome structure: 10 buildings × [width, length, height, x, y, active]
-        
-        Training encoding:
-        - width, length: pixels (range depends on parcel size)
-        - height: floors (0-max_floors)
-        - x, y: pixel coordinates centered at 0 (range: -parcel_size/2 to +parcel_size/2)
-        - active: binary 0/1
-        
-        Args:
-            genomes: (N, 60) normalized genomes in [0, 1]
-            parcel_size_bins: Parcel size in bins
-        
-        Returns:
-            (N, 60) denormalized genomes in pixel coordinates
-        """
-        N = len(genomes)
-        genomes_denorm = np.zeros_like(genomes)
-        
-        max_building_floors = self.fast_encoding.config.get('max_building_floors', 10)
-        
-        for i in range(10):  # 10 buildings
-            base = i * 6
-            
-            # Width & Length: 0-1 → 0 to parcel_size/2 pixels
-            genomes_denorm[:, base + 0] = genomes[:, base + 0] * (parcel_size_bins / 2)
-            genomes_denorm[:, base + 1] = genomes[:, base + 1] * (parcel_size_bins / 2)
-            
-            # Height: 0-1 → 0 to max_floors
-            genomes_denorm[:, base + 2] = genomes[:, base + 2] * max_building_floors
-            
-            # X & Y positions: 0-1 → -parcel_size/2 to +parcel_size/2 (centered at 0)
-            genomes_denorm[:, base + 3] = (genomes[:, base + 3] - 0.5) * parcel_size_bins
-            genomes_denorm[:, base + 4] = (genomes[:, base + 4] - 0.5) * parcel_size_bins
-            
-            # Active: 0-1 → 0 or 1 (threshold at 0.5)
-            genomes_denorm[:, base + 5] = (genomes[:, base + 5] > 0.5).astype(np.float32)
-        
-        return genomes_denorm
-    
-    def evaluate(
-        self,
-        genomes: np.ndarray,
-        parcel_sizes: np.ndarray
-    ) -> Dict[str, np.ndarray]:
-        """
-        Evaluate genomes using SVGP.
-        
-        Args:
-            genomes: (N, 60) genome array in NORMALIZED 0-1 range
-            parcel_sizes: (N,) parcel sizes in BINS (not meters!)
-        
-        Returns:
-            Dictionary with:
-            - objectives: UCB-adjusted objectives for selection
-            - objectives_mean: Pure SVGP mean predictions
-            - uncertainties: SVGP standard deviations
-            - features: (N, 8) planning features
-        """
-        N = len(genomes)
-        
-        # Express genomes to heightmaps
-        heightmaps = self.fast_encoding.express_batch(genomes)
-        
-        # Compute features for archive
-        from backend.fast_encoding import numba_calculate_features
-        pixel_size = self.fast_encoding.config['xy_scale']
-        features = np.zeros((N, 8), dtype=np.float64)
-        for i in range(N):
-            features[i] = numba_calculate_features(heightmaps[i], pixel_size)
-        
-        # CRITICAL: Convert normalized 0-1 genomes to pixel-coordinate encoding
-        # that SVGP was trained on
-        genomes_denorm = self._denormalize_genomes(genomes, parcel_sizes[0])
-        
-        # Prepare SVGP input: [denormalized_genome (60), width_bins (1), height_bins (1)] = 62D
-        widths = parcel_sizes.reshape(-1, 1)
-        heights = parcel_sizes.reshape(-1, 1)
-        X = np.column_stack([genomes_denorm, widths, heights])
-        X_tensor = torch.tensor(X, dtype=torch.float32, device=self.device)
-        
-        # Normalize
-        X_norm = (X_tensor - self.train_X_mean) / self.train_X_std
-        
-        # Predict with uncertainty
-        self.model.eval()
-        self.likelihood.eval()
-        with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            pred = self.likelihood(self.model(X_norm))
-            pred_mean = pred.mean * self.train_y_std + self.train_y_mean
-            pred_std = pred.stddev * self.train_y_std
-        
-        objectives_mean = pred_mean.cpu().numpy()
-        uncertainties = pred_std.cpu().numpy()
-        
-        # UCB adjustment
-        objectives_adjusted = objectives_mean + self.ucb_lambda * uncertainties
-        
-        return {
-            'objectives': objectives_adjusted,  # For MAP-Elites selection
-            'objectives_mean': objectives_mean,  # Pure predictions
-            'uncertainties': uncertainties,
-            'features': features
-        }
 
 
 # ============================================================================
@@ -502,63 +341,6 @@ class UNetEvaluator:
 
 
 # ============================================================================
-# Hybrid Evaluator (U-Net + SVGP)
-# ============================================================================
-
-class HybridEvaluator:
-    """
-    Hybrid evaluator: U-Net for accuracy + SVGP for uncertainty exploration.
-    
-    Fitness = U-Net(x) + λ * SVGP_stddev(x)
-    """
-    
-    def __init__(
-        self,
-        unet_path: Path,
-        svgp_path: Path,
-        parcel_size: int,
-        device: torch.device,
-        ucb_lambda: float = 1.0,
-        actual_parcel_size: Optional[int] = None
-    ):
-        self.unet_eval = UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)
-        actual_size = actual_parcel_size if actual_parcel_size else parcel_size
-        self.svgp_eval = SVGPEvaluator(svgp_path, actual_size, device, ucb_lambda=0.0)
-        self.ucb_lambda = ucb_lambda
-        
-        logger.info(f"Hybrid evaluator created (λ={ucb_lambda})")
-    
-    def evaluate(
-        self,
-        genomes: np.ndarray,
-        parcel_sizes: np.ndarray
-    ) -> Dict[str, np.ndarray]:
-        """
-        Evaluate using hybrid approach.
-        
-        Returns U-Net predictions adjusted by SVGP uncertainty.
-        """
-        # Get U-Net predictions (most accurate)
-        unet_results = self.unet_eval.evaluate(genomes, parcel_sizes)
-        
-        # Get SVGP uncertainty
-        svgp_results = self.svgp_eval.evaluate(genomes, parcel_sizes)
-        
-        # Combine: U-Net fitness + SVGP exploration bonus
-        objectives_adjusted = (
-            unet_results['objectives'] + 
-            self.ucb_lambda * svgp_results['uncertainties']
-        )
-        
-        return {
-            'objectives': objectives_adjusted,  # For MAP-Elites selection
-            'objectives_unet': unet_results['objectives'],  # Pure U-Net
-            'uncertainties': svgp_results['uncertainties'],  # SVGP stddev
-            'features': unet_results['features']
-        }
-
-
-# ============================================================================
 # Factory Function
 # ============================================================================
 
@@ -566,57 +348,30 @@ def create_evaluator(
     model_type: str,
     parcel_size: int,
     models_dir: Path = Path('models'),
-    device: str = 'cuda',
-    ucb_lambda: float = 1.0,
-    actual_parcel_size: Optional[int] = None
+    device: str = 'cpu',
+    actual_parcel_size: Optional[int] = None,
+    **kwargs
 ):
     """
-    Create appropriate evaluator based on model type.
+    Create a U-Net evaluator.
     
     Args:
-        model_type: 'svgp', 'unet', or 'hybrid'
-        parcel_size: MODEL parcel size in METERS (e.g., 81 for unet_81m.pth)
+        model_type: Must be 'unet'
+        parcel_size: Model parcel size in meters (e.g., 60)
         models_dir: Directory containing model files
         device: 'cuda' or 'cpu'
-        ucb_lambda: UCB exploration parameter (for SVGP/Hybrid)
-        actual_parcel_size: ACTUAL parcel size in meters (may be smaller than model size)
-                           If None, assumes actual size == model size
+        actual_parcel_size: Actual parcel size in meters (may be smaller)
     
     Returns:
-        Configured evaluator instance
-    
-    Raises:
-        FileNotFoundError: If model files not found
-        ValueError: If model_type invalid
-    
-    Example:
-        # For 17-bin (51m) parcel using 27-bin (81m) U-Net model
-        evaluator = create_evaluator('unet', parcel_size=81, actual_parcel_size=51)
+        UNetEvaluator instance
     """
     device = torch.device(device)
-    
-    # Model paths
-    # SVGP: Single model for ALL parcel sizes (uses parcel dims as input)
-    svgp_path = models_dir / 'svgp.pth'
-    # U-Net: Size-specific models (fixed input dimensions)
     unet_path = models_dir / f'unet_{parcel_size}m.pth'
     
-    if model_type == 'svgp':
-        if not svgp_path.exists():
-            raise FileNotFoundError(f"SVGP model not found: {svgp_path}")
-        return SVGPEvaluator(svgp_path, parcel_size, device, ucb_lambda)
+    if model_type != 'unet':
+        raise ValueError(f"Only 'unet' model type is supported, got '{model_type}'")
     
-    elif model_type == 'unet':
-        if not unet_path.exists():
-            raise FileNotFoundError(f"U-Net model not found: {unet_path}")
-        return UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)
+    if not unet_path.exists():
+        raise FileNotFoundError(f"U-Net model not found: {unet_path}")
     
-    elif model_type == 'hybrid':
-        if not svgp_path.exists():
-            raise FileNotFoundError(f"SVGP model not found: {svgp_path}")
-        if not unet_path.exists():
-            raise FileNotFoundError(f"U-Net model not found: {unet_path}")
-        return HybridEvaluator(unet_path, svgp_path, parcel_size, device, ucb_lambda, actual_parcel_size)
-    
-    else:
-        raise ValueError(f"Invalid model_type: {model_type}. Must be 'svgp', 'unet', or 'hybrid'")
+    return UNetEvaluator(unet_path, parcel_size, device, actual_parcel_size)

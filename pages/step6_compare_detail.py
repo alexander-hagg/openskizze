@@ -13,6 +13,9 @@ import numpy as np
 import plotly.graph_objects as go
 from backend.analysis import heightmap_to_geojson, generate_pdf_report
 from backend.config import ENCODING_CONFIG
+import logging
+
+logger = logging.getLogger(__name__)
 
 style_handle = assign("""
 function(feature, context){
@@ -222,10 +225,10 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
         if vertex_count > 0:
             # Safety check: ensure all lists have consistent lengths to avoid JavaScript zip errors
             if not (len(x_coords_list) == len(y_coords_list) == len(z_coords_list)):
-                print(f"WARNING: Coordinate list length mismatch in add_voxel_blocks")
+                logger.warning("Coordinate list length mismatch in add_voxel_blocks")
                 return
             if not (len(i_indices) == len(j_indices) == len(k_indices)):
-                print(f"WARNING: Index list length mismatch in add_voxel_blocks")
+                logger.warning("Index list length mismatch in add_voxel_blocks")
                 return
             
             # Use a single mesh trace with all building blocks combined
@@ -775,10 +778,10 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                                         'Height: %{z:.1f}m<extra></extra>'
                         ))
                 except Exception as e:
-                    print(f"Error creating streamline {idx}: {e}")
+                    logger.warning(f"Error creating streamline {idx}: {e}")
                     
         except Exception as e:
-            print(f"Error adding flow visualization: {e}")
+            logger.warning(f"Error adding flow visualization: {e}")
     
     return fig
 
@@ -1035,7 +1038,7 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                     # Old format compatibility
                     env_3d_fixed = env_data
         except Exception as e:
-            print(f"Warning: Could not load existing buildings data: {e}")
+            logger.warning(f"Could not load existing buildings data: {e}")
             env_3d_fixed = None
     
     # Get feature translation setup
@@ -1060,11 +1063,11 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
         # Check if flow visualization should be included
         flow_field = None
         show_flow = flow_toggle_states.get(str(i), False) if flow_toggle_states else False
-        print(f"DEBUG: Cluster {i}, show_flow = {show_flow}, flow_toggle_states = {flow_toggle_states}")
+        logger.debug(f"Cluster {i}, show_flow = {show_flow}, flow_toggle_states = {flow_toggle_states}")
         
         if show_flow and check_unet_model_availability():
-            print(f"DEBUG: Generating flow field for cluster {i}")
-            print(f"DEBUG: Solution keys: {list(sol.keys())}")
+            logger.debug(f"Generating flow field for cluster {i}")
+            logger.debug(f"Solution keys: {list(sol.keys())}")
             try:
                 # Generate flow field using U-Net model (regardless of optimization method used)
                 import torch
@@ -1073,7 +1076,7 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                 
                 # Calculate actual parcel size from results data
                 parcel_size_m = heightmap_res * pixel_size  # e.g., 17 cells * 3m = 51m
-                print(f"DEBUG: Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
+                logger.debug(f"Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
                 
                 # Get solution genome - handle different possible key names
                 genome = None
@@ -1085,18 +1088,18 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                     genome = np.array(sol['solution'])
                 else:
                     # Try to reconstruct genome from heightmap if available
-                    print(f"DEBUG: No genome found, available keys: {list(sol.keys())}")
-                    print(f"DEBUG: Attempting to use heightmap to generate dummy genome")
+                    logger.debug(f"No genome found, available keys: {list(sol.keys())}")
+                    logger.debug(f"Attempting to use heightmap to generate dummy genome")
                     # For now, skip flow generation if no genome available
                     raise KeyError("No genome data available in solution")
                 
                 # Ensure genome is numpy array
                 genome = np.array(genome) if not isinstance(genome, np.ndarray) else genome
-                print(f"DEBUG: Using genome shape: {genome.shape}")
+                logger.debug(f"Using genome shape: {genome.shape}")
                 
                 # Create U-Net evaluator with actual parcel size
                 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-                print(f"DEBUG: Using device: {device}")
+                logger.debug(f"Using device: {device}")
                 unet_eval = create_evaluator('unet', parcel_size=parcel_size_m, device=device)
                 
                 # Generate heightmap using actual parcel size
@@ -1137,18 +1140,18 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                     # Use ENTIRE flow field (grid dynamically sized based on parcel)
                     # Create flow field in expected format: (2, H, W) for (u, v)
                     flow_field = np.stack([uq_np, vq_np], axis=0)  # Shape: (2, grid_h, grid_w)
-                    print(f"DEBUG: Generated full flow field shape: {flow_field.shape}")
+                    logger.debug(f"Generated full flow field shape: {flow_field.shape}")
                     
             except Exception as e:
-                print(f"Warning: Could not generate flow field with U-Net: {e}")
+                logger.warning(f"Could not generate flow field with U-Net: {e}")
                 import traceback
-                print(traceback.format_exc())
+                logger.debug(traceback.format_exc())
                 flow_field = None
         else:
             if not show_flow:
-                print(f"DEBUG: Flow not requested for cluster {i}")
+                logger.debug(f"Flow not requested for cluster {i}")
             elif not check_unet_model_availability():
-                print(f"DEBUG: U-Net model not available for cluster {i}")
+                logger.debug(f"U-Net model not available for cluster {i}")
         
         # Create 3D visualization with geographic context
         fig_3d = create_3d_building_plot(
@@ -1464,17 +1467,17 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
     if lang is None:
         lang = 'DE'
     
-    print(f"DEBUG: Flow field callback triggered - show_toggle: {show_toggle}, component_id: {component_id}")
+    logger.debug(f"Flow field callback triggered - show_toggle: {show_toggle}, component_id: {component_id}")
     
     # Only display if toggle is on
     if not show_toggle or 1 not in show_toggle:
-        print(f"DEBUG: Toggle is off or empty for component {component_id}")
+        logger.debug(f"Toggle is off or empty for component {component_id}")
         return html.Div()
     
-    print(f"DEBUG: Toggle is ON for component {component_id}")
+    logger.debug(f"Toggle is ON for component {component_id}")
     
     if not selected_ids or not clustering_data or not results_data:
-        print(f"DEBUG: Missing data - selected_ids: {bool(selected_ids)}, clustering_data: {bool(clustering_data)}, results_data: {bool(results_data)}")
+        logger.debug(f"Missing data - selected_ids: {bool(selected_ids)}, clustering_data: {bool(clustering_data)}, results_data: {bool(results_data)}")
         return dbc.Alert("No data available", color="warning")
     
     try:
@@ -1519,7 +1522,7 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
             from backend.config import DOMAIN_CONFIG
             pixel_size = DOMAIN_CONFIG.get('pixel_size_in_meters', 3.0)
             parcel_size_m = heightmap_res * pixel_size
-            print(f"DEBUG: Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
+            logger.debug(f"Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
             
             # Get solution genome
             genome = solution['genome']
@@ -1566,7 +1569,7 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
                 # Use full domain flow field (grid dynamically sized)
                 # Create flow field in expected format: (2, H, W) for (u, v)
                 flow_field = np.stack([uq_np, vq_np], axis=0)  # Shape: (2, grid_h, grid_w)
-                print(f"DEBUG: Generated flow field shape: {flow_field.shape}")
+                logger.debug(f"Generated flow field shape: {flow_field.shape}")
                 
         except Exception as e:
             return dbc.Alert(
@@ -1611,8 +1614,7 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
     except Exception as e:
         import traceback
         error_msg = f"Error displaying flow field: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        print(traceback.format_exc())
+        logger.exception(error_msg)
         return dbc.Alert(error_msg, color="danger")
 
 

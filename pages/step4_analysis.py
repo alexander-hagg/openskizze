@@ -6,6 +6,9 @@ import os
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import logging
+
+logger = logging.getLogger(__name__)
 
 def layout(lang='DE'):
     from backend.translation import create_breadcrumb
@@ -74,27 +77,11 @@ def layout(lang='DE'):
         # Hidden placeholder for random sample (removed from UI)
         html.Div(id='random-sample-preview', style={'display': 'none'}),
         
-        # Uncertainty Heatmap Section (for SVGP/Hybrid models) - moved to bottom
+        # Uncertainty section placeholder (kept for callback targets)
         html.Div(id='uncertainty-heatmap-container', children=[
-            dbc.Row([
-                dbc.Col([
-                    dbc.Card(dbc.CardBody([
-                        html.Div([
-                            html.H5(T[lang]['STEP4_UNCERTAINTY_HEADER'], className="d-inline-block"),
-                            dbc.Checklist(
-                                options=[{"label": T[lang]['STEP4_SHOW_UNCERTAINTY'], "value": 1}],
-                                value=[],
-                                id="show-uncertainty-toggle",
-                                switch=True,
-                                className="float-end"
-                            ),
-                        ], className="clearfix"),
-                        html.P(T[lang]['STEP4_UNCERTAINTY_INFO'], className="text-muted small"),
-                        dcc.Loading(html.Div(id='uncertainty-heatmap-display')),
-                    ]), className="mb-3"),
-                ], md=12),
-            ])
-        ], style={'display': 'none'}),  # Hidden by default, shown only when surrogate model was used
+            dbc.Checklist(id="show-uncertainty-toggle", value=[], style={'display': 'none'}),
+            html.Div(id='uncertainty-heatmap-display'),
+        ], style={'display': 'none'}),
         
     ], fluid=True)
 
@@ -265,8 +252,7 @@ def update_filtered_preview(slider_values, results_data, lang):
         
     except Exception as e:
         import traceback
-        print(f"[ERROR] Filter preview: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception(f"Filter preview error: {str(e)}")
         return "", dbc.Alert(f"Error: {str(e)}", color="danger"), None
 
 
@@ -550,8 +536,7 @@ def generate_feature_objective_plots(results_data, pathname, language):
     except Exception as e:
         import traceback
         error_msg = f"Error generating feature-objective plots: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        print(traceback.format_exc())
+        logger.exception(error_msg)
         return dbc.Alert(error_msg, color="danger")
 
 @callback(
@@ -564,11 +549,8 @@ def toggle_uncertainty_section(results_data):
         return {'display': 'none'}
     
     model_type = results_data.get('model_type', 'original')
-    # Show section for SVGP and Hybrid models (they provide uncertainties)
-    if model_type in ['svgp', 'hybrid']:
-        return {'display': 'block'}
-    else:
-        return {'display': 'none'}
+    # Uncertainty section only applicable for models that provide uncertainties (none currently)
+    return {'display': 'none'}
 
 @callback(
     Output('uncertainty-heatmap-display', 'children'),
@@ -628,8 +610,7 @@ def display_uncertainty_heatmap(show_toggle, results_data, lang):
     except Exception as e:
         import traceback
         error_msg = f"Error displaying uncertainty: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        print(traceback.format_exc())
+        logger.exception(error_msg)
         return dbc.Alert(error_msg, color="danger")
 
 

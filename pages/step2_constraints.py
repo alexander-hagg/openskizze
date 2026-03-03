@@ -6,6 +6,9 @@ import dash_bootstrap_components as dbc
 from backend.translation import T, translate_feature_labels
 from backend.config import ENCODING_CONFIG, DOMAIN_CONFIG, QD_CONFIG
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_measures_options(lang='DE'):
     """Generate measures options with translated labels based on consolidated feature set"""
@@ -362,7 +365,7 @@ def create_range_sliders(selected_indices, pathname, max_height_input, min_dista
             # Calculate dynamic ranges based on feature set
             dynamic_ranges, _ = _calculate_dynamic_feat_ranges(buildable_mask, max_height_meters, min_distance_meters, feature_set='consolidated')
         except Exception as e:
-            print(f"Warning: Could not calculate dynamic ranges: {e}")
+            logger.warning(f"Could not calculate dynamic ranges: {e}")
             dynamic_ranges = None
 
     # Get saved feature ranges from session if available
@@ -703,7 +706,6 @@ def update_session_with_features_and_ranges(
     
     # Save surrogate model settings
     session_data['model_type'] = model_type if model_type is not None else 'street_canyon'
-    session_data['ucb_lambda'] = 1.0  # Fixed — UCB lambda only used by removed SVGP/hybrid
     
     return session_data
 

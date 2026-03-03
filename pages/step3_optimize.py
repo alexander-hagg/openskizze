@@ -25,6 +25,9 @@ import time
 
 import cProfile # Import the profiler
 import pstats   # Import for saving stats
+import logging
+
+logger = logging.getLogger(__name__)
 
 cache = diskcache.Cache("./cache")
 background_callback_manager = DiskcacheManager(cache)
@@ -53,7 +56,7 @@ def cleanup_old_files(directory: str, max_age_hours: int = 24):
     """
     Removes files from a directory if they are older than max_age_hours.
     """
-    print(f"Running cleanup on '{directory}' for files older than {max_age_hours} hours...")
+    logger.info(f"Running cleanup on '{directory}' for files older than {max_age_hours} hours...")
     try:
         max_age_seconds = max_age_hours * 3600
         current_time = time.time()
@@ -62,10 +65,10 @@ def cleanup_old_files(directory: str, max_age_hours: int = 24):
             if os.path.isfile(file_path):
                 file_age_seconds = current_time - os.path.getmtime(file_path)
                 if file_age_seconds > max_age_seconds:
-                    print(f"Deleting stale file: {file_path}")
+                    logger.info(f"Deleting stale file: {file_path}")
                     os.remove(file_path)
     except Exception as e:
-        print(f"Error during file cleanup: {e}")
+        logger.error(f"Error during file cleanup: {e}")
 
 
 def layout(lang='DE'):
@@ -436,22 +439,22 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     
     # Validate prerequisites before starting optimization
     if not n_clicks:
-        print("[run_optimization] No button click detected")
+        logger.debug("No button click detected")
         if existing_results:
             return no_update
         return None
     
     if not session_data:
-        print("[run_optimization] ✗ ERROR: No session data available")
-        print("[run_optimization] Please go back to Step 1 and select a parcel")
+        logger.error("No session data available")
+        logger.error("Please go back to Step 1 and select a parcel")
         return no_update
     
     if not session_data.get('site_polygon'):
-        print("[run_optimization] ✗ ERROR: No parcel selected")
-        print("[run_optimization] Please go back to Step 1 and select a parcel")
+        logger.error("No parcel selected")
+        logger.error("Please go back to Step 1 and select a parcel")
         return no_update
     
-    print(f"[run_optimization] ✓ Starting optimization (click #{n_clicks})")
+    logger.info(f"✓ Starting optimization (click #{n_clicks})")
 
     selected_features = session_data.get('selected_features', list(range(8)))
     user_feature_ranges = session_data.get('feature_ranges', {})
@@ -459,9 +462,6 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     qd_hyperparams = session_data.get('qd_hyperparams', {})
     feature_set = session_data.get('feature_set', 'consolidated')
     model_type = session_data.get('model_type', 'street_canyon')
-    ucb_lambda = session_data.get('ucb_lambda', 1.0)
-    
-    print(f"[run_optimization] Model settings: type={model_type}, ucb_lambda={ucb_lambda}")
     
     # Retrieve and deserialize cached building data from Step 1 (if available)
     cached_building_data = None
@@ -469,9 +469,9 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     if serialized_building_data:
         try:
             cached_building_data = pickle.loads(base64.b64decode(serialized_building_data))
-            print("[run_optimization] ✓ Deserialized cached building data from session")
+            logger.info("✓ Deserialized cached building data from session")
         except Exception as e:
-            print(f"[run_optimization] ✗ Error deserializing building data: {e}")
+            logger.error(f"Error deserializing building data: {e}")
             cached_building_data = None
 
     # Simple progress callback - only updates the progress bar
@@ -496,7 +496,6 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
             feature_set=feature_set,
             progress_callback=progress_callback,
             model_type=model_type,
-            ucb_lambda=ucb_lambda,
             grid_params=grid_params
         )
         
@@ -610,23 +609,21 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
     except ValueError as e:
         # User-friendly error for constraint/parcel issues
         import traceback
-        print("!!!!!! OPTIMIZATION FAILED - User Error !!!!!!")
-        print(str(e))
-        traceback.print_exc()
+        logger.error("OPTIMIZATION FAILED - User Error")
+        logger.exception(str(e))
         set_progress((0, "Error", str(e), {'visibility': 'visible', 'color': 'red'}))
         return None
     except RuntimeError as e:
         # Runtime error (e.g., empty archive)
         import traceback
-        print("!!!!!! OPTIMIZATION FAILED - Empty Archive !!!!!!")
-        print(str(e))
-        traceback.print_exc()
+        logger.error("OPTIMIZATION FAILED - Empty Archive")
+        logger.exception(str(e))
         set_progress((0, "Error", str(e), {'visibility': 'visible', 'color': 'red'}))
         return None
     except Exception as e:
         import traceback
-        print("!!!!!! OPTIMIZATION FAILED - Unexpected Error !!!!!!")
-        traceback.print_exc()
+        logger.error("OPTIMIZATION FAILED - Unexpected Error")
+        logger.exception(str(e))
         set_progress((0, "Error", f"Unexpected error: {str(e)}", {'visibility': 'visible', 'color': 'red'}))
         return None
     

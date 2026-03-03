@@ -7,6 +7,9 @@ from backend import project_state
 import base64
 import io
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Configure kaleido to run without a sandbox. This is often required in
 # containerized or restricted environments.
@@ -46,7 +49,7 @@ app.layout = html.Div([
 ])
 
 # Register page layouts
-from pages import step1_scope, step2_constraints, step3_optimize, step4_analysis, step5_clustering, step6_compare_detail, step_diagnostic, step_model_diagnostics
+from pages import step1_scope, step2_constraints, step3_optimize, step4_analysis, step5_clustering, step6_compare_detail
 
 # Callback to update navbar based on language
 @app.callback(
@@ -124,7 +127,7 @@ def load_project_file(contents, filename):
                 filter_data = state.get('filter_data', None)
                 return state['session_data'], state['results_data'], state['comparison_data'], filter_data, '/'
         except Exception as e:
-            print(f"Error loading project file: {e}")
+            logger.error(f"Error loading project file: {e}")
             # Optionally, show an error message to the user
     return no_update, no_update, no_update, no_update, no_update
 
@@ -280,9 +283,5 @@ def display_page(pathname, lang):
         return step5_clustering.layout(lang)
     elif pathname == '/step6':
         return step6_compare_detail.layout(lang)
-    elif pathname == '/diagnostic':
-        return step_diagnostic.layout(lang)
-    elif pathname == '/model_diagnostics':
-        return step_model_diagnostics.layout(lang)
     else:
         return step1_scope.layout(lang)

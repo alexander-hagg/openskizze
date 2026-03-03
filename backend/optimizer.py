@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adaptive=None, progress_callback=None):
     solution_dim = encoding_obj.get_dimension()
-    print(f"[QD-SETUP] Archive Configuration:")
-    print(f"  Solution Dimension: {solution_dim} (FIXED - always 60)")
-    print(f"  Features: {len(env_config['labels'])}")
-    print(f"  Niches per Feature: {qd_config['num_niches']}")
-    print(f"  Total Archive Size: {qd_config['num_niches'] ** len(env_config['labels'])}")
+    logger.info(f"Archive Configuration:")
+    logger.info(f"  Solution Dimension: {solution_dim} (FIXED - always 60)")
+    logger.info(f"  Features: {len(env_config['labels'])}")
+    logger.info(f"  Niches per Feature: {qd_config['num_niches']}")
+    logger.info(f"  Total Archive Size: {qd_config['num_niches'] ** len(env_config['labels'])}")
     
     archive = GridArchive(
         solution_dim=solution_dim,
@@ -30,7 +30,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
     
     # Use adaptive x0 if provided, otherwise zeros
     x0 = x0_adaptive if x0_adaptive is not None else np.zeros(solution_dim)
-    print(f"  Initial genome: {'Adaptive (biased for parcel)' if x0_adaptive is not None else 'Zeros'}")
+    logger.info(f"  Initial genome: {'Adaptive (biased for parcel)' if x0_adaptive is not None else 'Zeros'}")
     
     emitters = [
         GaussianEmitter(
@@ -43,7 +43,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
     nb_cpus = max(1, psutil.cpu_count(logical=True) - 2)
     pool = multiprocessing.Pool(processes=nb_cpus)
     
-    print("Starting QD Optimization...")
+    logger.info("Starting QD Optimization...")
     live_update_interval = qd_config.get('live_update_interval', 100)  # Default to every 50 generations
     
     # Check if using surrogate model
@@ -73,7 +73,7 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
             # Print stats at regular intervals (for console output)
             if gen % qd_config['output_inv_frequency'] == 0:
                 stats = archive.stats
-                print(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
+                logger.info(f"Gen {gen}/{qd_config['num_generations']} | QD Score: {stats.qd_score:.2f} | Coverage: {stats.coverage * 100:.2f}% | Elites: {stats.num_elites}")
             
             # Call progress callback with archive at user-defined generation intervals
             if progress_callback:
@@ -85,10 +85,10 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
                     progress_callback(100*gen/qd_config["num_generations"], f'Generation {gen} von {qd_config["num_generations"]}', None)
         
         except Exception as e:
-            print(f"!!!!!! ERROR during optimization loop at generation {gen} !!!!!!")
-            print(f"Error: {e}")
+            logger.error(f"ERROR during optimization loop at generation {gen}")
+            logger.error(f"Error: {e}")
             if isinstance(e, MemoryError):
-                print("!!!!!! MEMORY ERROR DETECTED. This is likely due to an unstable emitter state. !!!!!!")
+                logger.error("MEMORY ERROR DETECTED. This is likely due to an unstable emitter state.")
             pool.close()
             pool.join()
             raise e
@@ -105,5 +105,5 @@ def run_qd_optimization(encoding_obj, env_config: dict, qd_config: dict, x0_adap
         logger.info(f"  Avg per evaluation: {stats['avg_ms_per_eval']:.2f}ms")
         logger.info(f"  Throughput: {stats['evals_per_second']:.1f} evals/sec")
     
-    print("Finished QD Optimization.")
+    logger.info("Finished QD Optimization.")
     return archive

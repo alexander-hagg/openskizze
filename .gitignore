@@ -1,20 +1,26 @@
 static/vendor/*
 node_modules/*
+
+# Python
 *.pyc
-results/
+__pycache__/
+*.nbc
+*.nbi
 
-# Temporary optimization results
-temp_results/
-
-# Debug plots
+# Profiling / debug
+*.prof
+*.log
 debug_plots/
 
-# Cache files
+# Cache & temp
 cache/
+temp_results/
+results/
+lod2_tiles_cache/
 
-# Python cache
-__pycache__/
-*.pyc
+# Project files & data
+*.skizze
+*.gpkg
 
-# Profiling data
-*.prof
+# Editor
+.vscode/

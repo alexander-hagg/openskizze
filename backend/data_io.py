@@ -11,6 +11,9 @@ import math
 import time
 from pathlib import Path
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 # --- Flurstücke (Parcels) Fetching ---
 WFS_URL_PARCELS = "https://www.wfs.nrw.de/geobasis/wfs_nw_alkis_vereinfacht"
@@ -55,7 +58,7 @@ def fetch_flurstuecke_data(bbox: tuple):
         gdf_web['id'] = gdf_web.index.astype(str)
         return json.loads(gdf_web.to_json())
     except Exception as e:
-        print(f"An error occurred during Flurstücke fetching: {e}. Returning a fake parcel.")
+        logger.error(f"An error occurred during Flurstücke fetching: {e}. Returning a fake parcel.")
 
         # --- FAKE PARCEL GENERATION LOGIC ---
         # Calculate the center and a small size relative to the bbox
@@ -126,15 +129,15 @@ def download_lod2_tile(tile_x, tile_y, force_reload=False):
         with open(cache_path, 'wb') as f:
             f.write(response.content)
         
-        print(f"  Downloaded LOD2 tile: {filename} ({len(response.content) / 1024 / 1024:.1f} MB)")
+        logger.info(f"  Downloaded LOD2 tile: {filename} ({len(response.content) / 1024 / 1024:.1f} MB)")
         return cache_path
     
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            print(f"  Tile not available: {filename}")
+            logger.info(f"  Tile not available: {filename}")
         return None
     except Exception as e:
-        print(f"  Error downloading {filename}: {e}")
+        logger.error(f"  Error downloading {filename}: {e}")
         return None
 
 
@@ -153,7 +156,7 @@ def parse_citygml_lod2_tile(gml_file, bbox=None):
         tree = ET.parse(gml_file)
         root = tree.getroot()
     except Exception as e:
-        print(f"  XML parse error for {gml_file.name}: {e}")
+        logger.error(f"  XML parse error for {gml_file.name}: {e}")
         return None
     
     buildings = []
@@ -230,11 +233,11 @@ def fetch_lod2_buildings(bbox_native):
     """
     min_x, min_y, max_x, max_y = bbox_native
     
-    print(f"Fetching LOD2 buildings for bbox: ({min_x:.0f}, {min_y:.0f}, {max_x:.0f}, {max_y:.0f})")
+    logger.info(f"Fetching LOD2 buildings for bbox: ({min_x:.0f}, {min_y:.0f}, {max_x:.0f}, {max_y:.0f})")
     
     # Calculate required tiles
     tiles = bbox_to_tiles(min_x, min_y, max_x, max_y)
-    print(f"  Need {len(tiles)} LOD2 tile(s)")
+    logger.info(f"  Need {len(tiles)} LOD2 tile(s)")
     
     all_buildings = []
     for tile_x, tile_y in tiles:
@@ -251,7 +254,7 @@ def fetch_lod2_buildings(bbox_native):
         time.sleep(0.1)  # Be nice to server
     
     if not all_buildings:
-        print("  No buildings found in LOD2 tiles")
+        logger.warning("  No buildings found in LOD2 tiles")
         return None
     
     # Merge and remove duplicates
@@ -259,8 +262,8 @@ def fetch_lod2_buildings(bbox_native):
     original_count = len(merged)
     merged = merged.drop_duplicates(subset=['building_id'])
     
-    print(f"  ✓ Fetched {len(merged)} buildings from LOD2 tiles (removed {original_count - len(merged)} duplicates)")
-    print(f"    Height range: {merged['measuredHeight'].min():.1f}m - {merged['measuredHeight'].max():.1f}m")
+    logger.info(f"  ✓ Fetched {len(merged)} buildings from LOD2 tiles (removed {original_count - len(merged)} duplicates)")
+    logger.info(f"    Height range: {merged['measuredHeight'].min():.1f}m - {merged['measuredHeight'].max():.1f}m")
     
     return merged
 
@@ -336,7 +339,7 @@ def parse_citygml_buildings(xml_content: bytes):
                                 'geometry': polygon
                             })
             except Exception as e:
-                print(f"Warning: Could not parse building {gml_id}: {e}")
+                logger.warning(f"Could not parse building {gml_id}: {e}")
                 continue
         
         if buildings:
@@ -347,7 +350,7 @@ def parse_citygml_buildings(xml_content: bytes):
             return None
             
     except Exception as e:
-        print(f"Error parsing CityGML: {e}")
+        logger.error(f"Error parsing CityGML: {e}")
         return None
 
 
@@ -380,19 +383,17 @@ def fetch_existing_buildings_data(bbox: tuple):
         gdf_buildings = fetch_lod2_buildings((min_x, min_y, max_x, max_y))
         
         if gdf_buildings is None or gdf_buildings.empty:
-            print("  No buildings found in LOD2 tiles")
+            logger.warning("  No buildings found in LOD2 tiles")
             return None
         
         # Filter out underground buildings
         # (LOD2 data is clean but we can add filtering if needed)
         
-        print(f"  ✓ Successfully fetched {len(gdf_buildings)} buildings with real height data from LOD2 tiles")
+        logger.info(f"  ✓ Successfully fetched {len(gdf_buildings)} buildings with real height data from LOD2 tiles")
         return gdf_buildings
         
     except Exception as e:
-        print(f"An error occurred during LOD2 building fetching: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"An error occurred during LOD2 building fetching: {e}")
         return None
 
 
@@ -430,7 +431,7 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
     
     try:
         if not user_polygon_geojson or not user_polygon_geojson.get('features'):
-            print("[fetch_buildings] Invalid polygon provided")
+            logger.warning("Invalid polygon provided")
             return None
         
         # Convert user polygon to native CRS and calculate bounds
@@ -473,11 +474,11 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         fetch_poly_web = fetch_poly_native.to_crs("EPSG:4326")
         b_min_lon, b_min_lat, b_max_lon, b_max_lat = fetch_poly_web.total_bounds
         
-        print(f"[fetch_buildings] Fetching buildings for expanded area ({expanded_res}x{expanded_res} pixels)")
+        logger.info(f"Fetching buildings for expanded area ({expanded_res}x{expanded_res} pixels)")
         gdf_buildings_native = fetch_existing_buildings_data((b_min_lon, b_min_lat, b_max_lon, b_max_lat))
         
         if gdf_buildings_native is None or gdf_buildings_native.empty:
-            print("[fetch_buildings] No buildings found in area")
+            logger.warning("No buildings found in area")
             return None
         
         # Filter by geometry type
@@ -490,7 +491,7 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
             exclude_types = ['Überdachung', 'Tiefgarage']
             function_mask = ~gdf_polygons['funktion'].isin(exclude_types)
             gdf_building_polygons = gdf_polygons[function_mask]
-            print(f"[fetch_buildings] Filtered: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} buildings (excluded {exclude_types})")
+            logger.info(f"Filtered: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} buildings (excluded {exclude_types})")
         else:
             # Fallback geometric filter
             perimeter = gdf_polygons.geometry.length
@@ -499,17 +500,17 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
             compactness = 4 * math.pi * area / (perimeter**2)
             compact_mask = compactness > 0.1
             gdf_building_polygons = gdf_polygons[compact_mask]
-            print(f"[fetch_buildings] Geometric filter: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} buildings")
+            logger.info(f"Geometric filter: {len(gdf_polygons)} total -> {len(gdf_building_polygons)} buildings")
         
         if gdf_building_polygons.empty:
-            print("[fetch_buildings] No buildings after filtering")
+            logger.warning("No buildings after filtering")
             return None
         
         # Extract heights - KEEP IN METERS for consistency
         if 'measuredHeight' in gdf_building_polygons.columns:
             # LOD2 tiles: measuredHeight is in meters - KEEP IN METERS
             heights_meters = gdf_building_polygons['measuredHeight'].fillna(9.0)
-            print(f"[fetch_buildings] Using measuredHeight from LOD2 tiles (range: {heights_meters.min():.1f}-{heights_meters.max():.1f} meters)")
+            logger.info(f"Using measuredHeight from LOD2 tiles (range: {heights_meters.min():.1f}-{heights_meters.max():.1f} meters)")
         elif 'hoehe' in gdf_building_polygons.columns:
             # Legacy: hoehe is in meters - KEEP IN METERS
             heights_meters = gdf_building_polygons['hoehe'].fillna(9.0)
@@ -519,7 +520,7 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         else:
             # Fallback: assume 9 meters (3 floors)
             heights_meters = pd.Series([9.0] * len(gdf_building_polygons))
-            print("[fetch_buildings] Warning: No height data available, using default 9 meters")
+            logger.warning("No height data available, using default 9 meters")
         
         # Clip to reasonable range (3m to 90m = 1 to 30 floors)
         heights_meters = heights_meters.clip(3.0, 90.0)
@@ -577,7 +578,7 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
                     height_voxels = int(np.round(height_meters))  # 1 voxel = 1 meter
                     env_3d_expanded[r, c, :min(height_voxels, env_3d_expanded.shape[2])] = 1
         
-        print(f"[fetch_buildings] Successfully processed {len(gdf_building_polygons)} buildings into {expanded_res}x{expanded_res}x{max_height_needed} grid")
+        logger.info(f"Successfully processed {len(gdf_building_polygons)} buildings into {expanded_res}x{expanded_res}x{max_height_needed} grid")
         
         return {
             'gdf_buildings_filtered': gdf_building_polygons,
@@ -593,9 +594,7 @@ def fetch_and_process_buildings_for_area(user_polygon_geojson: dict, max_height_
         }
         
     except Exception as e:
-        print(f"[fetch_buildings] Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"Error: {e}")
         return None
 
 
@@ -616,11 +615,11 @@ def calculate_adaptive_max_height(gdf_buildings, parcel_centroid, num_closest=20
     
     try:
         if gdf_buildings is None or gdf_buildings.empty:
-            print(f"[adaptive_height] No buildings found, using default: {default_height}m")
+            logger.info(f"No buildings found, using default: {default_height}m")
             return default_height
         
         if 'height_meters' not in gdf_buildings.columns:
-            print(f"[adaptive_height] No height data available, using default: {default_height}m")
+            logger.info(f"No height data available, using default: {default_height}m")
             return default_height
         
         # Calculate distances from parcel centroid to each building
@@ -631,7 +630,7 @@ def calculate_adaptive_max_height(gdf_buildings, parcel_centroid, num_closest=20
         closest_buildings = gdf_buildings.nsmallest(num_closest, 'distance')
         
         if len(closest_buildings) == 0:
-            print(f"[adaptive_height] No close buildings found, using default: {default_height}m")
+            logger.info(f"No close buildings found, using default: {default_height}m")
             return default_height
         
         # Get heights of closest buildings (filter out zeros)
@@ -639,7 +638,7 @@ def calculate_adaptive_max_height(gdf_buildings, parcel_centroid, num_closest=20
         heights = heights[heights > 0]
         
         if len(heights) == 0:
-            print(f"[adaptive_height] No valid heights found, using default: {default_height}m")
+            logger.info(f"No valid heights found, using default: {default_height}m")
             return default_height
         
         # Calculate mean height of closest buildings
@@ -648,13 +647,13 @@ def calculate_adaptive_max_height(gdf_buildings, parcel_centroid, num_closest=20
         # Round to nearest 3 meters (matching the slider step)
         rounded_height = max(3, int(np.round(mean_height / 3) * 3))
         
-        print(f"[adaptive_height] Analyzed {len(heights)} nearby buildings:")
-        print(f"  → Height range: {heights.min():.1f}m - {heights.max():.1f}m")
-        print(f"  → Mean height: {mean_height:.1f}m")
-        print(f"  → Recommended max height: {rounded_height}m")
+        logger.info(f"Analyzed {len(heights)} nearby buildings:")
+        logger.info(f"  → Height range: {heights.min():.1f}m - {heights.max():.1f}m")
+        logger.info(f"  → Mean height: {mean_height:.1f}m")
+        logger.info(f"  → Recommended max height: {rounded_height}m")
         
         return rounded_height
         
     except Exception as e:
-        print(f"[adaptive_height] Error calculating adaptive height: {e}")
+        logger.error(f"Error calculating adaptive height: {e}")
         return default_height
