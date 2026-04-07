@@ -24,7 +24,7 @@ function(feature, context){
         fillOpacity: 0.8
     };
 }
-""")
+""", name="clusterHeightStyle")
 
 def layout(lang='DE'):
     from backend.translation import create_breadcrumb

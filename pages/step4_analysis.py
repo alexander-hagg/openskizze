@@ -993,10 +993,10 @@ def update_solution_archive_grid(x_axis_idx, y_axis_idx, slider_values, results_
                         if height <= 1.5:  # Skip cells < half floor
                             continue
                         
-                        # Create box vertices
+                        # Create box vertices (height in meters, convert to cell units to match x/y)
                         x0, x1 = col, col + 1
                         y0, y1 = row, row + 1
-                        z0, z1 = 0, height
+                        z0, z1 = 0, height / 3.0
                         
                         vertices = [
                             [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],

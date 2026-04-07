@@ -1,6 +1,6 @@
 window.dashExtensions = Object.assign({}, window.dashExtensions, {
     default: {
-        function0: function(feature, context) {
+        parcelStyle: function(feature, context) {
                 const {
                     selected
                 } = context.hideout;
@@ -22,7 +22,7 @@ window.dashExtensions = Object.assign({}, window.dashExtensions, {
             }
 
             ,
-        function1: function(feature, context) {
+        heightStyle: function(feature, context) {
                 const {
                     z_length
                 } = context.hideout;
@@ -38,7 +38,7 @@ window.dashExtensions = Object.assign({}, window.dashExtensions, {
             }
 
             ,
-        function2: function(feature, context) {
+        clusterHeightStyle: function(feature, context) {
                 const {
                     z_length
                 } = context.hideout;
@@ -54,7 +54,7 @@ window.dashExtensions = Object.assign({}, window.dashExtensions, {
             }
 
             ,
-        function3: function(feature, context) {
+        compareHeightStyle: function(feature, context) {
             const {
                 z_length
             } = context.hideout;

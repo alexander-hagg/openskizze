@@ -49,7 +49,7 @@ function(feature, context){
         fillOpacity: 0.8
     };
 }
-""")
+""", name="heightStyle")
 
 # Cleanup temp files on exit
 def cleanup_old_files(directory: str, max_age_hours: int = 24):
@@ -539,6 +539,8 @@ def run_optimization(set_progress, n_clicks, session_data, existing_results):
                     # NumbaFastEncoding uses express_batch, so wrap in batch
                     heightmaps = regeneration_encoding.express_batch(genome.reshape(1, -1))
                     heightmap = heightmaps[0]
+                    # Apply buildable_mask — NumbaFastEncoding doesn't enforce it
+                    heightmap = heightmap * env_config['buildable_mask']
                 else:
                     # ParametricEncoding uses express with buildable mask
                     heightmap = regeneration_encoding.express(env_config['buildable_mask'], genome)

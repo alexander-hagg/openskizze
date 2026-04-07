@@ -30,7 +30,7 @@ function(feature, context){
         fillOpacity: 0.8
     };
 }
-""")
+""", name="compareHeightStyle")
 
 def generate_distinct_colors(n):
     """
@@ -632,28 +632,33 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
     if flow_field is not None:
         try:
             # Flow field shape: (2, H, W) for (u, v) components
-            # Expected: (2, 66, 94) from full U-Net output at 3m resolution
             u = flow_field[0]  # X-component (m/s)
             v = flow_field[1]  # Y-component (m/s)
             
             # Compute velocity magnitude for ground surface coloring
             velocity_magnitude = np.sqrt(u**2 + v**2)
             
-            # Create ground-level velocity surface
-            # Flow field is 66x94 at 3m resolution = 198m x 282m domain
-            rows, cols = u.shape  # Should be 66, 94
-            flow_width_m = cols * 3.0  # 94 * 3 = 282m
-            flow_height_m = rows * 3.0  # 66 * 3 = 198m
+            # Compute the correct geographic extent of the U-Net domain.
+            # construct_domain_grids_batch() places the design grid at a known offset
+            # within a larger asymmetric domain (extra space to the left/west for upwind).
+            rows, cols = u.shape
             
-            # Center the flow field over the building domain
-            # Buildings span from min_x to max_x (parcel extent)
-            parcel_center_x = (min_x + max_x) / 2
-            parcel_center_y = (min_y + max_y) / 2
+            # Reconstruct the domain layout used by construct_domain_grids_batch
+            parcel_width_m = max_x - min_x
+            parcel_height_m = max_y - min_y
+            parcel_cells = round(parcel_width_m / pixel_size_m)
+            env_size_m = max(200, parcel_width_m * 3)
+            env_cells_base = int(env_size_m / pixel_size_m)
+            original_offset = (env_cells_base - parcel_cells) // 2
+            left_extension = original_offset
+            offset_x = original_offset + left_extension  # column where design starts
+            offset_y = original_offset                    # row where design starts
             
-            flow_min_x = parcel_center_x - flow_width_m / 2
-            flow_max_x = parcel_center_x + flow_width_m / 2
-            flow_min_y = parcel_center_y - flow_height_m / 2
-            flow_max_y = parcel_center_y + flow_height_m / 2
+            # Map: domain column offset_x corresponds to min_x, row offset_y to min_y
+            flow_min_x = min_x - offset_x * pixel_size_m
+            flow_max_x = flow_min_x + cols * pixel_size_m
+            flow_min_y = min_y - offset_y * pixel_size_m
+            flow_max_y = flow_min_y + rows * pixel_size_m
             
             x_flow = np.linspace(flow_min_x, flow_max_x, cols)
             y_flow = np.linspace(flow_min_y, flow_max_y, rows)
@@ -687,98 +692,77 @@ def create_3d_building_plot(heightmap, grid_bounds_native, env_3d_fixed=None, he
                 showlegend=True
             ))
             
-            # Create 3D streamlines
-            # Sample starting points from left edge of domain
-            step = max(1, rows // 8)  # ~8 streamlines
-            y_starts = np.arange(step//2, rows, step)
-            x_start = 2  # Start from left edge
-            
-            # Function to integrate streamline in 3D
-            def integrate_streamline_3d(x0_idx, y0_idx, max_steps=100):
-                from scipy.interpolate import RegularGridInterpolator
+            # Create streamlines over the full U-Net prediction domain.
+            # Compute in index-space (avoids numerical issues with large EPSG coords)
+            # then convert to geographic coordinates for rendering.
+            try:
+                import matplotlib
+                matplotlib.use('Agg')
+                import matplotlib.pyplot as plt
                 
-                # Create interpolators for u and v
-                y_coords_interp = np.arange(rows)
-                x_coords_interp = np.arange(cols)
-                u_interp = RegularGridInterpolator(
-                    (y_coords_interp, x_coords_interp), u, 
-                    bounds_error=False, fill_value=0
+                # Use integer index arrays for streamplot
+                ix = np.arange(cols, dtype=float)
+                iy = np.arange(rows, dtype=float)
+                
+                fig_mpl, ax_mpl = plt.subplots()
+                sp = ax_mpl.streamplot(
+                    ix, iy, u, v,
+                    density=1.8,
+                    linewidth=1,
+                    arrowsize=0,
+                    broken_streamlines=False,
                 )
-                v_interp = RegularGridInterpolator(
-                    (y_coords_interp, x_coords_interp), v,
-                    bounds_error=False, fill_value=0
-                )
+                plt.close(fig_mpl)
                 
-                points = []
-                x_idx, y_idx = x0_idx, y0_idx
-                dt = 0.3  # Step size in grid units
+                # Extract segments and chain into polylines.
+                # streamplot returns many 2-point segments; chain those whose
+                # endpoints are close (tolerance ~0.5 cell) into full streamlines.
+                segments = sp.lines.get_segments()
+                logger.debug(f"Streamplot produced {len(segments)} segments")
                 
-                for _ in range(max_steps):
-                    # Get velocity at current position
-                    u_val = u_interp([y_idx, x_idx])[0]
-                    v_val = v_interp([y_idx, x_idx])[0]
-                    
-                    # Convert to geographic coordinates and add height variation
-                    x_geo = min_x + (x_idx / cols) * (max_x - min_x)
-                    y_geo = min_y + (y_idx / rows) * (max_y - min_y)
-                    
-                    # Add height based on velocity magnitude for visual effect
-                    speed = np.sqrt(u_val**2 + v_val**2)
-                    z_height = 2 + speed * 3  # 2-15m height based on speed
-                    
-                    points.append([x_geo, y_geo, z_height])
-                    
-                    # Update position using RK2
-                    x_mid = x_idx + 0.5 * dt * u_val
-                    y_mid = y_idx + 0.5 * dt * v_val
-                    
-                    u_mid = u_interp([y_mid, x_mid])[0]
-                    v_mid = v_interp([y_mid, x_mid])[0]
-                    
-                    x_new = x_idx + dt * u_mid
-                    y_new = y_idx + dt * v_mid
-                    
-                    # Check bounds and stop conditions
-                    if (x_new < 0 or x_new >= cols or y_new < 0 or y_new >= rows or
-                        speed < 0.1):  # Stop if velocity too small
-                        break
-                    
-                    # Check if hit a building
-                    ix, iy = int(np.round(x_new)), int(np.round(y_new))
-                    if (0 <= ix < cols and 0 <= iy < rows and 
-                        ix < heightmap.shape[1] and iy < heightmap.shape[0] and
-                        heightmap[iy, ix] > 2):  # Stop if hit building
-                        break
-                    
-                    x_idx, y_idx = x_new, y_new
+                all_lines = []
+                if len(segments) > 0:
+                    current_line = [segments[0][0], segments[0][1]]
+                    for seg in segments[1:]:
+                        p0, p1 = seg[0], seg[1]
+                        dist = np.sqrt((p0[0] - current_line[-1][0])**2 + (p0[1] - current_line[-1][1])**2)
+                        if dist < 0.5:  # within half a cell → same streamline
+                            current_line.append(p1)
+                        else:
+                            all_lines.append(np.array(current_line))
+                            current_line = [p0, p1]
+                    all_lines.append(np.array(current_line))
                 
-                return np.array(points)
-            
-            # Generate streamlines
-            colors = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'cyan']
-            
-            for idx, y_start in enumerate(y_starts):
-                try:
-                    points = integrate_streamline_3d(x_start, y_start)
-                    if len(points) > 1:
-                        color = colors[idx % len(colors)]
-                        
-                        fig.add_trace(go.Scatter3d(
-                            x=points[:, 0],
-                            y=points[:, 1],
-                            z=points[:, 2],
-                            mode='lines+markers',
-                            line=dict(color=color, width=4),
-                            marker=dict(size=2, color=color),
-                            name=f'Streamline {idx+1}',
-                            showlegend=(idx < 3),  # Only show first few in legend
-                            hovertemplate='<b>Streamline</b><br>' +
-                                        'X: %{x:.1f}m<br>' +
-                                        'Y: %{y:.1f}m<br>' +
-                                        'Height: %{z:.1f}m<extra></extra>'
-                        ))
-                except Exception as e:
-                    logger.warning(f"Error creating streamline {idx}: {e}")
+                logger.debug(f"Chained into {len(all_lines)} streamlines")
+                
+                # Convert index-space to geographic coordinates and render
+                # Combine all streamlines into a single trace with None separators
+                all_x, all_y, all_z = [], [], []
+                for line in all_lines:
+                    if len(line) < 3:
+                        continue
+                    x_geo = flow_min_x + line[:, 0] / max(cols - 1, 1) * (flow_max_x - flow_min_x)
+                    y_geo = flow_min_y + line[:, 1] / max(rows - 1, 1) * (flow_max_y - flow_min_y)
+                    all_x.extend(x_geo.tolist() + [None])
+                    all_y.extend(y_geo.tolist() + [None])
+                    all_z.extend([1.5] * len(line) + [None])
+                
+                if len(all_x) > 0:
+                    fig.add_trace(go.Scatter3d(
+                        x=all_x,
+                        y=all_y,
+                        z=all_z,
+                        mode='lines',
+                        line=dict(color='white', width=3),
+                        name='Streamlines',
+                        showlegend=True,
+                        hoverinfo='skip',
+                    ))
+                    
+            except Exception as e:
+                logger.warning(f"Error creating streamlines: {e}")
+                import traceback
+                logger.debug(traceback.format_exc())
                     
         except Exception as e:
             logger.warning(f"Error adding flow visualization: {e}")
@@ -864,10 +848,10 @@ def create_diversity_grid(cluster, heightmap_res, cluster_index):
                 if height <= 1.5:  # Skip cells < half floor
                     continue
                 
-                # Create box vertices
+                # Create box vertices (height in meters, convert to cell units to match x/y)
                 x0, x1 = col, col + 1
                 y0, y1 = row, row + 1
-                z0, z1 = 0, height
+                z0, z1 = 0, height / 3.0
                 
                 vertices = [
                     [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
@@ -1060,6 +1044,16 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
         # Create heightmap
         heightmap = np.array(sol['heightmap']).reshape(heightmap_res, heightmap_res)
         
+        # Mask design buildings against existing buildings in non-buildable cells.
+        # NumbaFastEncoding (surrogate path) does not apply the buildable_mask,
+        # so design buildings may extend into cells that have existing buildings.
+        # Clear those cells to prevent visual overlap in the 3D view.
+        if env_3d_fixed is not None and design_offset is not None:
+            dr, dc = design_offset
+            env_design_slice = env_3d_fixed[dr:dr+heightmap_res, dc:dc+heightmap_res, :]
+            existing_mask = np.sum(env_design_slice > 0, axis=2) > 0
+            heightmap[existing_mask] = 0
+        
         # Check if flow visualization should be included
         flow_field = None
         show_flow = flow_toggle_states.get(str(i), False) if flow_toggle_states else False
@@ -1069,48 +1063,42 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
             logger.debug(f"Generating flow field for cluster {i}")
             logger.debug(f"Solution keys: {list(sol.keys())}")
             try:
-                # Generate flow field using U-Net model (regardless of optimization method used)
+                # Generate flow field using U-Net model
                 import torch
                 from backend.model_evaluator import create_evaluator
-                from backend.fast_encoding import NumbaFastEncoding
                 
                 # Calculate actual parcel size from results data
                 parcel_size_m = heightmap_res * pixel_size  # e.g., 17 cells * 3m = 51m
                 logger.debug(f"Calculated parcel size: {parcel_size_m}m ({heightmap_res} cells * {pixel_size}m)")
                 
-                # Get solution genome - handle different possible key names
-                genome = None
-                if 'genome' in sol:
-                    genome = np.array(sol['genome'])
-                elif 'x' in sol:  # Some solutions might store genome as 'x'
-                    genome = np.array(sol['x'])
-                elif 'solution' in sol:
-                    genome = np.array(sol['solution'])
-                else:
-                    # Try to reconstruct genome from heightmap if available
-                    logger.debug(f"No genome found, available keys: {list(sol.keys())}")
-                    logger.debug(f"Attempting to use heightmap to generate dummy genome")
-                    # For now, skip flow generation if no genome available
-                    raise KeyError("No genome data available in solution")
-                
-                # Ensure genome is numpy array
-                genome = np.array(genome) if not isinstance(genome, np.ndarray) else genome
-                logger.debug(f"Using genome shape: {genome.shape}")
-                
-                # Create U-Net evaluator with actual parcel size
+                # Create U-Net evaluator with proper model size negotiation
                 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
                 logger.debug(f"Using device: {device}")
-                unet_eval = create_evaluator('unet', parcel_size=parcel_size_m, device=device)
+                model_size_m, models_dir = _find_unet_model_size(parcel_size_m)
+                if model_size_m is None:
+                    raise FileNotFoundError(f"No suitable U-Net model for {parcel_size_m}m parcel")
+                unet_eval = create_evaluator('unet', parcel_size=model_size_m, device=device,
+                                             actual_parcel_size=parcel_size_m, models_dir=models_dir)
                 
-                # Generate heightmap using actual parcel size
-                encoding = NumbaFastEncoding(parcel_size=parcel_size_m)
-                heightmap_encoded = encoding.express_batch(genome.reshape(1, -1))[0]
+                # Use the DISPLAYED heightmap (already has buildable_mask applied)
+                # instead of re-encoding from genome, to ensure the flow field
+                # matches exactly what's shown in the 3D view.
+                heightmap_encoded = heightmap.copy()
+                
+                # Zero-pad heightmap to model size if actual parcel is smaller
+                D = heightmap_encoded.shape[0]  # actual cells
+                P = model_size_m // 3  # model cells
+                if D < P:
+                    padded = np.zeros((P, P), dtype=heightmap_encoded.dtype)
+                    offset = (P - D) // 2
+                    padded[offset:offset+D, offset:offset+D] = heightmap_encoded
+                    heightmap_encoded = padded
                 
                 # Construct proper 3-channel domain grids for U-Net (terrain, buildings, landuse)
                 from backend.model_evaluator import construct_domain_grids_batch
                 terrain, buildings, landuse = construct_domain_grids_batch(
                     heightmap_encoded[np.newaxis, :, :],  # Add batch dimension
-                    parcel_size_m=parcel_size_m
+                    parcel_size_m=model_size_m
                 )
                 
                 # Normalize inputs using the evaluator's normalization stats
@@ -1128,6 +1116,7 @@ def display_comparison(selected_ids, results_data, solution_modes, flow_toggle_s
                 # Get U-Net predictions
                 with torch.no_grad():
                     Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, 66, 94)
+                    Y_pred = Y_pred.float()  # Ensure float32 for denormalization
                     
                     # Extract velocity components (channels 2 and 3: uq, vq) - FULL DOMAIN
                     uq_full = Y_pred[0, 2, :, :] * unet_eval.uq_std + unet_eval.uq_mean  # cm/s
@@ -1413,12 +1402,32 @@ def export_pdf_report_s6(n_clicks, selected_ids, results_data, clustering_data):
     else:
         return dict(content="Error: Failed to generate PDF report.", filename="error.txt")
 
-def check_unet_model_availability(parcel_size_m=81):
-    """Check if U-Net model is available for the given parcel size."""
+def check_unet_model_availability(parcel_size_m=None):
+    """Check if a U-Net model is available (optionally for a given parcel size)."""
     from pathlib import Path
-    models_dir = Path('models')
-    unet_path = models_dir / f'unet_{parcel_size_m}m.pth'
-    return unet_path.exists()
+    from backend.config import SURROGATE_CONFIG
+    models_dir = Path(SURROGATE_CONFIG['models_dir'])
+    available_sizes = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet_m'])
+    if parcel_size_m is not None:
+        # Check if there's a model large enough for this parcel
+        suitable = [s for s in available_sizes if s >= parcel_size_m]
+        return any((models_dir / f'unet_{int(s)}m.pth').exists() for s in suitable)
+    # Just check if any model exists
+    return any((models_dir / f'unet_{int(s)}m.pth').exists() for s in available_sizes)
+
+
+def _find_unet_model_size(parcel_size_m):
+    """Find the smallest suitable U-Net model for a given parcel size. Returns (model_size_m, path) or None."""
+    from pathlib import Path
+    from backend.config import SURROGATE_CONFIG
+    models_dir = Path(SURROGATE_CONFIG['models_dir'])
+    available_sizes = sorted(SURROGATE_CONFIG['available_parcel_sizes_unet_m'])
+    for s in available_sizes:
+        if s >= parcel_size_m:
+            p = models_dir / f'unet_{int(s)}m.pth'
+            if p.exists():
+                return int(s), models_dir
+    return None, None
 
 # Callback to show/hide global flow toggle based on model availability
 @callback(
@@ -1527,19 +1536,32 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
             # Get solution genome
             genome = solution['genome']
             
-            # Create U-Net evaluator with actual parcel size
+            # Create U-Net evaluator with proper model size negotiation
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            unet_eval = create_evaluator('unet', parcel_size=parcel_size_m, device=device)
+            model_size_m, models_dir = _find_unet_model_size(parcel_size_m)
+            if model_size_m is None:
+                raise FileNotFoundError(f"No suitable U-Net model for {parcel_size_m}m parcel")
+            unet_eval = create_evaluator('unet', parcel_size=model_size_m, device=device,
+                                         actual_parcel_size=parcel_size_m, models_dir=models_dir)
             
             # Generate heightmap using actual parcel size
             encoding = NumbaFastEncoding(parcel_size=parcel_size_m)
             heightmap_encoded = encoding.express_batch(genome.reshape(1, -1))[0]
             
+            # Zero-pad heightmap to model size if actual parcel is smaller
+            D = heightmap_encoded.shape[0]
+            P = model_size_m // 3
+            if D < P:
+                padded = np.zeros((P, P), dtype=heightmap_encoded.dtype)
+                offset = (P - D) // 2
+                padded[offset:offset+D, offset:offset+D] = heightmap_encoded
+                heightmap_encoded = padded
+            
             # Construct proper 3-channel domain grids for U-Net (terrain, buildings, landuse)
             from backend.model_evaluator import construct_domain_grids_batch
             terrain, buildings, landuse = construct_domain_grids_batch(
                 heightmap_encoded[np.newaxis, :, :],  # Add batch dimension
-                parcel_size_m=parcel_size_m
+                parcel_size_m=model_size_m
             )
             
             # Normalize inputs using the evaluator's normalization stats
@@ -1557,6 +1579,7 @@ def display_flow_field(show_toggle, selected_ids, clustering_data, results_data,
             # Get U-Net predictions
             with torch.no_grad():
                 Y_pred = unet_eval.model(X_torch)  # Shape: (1, 6, grid_h, grid_w)
+                Y_pred = Y_pred.float()  # Ensure float32 for denormalization
                 
                 # Extract velocity components (channels 2 and 3: uq, vq)
                 uq_full = Y_pred[0, 2, :, :] * unet_eval.uq_std + unet_eval.uq_mean  # cm/s

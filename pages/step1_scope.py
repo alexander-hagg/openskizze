@@ -70,7 +70,7 @@ function(feature, context){
         return {color: '#3388ff', weight: 2, opacity: 1, fillOpacity: 0.1}; // Blue for available
     }
 }
-""")
+""", name="parcelStyle")
 
 def create_compass_component():
     """Creates the HTML structure for the interactive compass."""
@@ -88,6 +88,7 @@ def create_compass_component():
     ])
 
 def layout(lang='DE'):
+    from backend.translation import T
     from backend.translation import create_breadcrumb
     return dbc.Container([
         create_breadcrumb(1, lang),
@@ -113,7 +114,18 @@ def layout(lang='DE'):
                         ]),
                     ], id='map-step1', style={'width': '100%', 'height': '60vh'}
                 )
-            ], md=7),
+            ], md=5),
+            
+            dbc.Col([
+                # 3D neighborhood preview
+                html.Div(id='step1-3d-container', children=[
+                    dbc.Alert(
+                        T[lang].get('STEP1_3D_PLACEHOLDER', 'Wählen Sie ein Flurstück aus, um die 3D-Ansicht der Umgebung zu sehen.'),
+                        color="light", className="text-center",
+                        style={'height': '60vh', 'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'}
+                    )
+                ])
+            ], md=4),
             
             dbc.Col([
                 html.Div([
@@ -140,7 +152,7 @@ def layout(lang='DE'):
                 ]),
                 # Hidden upload component (needed for callbacks but not displayed)
                 dcc.Upload(id='upload-geojson', style={'display': 'none'}),
-            ], md=5)
+            ], md=3)
         ])
     ], fluid=True)
 
@@ -245,25 +257,28 @@ def load_parcels_data(n_clicks, bounds):
 def display_parcels(geojson_data):
     return geojson_data
 
-# Callback to restore the polygon when a project is loaded
+# Callback to restore the polygon and 3D viewer when a project is loaded
 @callback(
     Output('active-polygon-layer', 'data', allow_duplicate=True),
+    Output('step1-3d-container', 'children', allow_duplicate=True),
     Input('session-store', 'data'),
     Input('url', 'pathname'),
     prevent_initial_call=True
 )
 def restore_from_session(session_data, pathname):
     if pathname != '/' or not session_data:
-        return no_update
+        return no_update, no_update
     
     ctx = dash.callback_context
     # Only restore when session-store changes (e.g., project load), not on every visit
     if not ctx.triggered or ctx.triggered[0]['prop_id'] != 'session-store.data':
-        return no_update
+        return no_update, no_update
     
     site_polygon = session_data.get('site_polygon')
+    lang = session_data.get('language', 'DE')
+    viewer_3d = _build_3d_neighborhood_viewer(session_data, lang)
     
-    return site_polygon
+    return site_polygon, viewer_3d
 
 # The single, authoritative callback that manages the active green polygon.
 @callback(
@@ -272,6 +287,7 @@ def restore_from_session(session_data, pathname):
     Output('selected-parcels-store', 'data'),
     Output('parcels-layer', 'hideout'),
     Output('parcel-info-display', 'children'),
+    Output('step1-3d-container', 'children', allow_duplicate=True),
     Input('parcels-layer', 'clickData'),
     Input('edit-control', 'geojson'),
     Input('upload-geojson', 'contents'), # --- NEW INPUT ---
@@ -473,4 +489,84 @@ def handle_all_interactions(click_data, drawn_geojson, upload_contents, upload_f
     lang = session_data.get('language', 'DE')
     parcel_info_component = calculate_parcel_info(final_geom, lang)
 
-    return session_data, final_geojson, new_selected_ids, hideout, parcel_info_component
+    # Build 3D neighborhood viewer
+    viewer_3d = _build_3d_neighborhood_viewer(session_data, lang)
+
+    return session_data, final_geojson, new_selected_ids, hideout, parcel_info_component, viewer_3d
+
+
+def _build_3d_neighborhood_viewer(session_data, lang='DE'):
+    """Build 3D viewer showing existing buildings around the selected parcel."""
+    import numpy as np
+    from pages.step6_compare_detail import create_3d_building_plot
+
+    building_data_b64 = session_data.get('building_data')
+    if not building_data_b64:
+        return dbc.Alert(
+            T[lang].get('STEP1_3D_PLACEHOLDER', 'Wählen Sie ein Flurstück aus, um die 3D-Ansicht der Umgebung zu sehen.'),
+            color="light", className="text-center",
+            style={'height': '60vh', 'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'}
+        )
+
+    try:
+        building_data = pickle.loads(base64.b64decode(building_data_b64))
+
+        env_3d_expanded = building_data.get('env_3d_expanded')
+        expanded_bounds = building_data.get('expanded_bounds_native')
+        design_bounds = building_data.get('design_bounds_native')
+        design_offset = building_data.get('design_offset')
+        design_res = building_data.get('design_res', 17)
+        pixel_size = building_data.get('pixel_size', 3.0)
+        building_function_map = building_data.get('building_function_map')
+        function_lookup = building_data.get('function_lookup', {})
+
+        if env_3d_expanded is None or design_bounds is None:
+            return dbc.Alert("Keine Gebäudedaten verfügbar.", color="warning", className="small")
+
+        # Empty heightmap — no design yet, just show neighborhood
+        empty_heightmap = np.zeros((design_res, design_res), dtype=np.float32)
+
+        fig = create_3d_building_plot(
+            heightmap=empty_heightmap,
+            grid_bounds_native=design_bounds,
+            env_3d_fixed=env_3d_expanded,
+            height_exaggeration=1.0,
+            pixel_size_m=pixel_size,
+            expanded_bounds_native=expanded_bounds,
+            design_offset=design_offset,
+            building_function_map=building_function_map,
+            function_lookup=function_lookup,
+        )
+
+        # Add parcel outline on ground plane
+        import plotly.graph_objects as go
+        dx, dy = design_bounds[0], design_bounds[1]
+        dx2, dy2 = design_bounds[2], design_bounds[3]
+        z_line = 0.3  # slightly above ground
+        fig.add_trace(go.Scatter3d(
+            x=[dx, dx2, dx2, dx, dx],
+            y=[dy, dy, dy2, dy2, dy],
+            z=[z_line] * 5,
+            mode='lines',
+            line=dict(color='rgb(50, 180, 50)', width=6),
+            name='Flurstück',
+            showlegend=True,
+            hoverinfo='skip',
+        ))
+
+        # Compact layout for step 1 — smaller than the step 6 viewer
+        fig.update_layout(
+            height=None,
+            width=None,
+            margin=dict(l=0, r=0, t=30, b=0),
+        )
+
+        return dcc.Graph(
+            figure=fig,
+            style={'height': '60vh', 'width': '100%'},
+            config={'displayModeBar': True, 'displaylogo': False},
+        )
+
+    except Exception as e:
+        logger.warning(f"Could not build 3D viewer: {e}")
+        return dbc.Alert(f"3D-Vorschau nicht verfügbar: {e}", color="warning", className="small")
