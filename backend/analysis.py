@@ -8,7 +8,7 @@ from shapely.geometry import box, mapping
 import geopandas as gpd
 from sklearn.manifold import TSNE
 from sklearn.cluster import DBSCAN, AgglomerativeClustering # <-- Added AgglomerativeClustering
-from sklearn_extra.cluster import KMedoids
+from kmedoids import KMedoids
 from sklearn.metrics import pairwise_distances
 from sklearn.preprocessing import StandardScaler
 import hdbscan

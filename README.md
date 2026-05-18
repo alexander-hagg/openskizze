@@ -21,15 +21,17 @@ OpenSKIZZE is an interactive decision-support tool for urban planners exploring 
 
 ## Prerequisites
 
-- **Python 3.12** (3.11 also works)
+- **Python 3.14** (3.13+ also works)
 - **Conda or Mamba** (recommended for dependency management)
 - ~2 GB disk space (including ML model files in `models/`)
 
 ### Optional: GPU acceleration
 
-The U-Net surrogate model runs on CPU by default. For GPU acceleration, install PyTorch with CUDA support:
+The U-Net surrogate model runs on CPU by default. For GPU acceleration, install PyTorch with CUDA support
+after creating the conda environment:
 
 ```bash
+conda activate openskizze
 pip install torch --index-url https://download.pytorch.org/whl/cu128
 ```
 
@@ -38,12 +40,9 @@ pip install torch --index-url https://download.pytorch.org/whl/cu128
 ## Installation
 
 ```bash
-# 1. Create environment
-conda create -n openskizze python=3.12
+# 1. Create environment with mamba (preferred) or conda
+mamba env create -f environment.yml
 conda activate openskizze
-
-# 2. Install dependencies
-pip install -r requirements.txt
 ```
 
 ---
